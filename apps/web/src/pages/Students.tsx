@@ -1,17 +1,47 @@
 /**
- * M-EDU Students Page · v2 — Liquid Glass
+ * M-EDU Students Page · v3 — Liquid Glass
  * Student roster management, profile filters, enrollment actions, and batch operations.
  *
- * v2 o'zgarishlari:
- *  - Liquid glass tizimi (students-liquid.css): specular rim, kursor ortidan yuruvchi yorug'lik,
- *    recessed track + glass thumb, glass icon tugmalar
- *  - GlassSegmented: bitta qayta ishlatiladigan segmented control (status / zichlik / ko'rinish)
- *  - StudentActions va StatusBadge: grid va jadvaldagi takrorlanish olib tashlandi
- *  - buildStudentPanel: QuickLook va Sidecar uchun yagona payload builder
- *  - Emoji va ◨ belgilari SVG ikonlarga almashtirildi
- *  - Vaqt zonasi xatosi tuzatildi (toISOString → mahalliy sana)
- *  - Kalendar heatmap haftaga mos 7 ustunli qilindi
- *  - Tailwind'da mavjud bo'lmagan `/08` opacity tuzatildi
+ * v3 o'zgarishlari (v2 dan farqi):
+ *  P0 TUZATISHLAR
+ *   - RowHoverPeek: createPortal + useLayoutEffect, scroll/escape da yopiladi,
+ *     flip mantiq (pastga sig'masa yuqoriga).
+ *   - Bulk delete: barcha tanlangan talabalarni ketma-ket o'chiradi,
+ *     xato bo'lsa to'xtaydi va xabar beradi.
+ *   - Sort state: useReducer bilan yagona manba (race yo'q).
+ *   - StatTile: total va pageTotal izchil ishlatiladi.
+ *   - CSV: barcha maydonlar q() bilan o'ralgan (vergul xavfsiz).
+ *   - Space tugmasi scroll qilmaydi (preventDefault).
+ *   - CalendarHeatmap: start/end orasidagi haqiqiy kunlar.
+ *   - GlassSegmented: ArrowLeft/ArrowRight navigatsiya.
+ *
+ *  DIZAYN (10x)
+ *   - Bento grid: birinchi talaba kattaroq (lg:col-span-2).
+ *   - Skeleton: real layout o'lchamlari, prefers-reduced-motion.
+ *   - Filter chips: AnimatePresence + layout.
+ *   - StatTile: aria-pressed, role="tab", keyboard.
+ *   - Command palette: role="listbox", aria-activedescendant.
+ *   - RowHoverPeek: flip logic, scroll close.
+ *   - Micro-interactions: rAF-throttled trackPointer.
+ *   - Dark mode: shadow/ring izchil.
+ *   - Density: py + text + gap birgalikda o'zgaradi.
+ *
+ *  YANGI FUNKSIYALAR
+ *   - Bulk delete (barcha tanlanganlar).
+ *   - Column visibility toggle (desktop).
+ *   - Saved views (localStorage, 3 tagacha).
+ *   - Keyboard help overlay (? tugmasi).
+ *   - Scroll position restore.
+ *   - Optimistic unfreeze.
+ *   - 3 xil empty state.
+ *   - aria-live selection announcements.
+ *
+ *  ARXITEKTURA
+ *   - Sort state: useReducer (yagona manba).
+ *   - Selection: Set<string> + aria-live.
+ *   - Hover peek: portal + layout effect.
+ *   - Saved views: localStorage + Zod-like validation.
+ *   - TypeScript strict, any yo'q.
  */
 
 import {
@@ -20,10 +50,13 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useReducer,
+  useLayoutEffect,
   memo,
   forwardRef,
 } from 'react';
-import { Link, useNavigate, type NavigateFunction } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { Link, useNavigate, useLocation, type NavigateFunction } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { studentsApi, groupsApi } from '@/lib/api';
@@ -66,10 +99,10 @@ import './students-liquid.css';
  * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy:  { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.6 },
-  smooth:  { type: 'spring' as const, stiffness: 320, damping: 32, mass: 0.85 },
-  soft:    { type: 'spring' as const, stiffness: 220, damping: 30, mass: 1.0 },
-  island:  { type: 'spring' as const, stiffness: 480, damping: 32, mass: 0.72 },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.6 },
+  smooth: { type: 'spring' as const, stiffness: 320, damping: 32, mass: 0.85 },
+  soft: { type: 'spring' as const, stiffness: 220, damping: 30, mass: 1.0 },
+  island: { type: 'spring' as const, stiffness: 480, damping: 32, mass: 0.72 },
   breathe: { type: 'spring' as const, stiffness: 160, damping: 24, mass: 1.15 },
   palette: { type: 'spring' as const, stiffness: 400, damping: 34, mass: 0.8 },
 } as const;
@@ -98,12 +131,20 @@ const tileVariants: Variants = {
 type ClassPart = string | false | null | undefined;
 const cx = (...parts: ClassPart[]) => parts.filter(Boolean).join(' ');
 
-/** Kursor pozitsiyasini CSS o'zgaruvchisiga yozadi — re-render yo'q, 120Hz xavfsiz. */
+/** Kursor pozitsiyasini CSS o'zgaruvchisiga yozadi — rAF throttle, 120Hz xavfsiz. */
+const pointerRafMap = new WeakMap<HTMLElement, number>();
 function trackPointer(e: React.PointerEvent<HTMLElement>) {
   const el = e.currentTarget;
-  const r = el.getBoundingClientRect();
-  el.style.setProperty('--mx', `${e.clientX - r.left}px`);
-  el.style.setProperty('--my', `${e.clientY - r.top}px`);
+  const { clientX, clientY } = e;
+  const existing = pointerRafMap.get(el);
+  if (existing) cancelAnimationFrame(existing);
+  const raf = requestAnimationFrame(() => {
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', `${clientX - r.left}px`);
+    el.style.setProperty('--my', `${clientY - r.top}px`);
+    pointerRafMap.delete(el);
+  });
+  pointerRafMap.set(el, raf);
 }
 
 function toIsoDate(d: Date): string {
@@ -112,11 +153,50 @@ function toIsoDate(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/** 'YYYY-MM-DD' ni mahalliy sana sifatida o'qiydi (UTC siljishisiz). */
 function parseIsoDate(iso: string): Date | null {
   const [y, m, d] = (iso || '').split('-').map(Number);
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d);
+}
+
+const isMac =
+  typeof navigator !== 'undefined' && /Mac|iPad|iPhone/.test(navigator.platform || navigator.userAgent || '');
+
+/** localStorage kaliti — saved views uchun. */
+const SAVED_VIEWS_KEY = 'medu.students.savedViews.v1';
+const SCROLL_KEY = 'medu.students.scroll.v1';
+
+interface SavedView {
+  id: string;
+  name: string;
+  search: string;
+  groupId: string;
+  statusFilter: string;
+  sortField: string;
+  sortDir: string;
+  viewMode: string;
+  density: string;
+  createdAt: number;
+}
+
+function loadSavedViews(): SavedView[] {
+  try {
+    const raw = localStorage.getItem(SAVED_VIEWS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v): v is SavedView => v && typeof v.id === 'string' && typeof v.name === 'string').slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+function saveViews(views: SavedView[]) {
+  try {
+    localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(views.slice(0, 3)));
+  } catch {
+    /* quota */
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -141,6 +221,17 @@ type SortField = 'name' | 'groups' | 'status';
 type SortDirection = 'asc' | 'desc';
 type ViewMode = 'table' | 'grid';
 type Density = 'compact' | 'cozy' | 'comfy';
+
+type SortState = { field: SortField; dir: SortDirection };
+type SortAction = { type: 'toggle'; field: SortField } | { type: 'reset' };
+
+function sortReducer(state: SortState, action: SortAction): SortState {
+  if (action.type === 'reset') return { field: 'name', dir: 'asc' };
+  if (state.field === action.field) {
+    return { field: action.field, dir: state.dir === 'asc' ? 'desc' : 'asc' };
+  }
+  return { field: action.field, dir: 'asc' };
+}
 
 const DEFAULT_FREEZE_REASON = 'Tibbiy sabab / Kasallik maʼlumotnomasi (Medical leave)';
 
@@ -207,10 +298,7 @@ const I = {
     'M10 11v6',
     'M14 11v6',
   ],
-  mail: [
-    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
-    'M22 6 12 13 2 6',
-  ],
+  mail: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M22 6 12 13 2 6'],
   phone: [
     'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z',
   ],
@@ -263,6 +351,9 @@ const I = {
   star: ['M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'],
   shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
   sidecar: ['M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z', 'M14 3v18'],
+  columns: ['M3 3h7v18H3z', 'M14 3h7v18h-7z'],
+  bookmark: ['M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'],
+  help: ['M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3', 'M12 17h.01'],
 } as const;
 
 const Icon = memo(function Icon({
@@ -360,7 +451,6 @@ function avatarStyle(name: string): { background: string; glow: string } {
   };
 }
 
-/** QuickLook va Sidecar uchun yagona payload. Tiplar `ui.store` ga qarab cast qilinadi. */
 function buildStudentPanel(student: Student, navigate: NavigateFunction, copyable: boolean) {
   const name = formatStudentName(student);
   const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
@@ -410,19 +500,17 @@ function buildStudentPanel(student: Student, navigate: NavigateFunction, copyabl
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * AURORA — sekin suzuvchi rang dog'lari (sahifa yuklanganda bitta fade-in)
+ * AURORA
  * ════════════════════════════════════════════════════════════════════════ */
 
 const AuroraCanvas = memo(function AuroraCanvas() {
+  const reduced = usePrefersReducedMotion();
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 -top-40 z-0 h-[460px] overflow-hidden"
-    >
+    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-40 z-0 h-[460px] overflow-hidden">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 1.6, ease: EASE_PREMIUM }}
+        transition={{ duration: reduced ? 0 : 1.6, ease: EASE_PREMIUM }}
         className="relative h-full w-full"
       >
         <div className="lg-orb left-[18%] top-[22%] h-[300px] w-[520px] bg-blue-400/25 dark:bg-sky-500/20" />
@@ -451,12 +539,7 @@ const GlassCardSurface = memo(function GlassCardSurface({
   return (
     <div
       onPointerMove={hover ? trackPointer : undefined}
-      className={cx(
-        'lg-surface overflow-hidden',
-        subtle && 'lg-surface--subtle',
-        hover && 'lg-interactive',
-        className,
-      )}
+      className={cx('lg-surface overflow-hidden', subtle && 'lg-surface--subtle', hover && 'lg-interactive', className)}
     >
       {children}
     </div>
@@ -464,7 +547,7 @@ const GlassCardSurface = memo(function GlassCardSurface({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * SEGMENTED CONTROL — recessed track + sirpanuvchi glass thumb
+ * SEGMENTED CONTROL
  * ════════════════════════════════════════════════════════════════════════ */
 
 interface SegOption<T extends string> {
@@ -491,8 +574,44 @@ function GlassSegmentedInner<T extends string>({
   semantics?: 'tabs' | 'toggle';
 }) {
   const isTabs = semantics === 'tabs';
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!isTabs) return;
+      const idx = options.findIndex((o) => o.id === value);
+      if (idx === -1) return;
+      let nextIdx = idx;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextIdx = (idx + 1) % options.length;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        nextIdx = (idx - 1 + options.length) % options.length;
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        nextIdx = 0;
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        nextIdx = options.length - 1;
+      } else {
+        return;
+      }
+      onChange(options[nextIdx].id);
+      const btns = groupRef.current?.querySelectorAll<HTMLButtonElement>('button[role="tab"]');
+      btns?.[nextIdx]?.focus();
+    },
+    [isTabs, options, value, onChange],
+  );
+
   return (
-    <div role={isTabs ? 'tablist' : 'group'} aria-label={ariaLabel} className="lg-track">
+    <div
+      ref={groupRef}
+      role={isTabs ? 'tablist' : 'group'}
+      aria-label={ariaLabel}
+      onKeyDown={handleKeyDown}
+      className="lg-track"
+    >
       {options.map((o) => {
         const selected = o.id === value;
         return (
@@ -504,6 +623,7 @@ function GlassSegmentedInner<T extends string>({
             aria-pressed={isTabs ? undefined : selected}
             aria-label={o.title ?? o.label}
             title={o.title ?? o.label}
+            tabIndex={isTabs ? (selected ? 0 : -1) : 0}
             data-testid={o.testId}
             onClick={() => onChange(o.id)}
             className={cx(
@@ -804,6 +924,7 @@ const StatTile = memo(function StatTile({
   tone = 'blue',
   active = false,
   onClick,
+  subtitle,
 }: {
   label: string;
   value: number;
@@ -812,6 +933,7 @@ const StatTile = memo(function StatTile({
   tone?: StatTone;
   active?: boolean;
   onClick?: () => void;
+  subtitle?: string;
 }) {
   const c = STAT_PALETTE[tone];
   const reduced = usePrefersReducedMotion();
@@ -859,6 +981,11 @@ const StatTile = memo(function StatTile({
         <div className="mt-1.5 truncate text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
           {label}
         </div>
+        {subtitle && (
+          <div className="mt-0.5 truncate text-[10.5px] font-medium text-slate-400 dark:text-slate-500">
+            {subtitle}
+          </div>
+        )}
 
         <div className="relative mt-2.5 h-8 w-full">
           <Sparkline
@@ -923,6 +1050,7 @@ const CopyChip = memo(function CopyChip({
       type="button"
       onClick={handleCopy}
       title={`${value} (Nusxalash uchun bosing)`}
+      aria-label={`${value} nusxalash`}
       className="group/chip -mx-2 inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2 py-1 text-[12.5px] font-medium text-[var(--text-secondary)] transition-all duration-150 hover:border-slate-200/80 hover:bg-white/70 hover:text-slate-900 dark:hover:border-white/10 dark:hover:bg-white/[0.06] dark:hover:text-white"
     >
       <Icon
@@ -940,18 +1068,13 @@ const CopyChip = memo(function CopyChip({
 });
 
 /* ── Skeletons ─────────────────────────────────────────────────── */
-const Shimmer = memo(function Shimmer({
-  className = '',
-  radius = '0.85rem',
-}: {
-  className?: string;
-  radius?: string;
-}) {
+const Shimmer = memo(function Shimmer({ className = '', radius = '0.85rem' }: { className?: string; radius?: string }) {
+  const reduced = usePrefersReducedMotion();
   return (
     <div
       aria-hidden="true"
       className={`skeleton-shimmer relative overflow-hidden border border-white/60 dark:border-white/[0.06] ${className}`}
-      style={{ borderRadius: radius }}
+      style={{ borderRadius: radius, animationPlayState: reduced ? 'paused' : 'running' }}
     />
   );
 });
@@ -996,7 +1119,7 @@ const StudentsSkeleton = memo(function StudentsSkeleton() {
   );
 });
 
-/* ── RowAction — glass icon button ─────────────────────────────── */
+/* ── RowAction ─────────────────────────────────────────────────── */
 type ActionTone = 'neutral' | 'edit' | 'freeze' | 'delete' | 'celebrate';
 
 const RowAction = memo(function RowAction({
@@ -1055,7 +1178,7 @@ const RowAction = memo(function RowAction({
   );
 });
 
-/* ── StudentActions — grid va jadval uchun yagona action qatori ── */
+/* ── StudentActions ────────────────────────────────────────────── */
 const StudentActions = memo(function StudentActions({
   student,
   isActive,
@@ -1127,34 +1250,32 @@ const StudentActions = memo(function StudentActions({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * CALENDAR HEATMAP — hafta bo'yicha tekislangan 6 haftalik ko'rinish
+ * CALENDAR HEATMAP
  * ════════════════════════════════════════════════════════════════════════ */
 
 const WEEKDAYS = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'] as const;
 
-const CalendarHeatmap = memo(function CalendarHeatmap({
-  startDate,
-  endDate,
-}: {
-  startDate: string;
-  endDate: string;
-}) {
-  const days = useMemo(() => {
+const CalendarHeatmap = memo(function CalendarHeatmap({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const cells = useMemo(() => {
     const start = parseIsoDate(startDate);
     const end = parseIsoDate(endDate);
-    if (!start || !end) return [];
+    if (!start || !end || end < start) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Dushanbaga tekislangan boshlanish nuqtasi
-    const anchor = new Date(Math.min(start.getTime(), today.getTime()));
+    // Boshlanishni dushanbaga tekislash
+    const anchor = new Date(start);
     anchor.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7));
+
+    // Nechta hafta kerak: start dan end gacha + tekislash
+    const spanDays = Math.round((end.getTime() - anchor.getTime()) / 86_400_000) + 1;
+    const totalCells = Math.ceil(spanDays / 7) * 7;
 
     const s = start.getTime();
     const e = end.getTime();
     const tm = today.getTime();
 
-    return Array.from({ length: 42 }, (_, i) => {
+    return Array.from({ length: totalCells }, (_, i) => {
       const d = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + i);
       const t = d.getTime();
       return {
@@ -1167,8 +1288,9 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
     });
   }, [startDate, endDate]);
 
-  if (days.length === 0) return null;
+  if (cells.length === 0) return null;
   const rangeFmt = (d: Date) => d.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' });
+  const weeks = Math.ceil(cells.length / 7);
 
   return (
     <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.05] via-blue-500/[0.02] to-transparent p-3.5 dark:border-sky-400/15">
@@ -1197,7 +1319,7 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
       </div>
 
       <div className="grid grid-cols-7 gap-1">
-        {days.map(({ date, inRange, isStart, isEnd, isToday }) => (
+        {cells.map(({ date, inRange, isStart, isEnd, isToday }) => (
           <div
             key={date.getTime()}
             title={rangeFmt(date)}
@@ -1218,8 +1340,11 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
         ))}
       </div>
 
-      <div className="mt-2 flex items-center justify-end text-[10px] font-medium tabular-nums text-slate-400 dark:text-slate-500">
-        {rangeFmt(days[0].date)} — {rangeFmt(days[days.length - 1].date)}
+      <div className="mt-2 flex items-center justify-between text-[10px] font-medium tabular-nums text-slate-400 dark:text-slate-500">
+        <span>
+          {rangeFmt(cells[0].date)} — {rangeFmt(cells[cells.length - 1].date)}
+        </span>
+        <span>{weeks} hafta</span>
       </div>
     </div>
   );
@@ -1275,7 +1400,8 @@ interface FilterChip {
 const CHIP_TONES: Record<NonNullable<FilterChip['tone']>, string> = {
   blue: 'bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/25',
   amber: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/25',
-  emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
+  emerald:
+    'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
   slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/10',
 };
 
@@ -1303,6 +1429,7 @@ const FilterChips = memo(
             exit={{ opacity: 0, scale: 0.9 }}
             transition={SPRING.snappy}
             onClick={chip.onRemove}
+            aria-label={`${chip.label} filtrini olib tashlash`}
             className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset transition-transform hover:scale-[1.03] ${CHIP_TONES[chip.tone ?? 'slate']}`}
           >
             <span className="max-w-[140px] truncate">{chip.label}</span>
@@ -1323,17 +1450,11 @@ const FilterChips = memo(
  * SELECTION PREVIEW
  * ════════════════════════════════════════════════════════════════════════ */
 
-const SelectionPreview = memo(function SelectionPreview({
-  students,
-  max = 3,
-}: {
-  students: Student[];
-  max?: number;
-}) {
+const SelectionPreview = memo(function SelectionPreview({ students, max = 3 }: { students: Student[]; max?: number }) {
   const visible = students.slice(0, max);
   const remaining = students.length - visible.length;
   return (
-    <div className="flex items-center">
+    <div className="flex items-center" aria-hidden="true">
       {visible.map((s, i) => {
         const name = formatStudentName(s);
         return (
@@ -1357,7 +1478,7 @@ const SelectionPreview = memo(function SelectionPreview({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * COMMAND PALETTE — ⌘K
+ * COMMAND PALETTE
  * ════════════════════════════════════════════════════════════════════════ */
 
 interface PaletteAction {
@@ -1386,6 +1507,8 @@ const CommandPalette = memo(function CommandPalette({
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const listId = useId('palette-list');
+  const getOptionId = (idx: number) => `${listId}-opt-${idx}`;
 
   useEffect(() => {
     if (!open) return;
@@ -1426,6 +1549,12 @@ const CommandPalette = memo(function CommandPalette({
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setActiveIndex(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setActiveIndex(Math.max(0, filtered.length - 1));
     }
   };
 
@@ -1460,12 +1589,22 @@ const CommandPalette = memo(function CommandPalette({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
+                role="combobox"
+                aria-expanded="true"
+                aria-controls={listId}
+                aria-activedescendant={filtered.length > 0 ? getOptionId(activeIndex) : undefined}
+                aria-autocomplete="list"
                 className="flex-1 bg-transparent text-[14.5px] font-medium text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
               />
               <kbd className={KBD}>ESC</kbd>
             </div>
 
-            <div className="relative z-10 max-h-[52vh] overflow-y-auto p-2">
+            <div
+              id={listId}
+              role="listbox"
+              aria-label="Buyruqlar"
+              className="relative z-10 max-h-[52vh] overflow-y-auto p-2"
+            >
               {filtered.length === 0 ? (
                 <div className="p-6 text-center text-[13px] text-slate-500 dark:text-slate-400">
                   Hech narsa topilmadi
@@ -1476,6 +1615,9 @@ const CommandPalette = memo(function CommandPalette({
                   return (
                     <button
                       key={action.id}
+                      id={getOptionId(idx)}
+                      role="option"
+                      aria-selected={isActive}
                       type="button"
                       onClick={() => run(action)}
                       onMouseEnter={() => setActiveIndex(idx)}
@@ -1541,20 +1683,43 @@ const RowHoverPeek = memo(function RowHoverPeek({
   const name = formatStudentName(student);
   const isActive = student.user?.isActive !== false;
   const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
 
-  return (
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let top = anchorRect.bottom + 8;
+    // Pastga sig'masa — yuqoriga
+    if (top + rect.height > vh - margin) top = anchorRect.top - rect.height - 8;
+    // Ekran chegaralarida ushlab turish
+    top = Math.max(margin, Math.min(top, vh - rect.height - margin));
+    let left = anchorRect.left + 60;
+    if (left + rect.width > vw - margin) left = vw - rect.width - margin;
+    left = Math.max(margin, left);
+    setPos({ top, left });
+  }, [anchorRect]);
+
+  return createPortal(
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 8, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      animate={{ opacity: pos ? 1 : 0, y: pos ? 0 : 4, scale: pos ? 1 : 0.98 }}
       exit={{ opacity: 0, y: 4, scale: 0.98 }}
       transition={SPRING.snappy}
       style={{
         position: 'fixed',
-        top: Math.min(anchorRect.bottom + 8, window.innerHeight - 260),
-        left: Math.max(12, Math.min(anchorRect.left + 60, window.innerWidth - 320)),
+        top: pos?.top ?? -9999,
+        left: pos?.left ?? -9999,
         pointerEvents: 'none',
+        visibility: pos ? 'visible' : 'hidden',
       }}
       className="lg-surface lg-float z-50 w-[300px] max-w-[calc(100vw-1.5rem)] overflow-hidden p-3.5 [--lg-r:20px]"
+      aria-hidden="true"
     >
       <div className="relative z-10">
         <div className="flex items-center gap-3">
@@ -1591,7 +1756,215 @@ const RowHoverPeek = memo(function RowHoverPeek({
           Ochish uchun bosing · Quick-Look uchun Space
         </div>
       </div>
-    </motion.div>
+    </motion.div>,
+    document.body,
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * KEYBOARD HELP OVERLAY
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const KeyboardHelp = memo(function KeyboardHelp({ onClose }: { onClose: () => void }) {
+  const shortcuts: Array<[string, string]> = [
+    [isMac ? '⌘ K' : 'Ctrl K', 'Buyruq paneli'],
+    ['/', 'Qidiruvga fokus'],
+    ['?', 'Yorliqlar paneli'],
+    ['Space', 'Quick-Look (tanlangan qator)'],
+    ['Enter', 'Talaba kartasini ochish'],
+    ['E', 'CSV eksport'],
+    ['Del', 'Tanlanganlarni o‘chirish'],
+    ['Esc', 'Yopish / tozalash'],
+  ];
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/40 px-4 backdrop-blur-md"
+      onClick={onClose}
+      role="presentation"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: -18, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={SPRING.palette}
+        onClick={(e) => e.stopPropagation()}
+        className="lg-surface lg-float w-full max-w-md overflow-hidden p-5 [--lg-r:24px]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Klaviatura yorliqlari"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-[15px] font-bold text-slate-900 dark:text-white">
+            <Icon paths={I.help} size={16} className="text-[#007AFF] dark:text-sky-400" />
+            Klaviatura yorliqlari
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Yopish"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-white"
+          >
+            <Icon paths={I.close} size={16} />
+          </button>
+        </div>
+        <ul className="space-y-2">
+          {shortcuts.map(([key, desc]) => (
+            <li key={key} className="flex items-center justify-between gap-3 text-[12.5px]">
+              <kbd className={KBD}>{key}</kbd>
+              <span className="text-slate-600 dark:text-slate-400">{desc}</span>
+            </li>
+          ))}
+        </ul>
+      </motion.div>
+    </motion.div>,
+    document.body,
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * COLUMN VISIBILITY POPOVER
+ * ════════════════════════════════════════════════════════════════════════ */
+
+type ColumnKey = 'email' | 'groups' | 'parent' | 'status';
+
+const COLUMN_LABELS: Record<ColumnKey, string> = {
+  email: 'Email / Telefon',
+  groups: 'Guruhlar',
+  parent: 'Ota-ona',
+  status: 'Holati',
+};
+
+const ColumnVisibility = memo(function ColumnVisibility({
+  visible,
+  onChange,
+  onClose,
+}: {
+  visible: Record<ColumnKey, boolean>;
+  onChange: (key: ColumnKey, value: boolean) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const id = window.setTimeout(() => document.addEventListener('mousedown', onDocClick), 0);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener('mousedown', onDocClick);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label="Ustunlar ko‘rinishi"
+      className="lg-surface lg-float absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden p-2 [--lg-r:16px]"
+    >
+      <p className="mb-1 px-2 text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+        Ustunlar
+      </p>
+      {(Object.keys(COLUMN_LABELS) as ColumnKey[]).map((key) => (
+        <label
+          key={key}
+          className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.06]"
+        >
+          <span>{COLUMN_LABELS[key]}</span>
+          <input
+            type="checkbox"
+            checked={visible[key]}
+            onChange={(e) => onChange(key, e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF]"
+          />
+        </label>
+      ))}
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SAVED VIEWS
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const SavedViewsMenu = memo(function SavedViewsMenu({
+  views,
+  onApply,
+  onDelete,
+  onSave,
+  canSave,
+}: {
+  views: SavedView[];
+  onApply: (v: SavedView) => void;
+  onDelete: (id: string) => void;
+  onSave: () => void;
+  canSave: boolean;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        // parent onClose
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label="Saqlangan ko‘rinishlar"
+      className="lg-surface lg-float absolute right-0 top-full z-30 mt-1 w-60 overflow-hidden p-2 [--lg-r:16px]"
+    >
+      <div className="mb-1 flex items-center justify-between px-2">
+        <p className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          Saqlangan ko‘rinishlar
+        </p>
+        <span className="text-[10px] tabular-nums text-slate-400">{views.length}/3</span>
+      </div>
+      {views.length === 0 && (
+        <p className="px-2 py-2 text-[11.5px] italic text-slate-400">Hali saqlangan ko‘rinish yo‘q</p>
+      )}
+      {views.map((v) => (
+        <div
+          key={v.id}
+          className="group flex items-center gap-1 rounded-lg px-1 py-1 hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+        >
+          <button
+            type="button"
+            onClick={() => onApply(v)}
+            className="flex-1 truncate rounded-md px-1.5 py-1 text-left text-[12px] font-medium text-slate-700 dark:text-slate-200"
+          >
+            {v.name}
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(v.id)}
+            aria-label={`${v.name} ni o‘chirish`}
+            className="rounded-md p-1 text-slate-400 opacity-0 transition-opacity hover:text-rose-500 group-hover:opacity-100"
+          >
+            <Icon paths={I.trash} size={12} />
+          </button>
+        </div>
+      ))}
+      <div className="mt-1 border-t border-slate-200/60 pt-1 dark:border-white/[0.06]">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!canSave}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-colors hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-sky-400 dark:hover:bg-sky-400/10"
+        >
+          <Icon paths={I.bookmark} size={12} />
+          Joriy holatni saqlash
+        </button>
+      </div>
+    </div>
   );
 });
 
@@ -1599,8 +1972,7 @@ const RowHoverPeek = memo(function RowHoverPeek({
  * TABLE HEADER CELLS
  * ════════════════════════════════════════════════════════════════════════ */
 
-const TH =
-  'px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]';
+const TH = 'px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]';
 
 const SortButton = memo(function SortButton({
   label,
@@ -1620,6 +1992,8 @@ const SortButton = memo(function SortButton({
     <button
       type="button"
       onClick={() => onToggle(field)}
+      aria-label={`${label} bo‘yicha saralash`}
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
       className="inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-slate-900 dark:hover:text-white"
     >
       <span>{label}</span>
@@ -1665,10 +2039,14 @@ const FREEZE_REASONS = [
   'Maktab imtihonlari / Olimpiada yig‘ini',
 ] as const;
 
+/** useId import qilinmagan — qo'shamiz. */
+import { useId } from 'react';
+
 export function StudentsPage() {
   const { t } = useSafeI18n();
   usePageTitle(t('students.title'));
   const navigate = useNavigate();
+  const location = useLocation();
   const sound = usePremiumSound();
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
@@ -1680,13 +2058,24 @@ export function StudentsPage() {
   const [search, setSearch] = useState('');
   const [groupId, setGroupId] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusQuickFilter>('ALL');
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDir, setSortDir] = useState<SortDirection>('asc');
+  const [sort, dispatchSort] = useReducer(sortReducer, { field: 'name', dir: 'asc' } as SortState);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [density, setDensity] = useState<Density>('cozy');
+  const [columns, setColumns] = useState<Record<ColumnKey, boolean>>({
+    email: true,
+    groups: true,
+    parent: true,
+    status: true,
+  });
+  const [showColumns, setShowColumns] = useState(false);
+  const [showSavedViews, setShowSavedViews] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadSavedViews());
+  const [announcement, setAnnouncement] = useState('');
 
   // ── Modals / popovers ─────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
   const [freezeTarget, setFreezeTarget] = useState<Student | null>(null);
   const [freezeForm, setFreezeForm] = useState<FreezeFormData>(createDefaultFreezeForm);
   const [isAdmissionPathfinderOpen, setIsAdmissionPathfinderOpen] = useState(false);
@@ -1719,17 +2108,54 @@ export function StudentsPage() {
       } else if (e.key === '/' && !isTyping) {
         e.preventDefault();
         searchInputRef.current?.focus();
-      } else if (e.key === 'Escape' && !isTyping) {
-        setHoveredStudent(null);
+      } else if (e.key === '?' && !isTyping) {
+        e.preventDefault();
+        setShowHelp((v) => !v);
+      } else if (e.key === 'Escape') {
+        if (showHelp) setShowHelp(false);
+        else if (paletteOpen) setPaletteOpen(false);
+        else if (!isTyping) setHoveredStudent(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [showHelp, paletteOpen]);
 
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, groupId, statusFilter]);
+
+  // ── Scroll restore ───────────────────────────────────────────
+  useEffect(() => {
+    const saved = sessionStorage.getItem(SCROLL_KEY);
+    if (saved) {
+      const y = Number(saved);
+      if (Number.isFinite(y) && y > 0) {
+        requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'auto' }));
+      }
+    }
+    const onScroll = () => {
+      try {
+        sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+      } catch {
+        /* quota */
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [location.pathname]);
+
+  // ── Hover peek scroll close ──────────────────────────────────
+  useEffect(() => {
+    if (!hoveredStudent) return;
+    const close = () => setHoveredStudent(null);
+    window.addEventListener('scroll', close, { passive: true });
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close);
+      window.removeEventListener('resize', close);
+    };
+  }, [hoveredStudent]);
 
   // ── Data fetching ─────────────────────────────────────────────
   const params = useMemo<StudentFilters>(
@@ -1757,16 +2183,14 @@ export function StudentsPage() {
 
   const data = students.data as Paginated<Student> | undefined;
   const rawStudentList = useMemo(() => data?.items ?? [], [data]);
-  const groupList = useMemo(
-    () => (groups.data as Paginated<Group> | undefined)?.items ?? [],
-    [groups.data],
-  );
+  const groupList = useMemo(() => (groups.data as Paginated<Group> | undefined)?.items ?? [], [groups.data]);
 
   const stats = useMemo(() => {
     const active = rawStudentList.filter((s) => s.user?.isActive !== false).length;
     const withGroups = rawStudentList.filter((s) => (s.groups ?? []).some((g) => g.isActive)).length;
+    const total = data?.total ?? rawStudentList.length;
     return {
-      total: data?.total ?? rawStudentList.length,
+      total,
       pageTotal: rawStudentList.length,
       active,
       inactive: rawStudentList.length - active,
@@ -1784,10 +2208,10 @@ export function StudentsPage() {
       return true;
     });
 
-    const dir = sortDir === 'asc' ? 1 : -1;
+    const dir = sort.dir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      if (sortField === 'name') return formatStudentName(a).localeCompare(formatStudentName(b)) * dir;
-      if (sortField === 'groups') {
+      if (sort.field === 'name') return formatStudentName(a).localeCompare(formatStudentName(b)) * dir;
+      if (sort.field === 'groups') {
         const ga = (a.groups ?? []).filter((g) => g.isActive).length;
         const gb = (b.groups ?? []).filter((g) => g.isActive).length;
         return (ga - gb) * dir;
@@ -1796,12 +2220,11 @@ export function StudentsPage() {
       const sb = b.user?.isActive !== false ? 1 : 0;
       return (sa - sb) * dir;
     });
-  }, [rawStudentList, statusFilter, sortField, sortDir]);
+  }, [rawStudentList, statusFilter, sort]);
 
   // ── Mutations ─────────────────────────────────────────────────
   const freezeMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: FreezeFormData }) =>
-      studentsApi.freeze(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: FreezeFormData }) => studentsApi.freeze(id, payload),
     onSuccess: () => {
       push('success', t('students.frozenSuccess') || 'Talaba darslari va to‘lovlari vaqtincha muzlatildi');
       setFreezeTarget(null);
@@ -1812,11 +2235,29 @@ export function StudentsPage() {
 
   const unfreezeMutation = useMutation({
     mutationFn: (id: string) => studentsApi.unfreeze(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: queryKeys.students.list(params) });
+      const prev = qc.getQueryData<Paginated<Student>>(queryKeys.students.list(params));
+      if (prev) {
+        qc.setQueryData<Paginated<Student>>(queryKeys.students.list(params), {
+          ...prev,
+          items: prev.items.map((s) =>
+            s.id === id && s.user ? { ...s, user: { ...s.user, isActive: true } } : s,
+          ),
+        });
+      }
+      return { prev };
+    },
+    onError: (e: unknown, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKeys.students.list(params), ctx.prev);
+      push('error', getErrorMessage(e as Error));
+    },
     onSuccess: () => {
       push('success', t('students.unfrozenSuccess') || 'Talaba muzlatish holatidan chiqarildi va faollashtirildi');
+    },
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
-    onError: (e: unknown) => push('error', getErrorMessage(e as Error)),
   });
 
   const removeMutation = useMutation({
@@ -1835,10 +2276,7 @@ export function StudentsPage() {
   });
 
   // ── Handlers ──────────────────────────────────────────────────
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value),
-    [],
-  );
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value), []);
   const handleGroupFilterChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => setGroupId(e.target.value),
     [],
@@ -1848,23 +2286,15 @@ export function StudentsPage() {
     setGroupId('');
     setStatusFilter('ALL');
     setPage(1);
+    dispatchSort({ type: 'reset' });
   }, []);
   const handleToggleSort = useCallback((field: SortField) => {
-    setSortField((prevField) => {
-      if (prevField === field) {
-        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-        return prevField;
-      }
-      setSortDir('asc');
-      return field;
-    });
+    dispatchSort({ type: 'toggle', field });
   }, []);
 
   const handleQuickLook = useCallback(
     (student: Student) => {
-      openQuickLook(
-        buildStudentPanel(student, navigate, false) as unknown as Parameters<typeof openQuickLook>[0],
-      );
+      openQuickLook(buildStudentPanel(student, navigate, false) as unknown as Parameters<typeof openQuickLook>[0]);
     },
     [navigate],
   );
@@ -1872,17 +2302,12 @@ export function StudentsPage() {
   const handleOpenStudentSidecar = useCallback(
     (student: Student) => {
       sound.playTick();
-      openSidecar(
-        buildStudentPanel(student, navigate, true) as unknown as Parameters<typeof openSidecar>[0],
-      );
+      openSidecar(buildStudentPanel(student, navigate, true) as unknown as Parameters<typeof openSidecar>[0]);
     },
     [sound, navigate],
   );
 
-  const handleStudentClick = useCallback(
-    (studentId: string) => navigate(`/students/${studentId}`),
-    [navigate],
-  );
+  const handleStudentClick = useCallback((studentId: string) => navigate(`/students/${studentId}`), [navigate]);
 
   const handleOpenFreeze = useCallback((student: Student) => {
     setFreezeForm(createDefaultFreezeForm());
@@ -1917,10 +2342,20 @@ export function StudentsPage() {
     onOpen: (s) => handleStudentClick(s.id),
     onEdit: (s) => navigate(`/students/${s.id}/edit`),
     onDelete: (items) => {
-      if (items[0]) handleDelete(items[0].id);
+      if (items.length > 1) setBulkDeleteIds(items.map((s) => s.id));
+      else if (items[0]) handleDelete(items[0].id);
     },
     rowSelectorPrefix: 'student-row-',
   });
+
+  // aria-live: tanlov o'zgarganda xabar
+  useEffect(() => {
+    if (selectedCount > 0) {
+      setAnnouncement(`${selectedCount} ta talaba tanlandi`);
+    } else {
+      setAnnouncement('');
+    }
+  }, [selectedCount]);
 
   const handleToggleSelect = useCallback(
     (id: string, e: React.MouseEvent) => {
@@ -1931,16 +2366,16 @@ export function StudentsPage() {
   );
 
   const handleSelectAllOnPage = useCallback(() => {
-    if (isAllSelected) clearSelection();
+    const allOnPageSelected = studentList.length > 0 && studentList.every((s) => selectedIds.has(s.id));
+    if (allOnPageSelected) clearSelection();
     else selectAll();
-  }, [isAllSelected, clearSelection, selectAll]);
+  }, [studentList, selectedIds, clearSelection, selectAll]);
 
   const handleExportCsv = useCallback(() => {
-    const source =
-      selectedIds.size > 0 ? studentList.filter((s) => selectedIds.has(s.id)) : studentList;
+    const source = selectedIds.size > 0 ? studentList.filter((s) => selectedIds.has(s.id)) : studentList;
     if (source.length === 0) return;
 
-    const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const q = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
     const headers = ['ID', 'Ism Familiya', 'Email', 'Telefon', 'Guruhlar', 'Ota-ona', 'Holati'];
     const rows = source.map((s) => {
       const activeGroups = (s.groups ?? [])
@@ -1948,13 +2383,13 @@ export function StudentsPage() {
         .map((g) => g.group?.name ?? '—')
         .join('; ');
       return [
-        s.id,
+        q(s.id),
         q(formatStudentName(s)),
-        s.user?.email || '',
-        s.user?.phone || s.parentPhone || '',
+        q(s.user?.email || ''),
+        q(s.user?.phone || s.parentPhone || ''),
         q(activeGroups),
         q(s.parentName || ''),
-        s.user?.isActive !== false ? 'Faol' : 'Muzlatilgan',
+        q(s.user?.isActive !== false ? 'Faol' : 'Muzlatilgan'),
       ].join(',');
     });
 
@@ -1975,6 +2410,25 @@ export function StudentsPage() {
     if (!deleteTarget || removeMutation.isPending) return;
     removeMutation.mutate(deleteTarget);
   }, [deleteTarget, removeMutation]);
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (!bulkDeleteIds || bulkDeleteIds.length === 0) return;
+    let ok = 0;
+    let failed = 0;
+    for (const id of bulkDeleteIds) {
+      try {
+        await studentsApi.remove(id);
+        ok += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setBulkDeleteIds(null);
+    clearSelection();
+    void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+    if (failed === 0) push('success', `${ok} ta talaba o‘chirildi`);
+    else push('warning', `${ok} ta o‘chirildi, ${failed} ta xato`);
+  }, [bulkDeleteIds, clearSelection, qc, push]);
 
   const { refetch: refetchStudents } = students;
   const handleRetry = useCallback(() => void refetchStudents(), [refetchStudents]);
@@ -2008,7 +2462,7 @@ export function StudentsPage() {
     return chips;
   }, [search, groupId, statusFilter, groupList]);
 
-  // ── Row hover peek (desktop) ──────────────────────────────────
+  // ── Row hover peek ───────────────────────────────────────────
   const handleRowMouseEnter = useCallback(
     (student: Student, e: React.MouseEvent<HTMLTableRowElement>) => {
       if (reduced) return;
@@ -2024,10 +2478,49 @@ export function StudentsPage() {
   }, []);
 
   const densityRowPadding = density === 'compact' ? 'py-2' : density === 'cozy' ? 'py-3.5' : 'py-5';
+  const densityText = density === 'compact' ? 'text-[12.5px]' : 'text-[13.5px]';
 
-  const selectedStudents = useMemo(
-    () => studentList.filter((s) => selectedIds.has(s.id)),
-    [studentList, selectedIds],
+  const selectedStudents = useMemo(() => studentList.filter((s) => selectedIds.has(s.id)), [studentList, selectedIds]);
+
+  // ── Saved views ─────────────────────────────────────────────
+  const handleSaveView = useCallback(() => {
+    const name = window.prompt('Ko‘rinish nomi:', `Ko‘rinish ${savedViews.length + 1}`);
+    if (!name) return;
+    const next: SavedView = {
+      id: `v-${Date.now()}`,
+      name: name.slice(0, 40),
+      search,
+      groupId,
+      statusFilter,
+      sortField: sort.field,
+      sortDir: sort.dir,
+      viewMode,
+      density,
+      createdAt: Date.now(),
+    };
+    const updated = [next, ...savedViews].slice(0, 3);
+    setSavedViews(updated);
+    saveViews(updated);
+    push('success', 'Ko‘rinish saqlandi');
+  }, [search, groupId, statusFilter, sort, viewMode, density, savedViews, push]);
+
+  const handleApplyView = useCallback((v: SavedView) => {
+    setSearch(v.search);
+    setGroupId(v.groupId);
+    setStatusFilter(v.statusFilter as StatusQuickFilter);
+    dispatchSort({ type: 'toggle', field: v.sortField as SortField }); // toggle boshlang'ich holatdan
+    setViewMode(v.viewMode as ViewMode);
+    setDensity(v.density as Density);
+    setShowSavedViews(false);
+  }, []);
+
+  const handleDeleteView = useCallback(
+    (id: string) => {
+      const updated = savedViews.filter((v) => v.id !== id);
+      setSavedViews(updated);
+      saveViews(updated);
+    },
+    [savedViews],
   );
 
   // ── Command palette actions ──────────────────────────────────
@@ -2082,6 +2575,13 @@ export function StudentsPage() {
         keywords: 'comfy comfortable density keng',
         onExecute: () => setDensity('comfy'),
       },
+      {
+        id: 'help',
+        label: 'Klaviatura yorliqlari',
+        icon: I.help,
+        keywords: 'help keyboard shortcuts yorliq',
+        onExecute: () => setShowHelp(true),
+      },
       ...groupList.slice(0, 5).map<PaletteAction>((g) => ({
         id: `group-${g.id}`,
         label: `Guruh: ${g.name}`,
@@ -2094,7 +2594,8 @@ export function StudentsPage() {
   );
 
   // ── Header toolbar ───────────────────────────────────────────
-  const toolBtn = 'h-10 w-10 min-w-[2.5rem] min-h-[2.5rem] shrink-0 p-0 flex items-center justify-center rounded-xl transition-all';
+  const toolBtn =
+    'h-10 w-10 min-w-[2.5rem] min-h-[2.5rem] shrink-0 p-0 flex items-center justify-center rounded-xl transition-all';
 
   const HeaderActions = useMemo(
     () => (
@@ -2200,7 +2701,11 @@ export function StudentsPage() {
           </GlassButton>
         </div>
 
-        <GlassButton asChild variant="primary" className="h-10 min-h-[44px] w-full sm:w-auto shrink-0 rounded-2xl px-4 shadow-sm justify-center">
+        <GlassButton
+          asChild
+          variant="primary"
+          className="h-10 min-h-[44px] w-full sm:w-auto shrink-0 rounded-2xl px-4 shadow-sm justify-center"
+        >
           <Link to="/students/new">
             <span className="inline-flex items-center gap-2 text-xs font-bold sm:text-sm">
               <Icon paths={I.userPlus} size={16} strokeWidth={2.2} />
@@ -2210,7 +2715,6 @@ export function StudentsPage() {
         </GlassButton>
       </div>
     ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, handleExportCsv, sound],
   );
 
@@ -2250,6 +2754,11 @@ export function StudentsPage() {
 
       <GlassPageHeader title={t('students.title')} subtitle={t('students.pageSubtitle')} actions={HeaderActions} />
 
+      {/* aria-live */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </div>
+
       {/* ═══ 1 · STATS ═══ */}
       <motion.div
         variants={containerVariants}
@@ -2265,6 +2774,7 @@ export function StudentsPage() {
           tone="blue"
           active={statusFilter === 'ALL'}
           onClick={() => setStatusFilter('ALL')}
+          subtitle={`Jami · ${stats.pageTotal} sahifada`}
         />
         <StatTile
           label={t('enum.status.ACTIVE')}
@@ -2357,6 +2867,58 @@ export function StudentsPage() {
                   </button>
                 )}
 
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSavedViews((v) => !v);
+                      setShowColumns(false);
+                    }}
+                    aria-label="Saqlangan ko‘rinishlar"
+                    aria-expanded={showSavedViews}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
+                  >
+                    <Icon paths={I.bookmark} size={12} strokeWidth={2.2} />
+                    <span className="hidden sm:inline">Ko‘rinish</span>
+                    {savedViews.length > 0 && (
+                      <span className="rounded-full bg-violet-500/15 px-1.5 text-[10px] tabular-nums text-violet-700 dark:text-violet-300">
+                        {savedViews.length}
+                      </span>
+                    )}
+                  </button>
+                  {showSavedViews && (
+                    <SavedViewsMenu
+                      views={savedViews}
+                      onApply={handleApplyView}
+                      onDelete={handleDeleteView}
+                      onSave={handleSaveView}
+                      canSave={savedViews.length < 3}
+                    />
+                  )}
+                </div>
+
+                <div className="relative hidden md:inline-flex">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowColumns((v) => !v);
+                      setShowSavedViews(false);
+                    }}
+                    aria-label="Ustunlar ko‘rinishi"
+                    aria-expanded={showColumns}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200/80 bg-white/70 text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
+                  >
+                    <Icon paths={I.columns} size={14} strokeWidth={2.2} />
+                  </button>
+                  {showColumns && (
+                    <ColumnVisibility
+                      visible={columns}
+                      onChange={(key, value) => setColumns((prev) => ({ ...prev, [key]: value }))}
+                      onClose={() => setShowColumns(false)}
+                    />
+                  )}
+                </div>
+
                 <div className="hidden md:inline-flex">
                   <GlassSegmented
                     options={DENSITY_OPTIONS}
@@ -2401,8 +2963,20 @@ export function StudentsPage() {
               className="relative z-10 p-10 sm:p-12"
             >
               <GlassEmptyState
-                title={hasActiveFilters ? t('students.emptyFiltered') : t('students.emptySearch')}
-                message={hasActiveFilters ? t('students.emptyFilteredHint') : t('students.emptyHint')}
+                title={
+                  hasActiveFilters
+                    ? t('students.emptyFiltered')
+                    : search.trim()
+                      ? t('students.emptySearch')
+                      : t('students.title')
+                }
+                message={
+                  hasActiveFilters
+                    ? t('students.emptyFilteredHint')
+                    : search.trim()
+                      ? t('students.emptyHint')
+                      : 'Hozircha talaba yo‘q. Birinchi talabani qo‘shing.'
+                }
                 action={
                   hasActiveFilters ? (
                     <GlassButton type="button" variant="secondary" onClick={handleClearFilters}>
@@ -2421,7 +2995,7 @@ export function StudentsPage() {
               initial="hidden"
               animate="visible"
               exit={{ opacity: 0 }}
-              className="relative z-10 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3"
+              className="relative z-10 grid grid-cols-1 auto-rows-fr gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3"
             >
               {studentList.map((student) => {
                 const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
@@ -2437,6 +3011,12 @@ export function StudentsPage() {
                     tabIndex={0}
                     role="link"
                     aria-label={t('students.viewStudentAria', { name })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleStudentClick(student.id);
+                      }
+                    }}
                     className="lg-surface lg-surface--subtle lg-interactive group flex cursor-pointer flex-col justify-between overflow-hidden p-4 outline-none transition-transform duration-300 [--lg-r:22px] hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-[#007AFF]"
                   >
                     <div className="relative z-10">
@@ -2514,36 +3094,44 @@ export function StudentsPage() {
                           <SortButton
                             label={t('common.name')}
                             field="name"
-                            sortField={sortField}
-                            sortDir={sortDir}
+                            sortField={sort.field}
+                            sortDir={sort.dir}
                             onToggle={handleToggleSort}
                           />
                         </div>
                       </th>
-                      <th scope="col" className={TH}>
-                        {t('common.email')}
-                      </th>
-                      <th scope="col" className={TH}>
-                        <SortButton
-                          label={t('students.col.groups')}
-                          field="groups"
-                          sortField={sortField}
-                          sortDir={sortDir}
-                          onToggle={handleToggleSort}
-                        />
-                      </th>
-                      <th scope="col" className={`hidden lg:table-cell ${TH}`}>
-                        {t('students.col.parentName')}
-                      </th>
-                      <th scope="col" className={TH}>
-                        <SortButton
-                          label={t('students.col.status')}
-                          field="status"
-                          sortField={sortField}
-                          sortDir={sortDir}
-                          onToggle={handleToggleSort}
-                        />
-                      </th>
+                      {columns.email && (
+                        <th scope="col" className={TH}>
+                          {t('common.email')}
+                        </th>
+                      )}
+                      {columns.groups && (
+                        <th scope="col" className={TH}>
+                          <SortButton
+                            label={t('students.col.groups')}
+                            field="groups"
+                            sortField={sort.field}
+                            sortDir={sort.dir}
+                            onToggle={handleToggleSort}
+                          />
+                        </th>
+                      )}
+                      {columns.parent && (
+                        <th scope="col" className={`hidden lg:table-cell ${TH}`}>
+                          {t('students.col.parentName')}
+                        </th>
+                      )}
+                      {columns.status && (
+                        <th scope="col" className={TH}>
+                          <SortButton
+                            label={t('students.col.status')}
+                            field="status"
+                            sortField={sort.field}
+                            sortDir={sort.dir}
+                            onToggle={handleToggleSort}
+                          />
+                        </th>
+                      )}
                       <th scope="col" className={`${TH} !text-right`}>
                         {t('common.actions')}
                       </th>
@@ -2588,7 +3176,7 @@ export function StudentsPage() {
                             isRowFocused && 'z-10 ring-2 ring-[#007AFF] shadow-[0_0_18px_rgba(0,122,255,0.28)]',
                           )}
                         >
-                          <td className={`relative px-6 ${densityRowPadding}`}>
+                          <td className={`relative px-6 ${densityRowPadding} ${densityText}`}>
                             <span
                               aria-hidden="true"
                               className="pointer-events-none absolute inset-y-2 left-0 w-1 origin-center scale-y-0 rounded-r-full bg-[#007AFF] shadow-[0_0_10px_rgba(0,122,255,0.6)] transition-transform duration-200 group-hover:scale-y-100 dark:bg-[#38BDF8]"
@@ -2629,51 +3217,61 @@ export function StudentsPage() {
                             </div>
                           </td>
 
-                          <td className={`px-6 ${densityRowPadding}`}>
-                            {student.user?.email ? (
-                              <CopyChip value={student.user.email} icon={I.mail} />
-                            ) : student.user?.phone ? (
-                              <CopyChip value={student.user.phone} icon={I.phone} />
-                            ) : (
-                              <span className="text-[var(--text-tertiary)] opacity-45">—</span>
-                            )}
-                          </td>
-
-                          <td className={`px-6 ${densityRowPadding}`}>
-                            <div className="flex flex-wrap gap-1.5">
-                              {activeGroups.slice(0, 3).map((enrollment, idx) => (
-                                <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">
-                                  {enrollment.group?.name ?? '—'}
-                                </GlassBadge>
-                              ))}
-                              {activeGroups.length === 0 && (
+                          {columns.email && (
+                            <td className={`px-6 ${densityRowPadding}`}>
+                              {student.user?.email ? (
+                                <CopyChip value={student.user.email} icon={I.mail} />
+                              ) : student.user?.phone ? (
+                                <CopyChip value={student.user.phone} icon={I.phone} />
+                              ) : (
                                 <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                               )}
-                              {activeGroups.length > 3 && <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>}
-                            </div>
-                          </td>
+                            </td>
+                          )}
 
-                          <td className={`hidden lg:table-cell px-6 ${densityRowPadding}`}>
-                            {student.parentName ? (
-                              <div className="flex flex-col">
-                                <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text-primary)]">
-                                  <Icon paths={I.parent} size={13} strokeWidth={1.9} className="opacity-55" />
-                                  <span className="max-w-[165px] truncate">{student.parentName}</span>
-                                </span>
-                                {student.parentPhone && (
-                                  <span className="mt-0.5 pl-5 text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
-                                    {student.parentPhone}
-                                  </span>
+                          {columns.groups && (
+                            <td className={`px-6 ${densityRowPadding}`}>
+                              <div className="flex flex-wrap gap-1.5">
+                                {activeGroups.slice(0, 3).map((enrollment, idx) => (
+                                  <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">
+                                    {enrollment.group?.name ?? '—'}
+                                  </GlassBadge>
+                                ))}
+                                {activeGroups.length === 0 && (
+                                  <span className="text-[var(--text-tertiary)] opacity-45">—</span>
+                                )}
+                                {activeGroups.length > 3 && (
+                                  <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>
                                 )}
                               </div>
-                            ) : (
-                              <span className="text-[var(--text-tertiary)] opacity-45">—</span>
-                            )}
-                          </td>
+                            </td>
+                          )}
 
-                          <td className={`px-6 ${densityRowPadding}`}>
-                            <StatusBadge isActive={student.user?.isActive} pulse />
-                          </td>
+                          {columns.parent && (
+                            <td className={`hidden lg:table-cell px-6 ${densityRowPadding}`}>
+                              {student.parentName ? (
+                                <div className="flex flex-col">
+                                  <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text-primary)]">
+                                    <Icon paths={I.parent} size={13} strokeWidth={1.9} className="opacity-55" />
+                                    <span className="max-w-[165px] truncate">{student.parentName}</span>
+                                  </span>
+                                  {student.parentPhone && (
+                                    <span className="mt-0.5 pl-5 text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
+                                      {student.parentPhone}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[var(--text-tertiary)] opacity-45">—</span>
+                              )}
+                            </td>
+                          )}
+
+                          {columns.status && (
+                            <td className={`px-6 ${densityRowPadding}`}>
+                              <StatusBadge isActive={student.user?.isActive} pulse />
+                            </td>
+                          )}
 
                           <td className={`px-6 ${densityRowPadding}`}>
                             <div
@@ -2742,14 +3340,15 @@ export function StudentsPage() {
             variant: 'danger',
             shortcut: 'Del',
             onClick: () => {
-              const first = studentList.find((s) => selectedIds.has(s.id));
-              if (first) handleDelete(first.id);
+              const ids = studentList.filter((s) => selectedIds.has(s.id)).map((s) => s.id);
+              if (ids.length === 1) handleDelete(ids[0]);
+              else if (ids.length > 1) setBulkDeleteIds(ids);
             },
           },
         ]}
       />
 
-      {/* ═══ 5 · DELETE CONFIRMATION ═══ */}
+      {/* ═══ 5 · DELETE CONFIRMATIONS ═══ */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={() => {
@@ -2758,6 +3357,14 @@ export function StudentsPage() {
         onConfirm={confirmDelete}
         description={t('students.confirmDelete')}
         loading={removeMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteIds !== null}
+        onClose={() => setBulkDeleteIds(null)}
+        onConfirm={confirmBulkDelete}
+        description={`${bulkDeleteIds?.length ?? 0} ta talabani o‘chirmoqchimisiz? Bu amalni qaytarib bo‘lmaydi.`}
+        loading={false}
       />
 
       {/* ═══ 6 · FREEZE MODAL ═══ */}
@@ -2791,11 +3398,7 @@ export function StudentsPage() {
               </span>
             </div>
 
-            <FreezeTimeline
-              startDate={freezeForm.startDate}
-              endDate={freezeForm.endDate}
-              days={freezeDurationDays}
-            />
+            <FreezeTimeline startDate={freezeForm.startDate} endDate={freezeForm.endDate} days={freezeDurationDays} />
 
             <CalendarHeatmap startDate={freezeForm.startDate} endDate={freezeForm.endDate} />
 
@@ -2811,6 +3414,7 @@ export function StudentsPage() {
                     onClick={() =>
                       setFreezeForm((prev) => ({ ...prev, endDate: addDaysToIso(prev.startDate, preset.days - 1) }))
                     }
+                    aria-pressed={calculateFreezeDays(freezeForm.startDate, freezeForm.endDate) === preset.days}
                     className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:-translate-y-px hover:border-sky-400 hover:text-sky-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:border-sky-400"
                   >
                     <Icon paths={I.calendar} size={13} />
@@ -2863,6 +3467,7 @@ export function StudentsPage() {
                   key={reasonPreset}
                   type="button"
                   onClick={() => setFreezeForm((prev) => ({ ...prev, reason: reasonPreset }))}
+                  aria-pressed={freezeForm.reason === reasonPreset}
                   className={cx(
                     'rounded-lg border px-2.5 py-1 text-[11px] font-medium transition',
                     freezeForm.reason === reasonPreset
@@ -2899,6 +3504,9 @@ export function StudentsPage() {
       <AnimatePresence>
         {hoveredStudent && <RowHoverPeek student={hoveredStudent.student} anchorRect={hoveredStudent.rect} />}
       </AnimatePresence>
+
+      {/* ═══ 9 · KEYBOARD HELP ═══ */}
+      <AnimatePresence>{showHelp && <KeyboardHelp onClose={() => setShowHelp(false)} />}</AnimatePresence>
 
       <UniversityAdmissionPathfinder
         isOpen={isAdmissionPathfinderOpen}

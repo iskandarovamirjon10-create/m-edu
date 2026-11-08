@@ -16,6 +16,8 @@
  * ============================================================================
  */
 
+import { createPortal } from 'react-dom';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import {
   useCallback,
   useEffect,
@@ -476,6 +478,7 @@ function useHotkeys(map: Record<string, () => void>, disabled = false): void {
 
 export function AiCopilot() {
   const { t } = useSafeI18n();
+  usePageTitle(t('ai.title') || 'AI Yordamchi — M-EDU');
   const online = useOnlineStatus();
   const { routeTitle, routeContext } = useAiContextSuggestions();
   const { isDark, toggleTheme } = useTheme();
@@ -1868,40 +1871,43 @@ export function AiCopilot() {
       />
 
       {/* ── 9.2 Pedagogical Lesson Plan Studio Modal (Full Motion & Focus Trap) ─ */}
-      <AnimatePresence>
-        {isLessonStudioOpen && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="5-Bosqichli Dars Rejasi Studiyasi"
-            className="fixed inset-0 z-[170] flex items-center justify-center p-2.5 sm:p-5 overflow-y-auto"
-          >
-            <motion.div
-              key="lesson-studio-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setIsLessonStudioOpen(false)}
-              className="fixed inset-0 bg-zinc-950/65 backdrop-blur-md"
-              aria-hidden="true"
-            />
-            <motion.div
-              key="lesson-studio-dialog"
-              ref={lessonModalRef}
-              tabIndex={-1}
-              initial={{ opacity: 0, scale: 0.96, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              transition={SPRING_PANEL}
-              className="relative z-10 w-full max-w-5xl rounded-[28px] bg-white/95 dark:bg-zinc-900/95 border border-white/25 dark:border-white/10 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.45)] backdrop-blur-2xl overflow-hidden max-h-[92vh] flex flex-col focus:outline-none"
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isLessonStudioOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="5-Bosqichli Dars Rejasi Studiyasi"
+              className="fixed inset-0 z-[220] flex items-center justify-center p-2.5 sm:p-5 overflow-y-auto"
             >
-              <TopSpecular inset="inset-x-10" />
-              <AiLessonPlanStudio onClose={() => setIsLessonStudioOpen(false)} />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+              <motion.div
+                key="lesson-studio-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setIsLessonStudioOpen(false)}
+                className="fixed inset-0 bg-zinc-950/65 backdrop-blur-md"
+                aria-hidden="true"
+              />
+              <motion.div
+                key="lesson-studio-dialog"
+                ref={lessonModalRef}
+                tabIndex={-1}
+                initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                transition={SPRING_PANEL}
+                className="relative z-10 w-full max-w-5xl rounded-[28px] bg-white/95 dark:bg-zinc-900/95 border border-white/25 dark:border-white/10 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.45)] backdrop-blur-2xl overflow-hidden max-h-[92vh] flex flex-col focus:outline-none"
+              >
+                <TopSpecular inset="inset-x-10" />
+                <AiLessonPlanStudio onClose={() => setIsLessonStudioOpen(false)} />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ── 10. Clear Chat Confirmation Dialog ───────────────────── */}
       <ConfirmDialog

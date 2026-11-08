@@ -22,7 +22,6 @@ import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { StudentSkillConstellationStudio } from '@/components/gamification/StudentSkillConstellationStudio';
@@ -1185,7 +1184,6 @@ export function GamificationHubPage() {
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [rewardToDelete, setRewardToDelete] = useState<RewardItem | null>(null);
   const [rewardToDelete, setRewardToDelete] = useState<RewardItem | null>(null);
 
   /* ── Queries ── */
