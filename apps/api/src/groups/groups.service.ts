@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
@@ -10,12 +10,38 @@ import { BulkGroupRoomDto, BulkGroupStatusDto, BulkGroupTeacherDto } from './dto
 export class GroupsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: GroupQuery) {
+  async findAll(organizationId: string, query: GroupQuery, currentUser?: { id?: string; role?: string }) {
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.GroupWhereInput = { organizationId };
 
+    // Object-level authorization: Teachers, students, and parents only view their own groups
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id, organizationId },
+        select: { id: true },
+      });
+      where.teacherId = teacher?.id || '00000000-0000-0000-0000-000000000000';
+    } else if (currentUser?.role === 'STUDENT') {
+      where.enrollments = {
+        some: {
+          isActive: true,
+          organizationId,
+          student: { userId: currentUser.id },
+        },
+      };
+    } else if (currentUser?.role === 'PARENT') {
+      where.enrollments = {
+        some: {
+          isActive: true,
+          organizationId,
+          student: { parentStudents: { some: { parentId: currentUser.id } } },
+        },
+      };
+    } else if (query.teacherId) {
+      where.teacherId = query.teacherId;
+    }
+
     if (query.courseId) where.courseId = query.courseId;
-    if (query.teacherId) where.teacherId = query.teacherId;
     if (query.room) where.room = { contains: query.room, mode: 'insensitive' };
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
     if (query.search) {
@@ -55,7 +81,7 @@ export class GroupsService {
     return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
-  async findOne(organizationId: string, id: string) {
+  async findOne(organizationId: string, id: string, currentUser?: { id?: string; role?: string }) {
     const group = await this.prisma.group.findFirst({
       where: { id, organizationId },
       include: {
@@ -64,11 +90,44 @@ export class GroupsService {
         schedules: { where: { isActive: true } },
         enrollments: {
           where: { isActive: true },
-          include: { student: { include: { user: { select: { firstName: true, lastName: true, email: true } } } } },
+          include: {
+            student: {
+              include: {
+                user: { select: { firstName: true, lastName: true, email: true } },
+                parentStudents: { select: { parentId: true } },
+              },
+            },
+          },
         },
       },
     });
     if (!group) throw new NotFoundException('Group not found');
+
+    // Object-level authorization: Teachers cannot view other teachers' groups
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || group.teacherId !== teacher.id) {
+        throw new ForbiddenException('Siz faqat o‘zingizga biriktirilgan guruhlarni ko‘ra olasiz');
+      }
+    } else if (currentUser?.role === 'STUDENT') {
+      const isMember = group.enrollments?.some(
+        (e: any) => e.student?.user?.id === currentUser.id || e.student?.userId === currentUser.id,
+      );
+      if (!isMember) {
+        throw new ForbiddenException('Siz faqat o‘zingiz a’zo bo‘lgan guruhlarni ko‘ra olasiz');
+      }
+    } else if (currentUser?.role === 'PARENT') {
+      const hasChild = group.enrollments?.some((e: any) =>
+        e.student?.parentStudents?.some((ps: any) => ps.parentId === currentUser.id),
+      );
+      if (!hasChild) {
+        throw new ForbiddenException('Siz faqat farzandingiz a’zo bo‘lgan guruhlarni ko‘ra olasiz');
+      }
+    }
+
     return group;
   }
 

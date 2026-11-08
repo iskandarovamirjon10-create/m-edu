@@ -34,6 +34,9 @@ pids
 .DS_Store
 Thumbs.db
 
+# Binaries
+*.exe
+
 # Turborepo
 .turbo/
 

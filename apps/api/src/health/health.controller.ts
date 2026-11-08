@@ -45,7 +45,7 @@ export class HealthController {
     return payload;
   }
 
-  @Get('liveness')
+  @Get(['liveness', 'live'])
   @ApiOperation({ summary: 'Kubernetes/Cloud Liveness probe — checks if process is responding' })
   liveness() {
     return {
@@ -55,7 +55,7 @@ export class HealthController {
     };
   }
 
-  @Get('readiness')
+  @Get(['readiness', 'ready'])
   @ApiOperation({ summary: 'Kubernetes/Cloud Readiness probe — checks database connection' })
   async readiness(@Res({ passthrough: true }) res: Response) {
     let database = 'down';
@@ -115,6 +115,8 @@ export class HealthController {
         heapTotalMb: toMb(mem.heapTotal),
         heapUsedMb: toMb(mem.heapUsed),
         externalMb: toMb(mem.external),
+        heapUsagePercent: Math.round((mem.heapUsed / mem.heapTotal) * 100),
+        pressure: (mem.heapUsed / mem.heapTotal) > 0.85 ? 'high' : 'normal',
       },
       timestamp: new Date().toISOString(),
     };

@@ -609,7 +609,7 @@ export function CurriculumPage() {
   });
 
   const list: Curriculum[] = useMemo(
-    () => (Array.isArray(curriculums) ? curriculums : (curriculums as any)?.items ?? []),
+    () => (Array.isArray(curriculums) ? curriculums : (curriculums as { items?: unknown[] })?.items ?? []),
     [curriculums],
   );
 
@@ -625,7 +625,7 @@ export function CurriculumPage() {
         title: curriculum.name,
         subtitle: curriculum.subject
           ? `${curriculum.subject.name} (${curriculum.subject.code})`
-          : t('curriculum.generalCurriculum', "Umumiy ta'lim rejasi"),
+          : t('curriculum.generalCurriculum', "Umumiy taʼlim rejasi"),
         badge: {
           text: curriculum.status,
           tone: curriculum.status === 'PUBLISHED' || curriculum.status === 'ACTIVE' ? 'emerald' : 'amber',
@@ -641,13 +641,13 @@ export function CurriculumPage() {
           { label: 'Holati', value: curriculum.status },
         ],
         details: [
-          { label: "O'quv rejasi ID", value: curriculum.id, copyable: true },
+          { label: "O‘quv rejasi ID", value: curriculum.id, copyable: true },
           { label: 'Reja nomi', value: curriculum.name },
           { label: 'Fan kodi', value: curriculum.subject?.code || '—' },
           { label: 'Mavjud modullar', value: `${curriculum._count?.modules || 0} ta modul` },
         ],
         primaryAction: {
-          label: "O'quv rejasini tahrirlash",
+          label: "O‘quv rejasini tahrirlash",
           onExecute: () => {
             setIsModalOpen(true);
             setName(curriculum.name);
@@ -752,7 +752,7 @@ export function CurriculumPage() {
           </div>
           <div>
             <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              {t('curriculum.loadErrorTitle', "O'quv rejalarini yuklab bo'lmadi")}
+              {t('curriculum.loadErrorTitle', "O‘quv rejalarini yuklab bo‘lmadi")}
             </h3>
             <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
               {(error as Error)?.message || t('common.error', 'Xatolik yuz berdi')}
@@ -818,7 +818,7 @@ export function CurriculumPage() {
                     className="h-1.5 w-1.5 rounded-full"
                     style={{ background: TONE.green.fg, boxShadow: `0 0 6px ${TONE.green.glow}` }}
                   />
-                  {stats.published} {t('curriculum.badge.published', "Faol o'quv rejalari")}
+                  {stats.published} {t('curriculum.badge.published', "Faol o‘quv rejalari")}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-black/5 bg-slate-100/70 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
                   <Icon paths={I.layers} size={10} strokeWidth={2.5} />
@@ -840,10 +840,10 @@ export function CurriculumPage() {
               </div>
 
               <h1 className="mt-2.5 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
-                {t('curriculum.heroTitle', "O'quv rejalari va sillabus")}
+                {t('curriculum.heroTitle', "O‘quv rejalari va sillabus")}
               </h1>
               <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">
-                {t('curriculum.heroSubtitle', "Fanlar bo'yicha bosqichma-bosqich o'quv rejalari, mavzular va dars modullarini boshqaring")}
+                {t('curriculum.heroSubtitle', "Fanlar bo‘yicha bosqichma-bosqich o‘quv rejalari, mavzular va dars modullarini boshqaring")}
               </p>
             </div>
 
@@ -921,7 +921,7 @@ export function CurriculumPage() {
               setSelectedSubject(e.target.value);
             }}
             className="bg-transparent text-xs font-bold text-slate-800 outline-none dark:text-slate-200 cursor-pointer min-h-[36px] max-w-full truncate"
-            aria-label={t('curriculum.filterAria', "Fan bo'yicha filtrlash")}
+            aria-label={t('curriculum.filterAria', "Fan bo‘yicha filtrlash")}
           >
             <option value="">{t('curriculum.allSubjects', 'Barcha fanlar')}</option>
             {subjects?.items?.map((s: any) => (
@@ -978,7 +978,7 @@ export function CurriculumPage() {
               </div>
               <div>
                 <h2 className="text-sm font-black tracking-tight text-slate-900 dark:text-slate-100">
-                  {t('curriculum.listTitle', "O'quv rejalari ro'yxati")}
+                  {t('curriculum.listTitle', "O‘quv rejalari ro‘yxati")}
                 </h2>
                 <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   {list.length} {t('curriculum.countSuffix', 'ta reja mavjud')}
@@ -995,13 +995,13 @@ export function CurriculumPage() {
                 </div>
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {selectedSubject
-                    ? t('curriculum.emptyFilteredTitle', "Bu fan bo'yicha o'quv reja topilmadi")
-                    : t('curriculum.emptyTitle', "Hozircha o'quv rejalari mavjud emas")}
+                    ? t('curriculum.emptyFilteredTitle', "Bu fan bo‘yicha o‘quv reja topilmadi")
+                    : t('curriculum.emptyTitle', "Hozircha o‘quv rejalari mavjud emas")}
                 </p>
                 <p className="max-w-sm text-xs font-medium text-slate-500 dark:text-slate-400">
                   {selectedSubject
                     ? t('curriculum.emptyFilteredHint', "Boshqa fanni tanlang yoki ushbu fan uchun yangi reja yarating")
-                    : t('curriculum.emptyHint', "Darslik va kurslar uchun yangi o'quv dasturini shakllantiring")}
+                    : t('curriculum.emptyHint', "Darslik va kurslar uchun yangi o‘quv dasturini shakllantiring")}
                 </p>
                 <button
                   type="button"
@@ -1065,7 +1065,7 @@ export function CurriculumPage() {
                   <Icon paths={I.sparkles} size={18} strokeWidth={2.2} />
                 </div>
                 <p className="text-xs font-semibold leading-snug">
-                  {t('curriculum.createHint', "Yangi o'quv rejasiga nom bering va uni tegishli fanga biriktiring.")}
+                  {t('curriculum.createHint', "Yangi o‘quv rejasiga nom bering va uni tegishli fanga biriktiring.")}
                 </p>
               </div>
 

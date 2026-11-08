@@ -274,14 +274,24 @@ export function GlassTR({
 }: GlassTRProps & ExtraProps) {
   const selected = Boolean(rest['aria-selected']);
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLTableRowElement>) => {
+    rest.onKeyDown?.(e);
+    if (!e.defaultPrevented && onClick && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onClick(e as unknown as MouseEvent);
+    }
+  };
+
   return (
     <tr
       data-selected={selected ? 'true' : 'false'}
+      tabIndex={onClick && rest.tabIndex === undefined ? 0 : rest.tabIndex}
+      onKeyDown={onClick ? handleKeyDown : rest.onKeyDown}
       className={cn(
         'border-b border-black/[0.04] dark:border-white/[0.06] transition-colors duration-150 last:border-b-0',
         'hover:bg-black/[0.02] dark:hover:bg-white/[0.03]',
         selected && 'bg-apple-blue/[0.07] hover:bg-apple-blue/[0.10] dark:bg-apple-blue/[0.12]',
-        onClick && 'cursor-pointer',
+        onClick && 'cursor-pointer focus-visible:outline-2 focus-visible:outline-[var(--border-focus)]',
         className,
       )}
       onClick={onClick}

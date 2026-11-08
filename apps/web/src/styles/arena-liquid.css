@@ -1,0 +1,272 @@
+/**
+ * ============================================================================
+ *  M-EDU Mind Arena (v4.0 — Spatial Liquid Glass & Chromatic Optics)
+ *  Directly derived from TelegramPresentation.tsx and Apple VisionOS tokens.
+ *  Supports seamless adaptive Light (Ivory/Frosted White) & Dark (Obsidian) modes.
+ * ============================================================================
+ */
+
+:root {
+  --arena-lg-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --arena-lg-blur: 38px;
+  --arena-lg-sat: 195%;
+
+  /* Light Theme Optics (Matches M-EDU Light & Telegram WebApp Light) */
+  --arena-page-bg: #F4F6FB;
+  --arena-glass-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.72) 100%);
+  --arena-glass-bg-subtle: rgba(255, 255, 255, 0.65);
+  --arena-glass-edge: rgba(15, 23, 42, 0.08);
+  --arena-glass-edge-soft: rgba(15, 23, 42, 0.05);
+  --arena-glass-spec: #FFFFFF;
+  --arena-glass-shadow: 0 20px 48px -14px rgba(15, 23, 42, 0.08), 0 4px 14px -2px rgba(15, 23, 42, 0.03);
+  --arena-glass-shadow-elevated: 0 28px 64px -16px rgba(15, 23, 42, 0.12), 0 8px 24px -4px rgba(15, 23, 42, 0.06);
+
+  --arena-inset-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(246, 248, 252, 0.72));
+  --arena-inset-edge: rgba(15, 23, 42, 0.06);
+  --arena-inset-shadow: inset 0 1px 0 #FFFFFF, 0 1px 3px rgba(15, 23, 42, 0.04);
+
+  --arena-dock-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.82));
+  --arena-dock-edge: rgba(15, 23, 42, 0.08);
+
+  --arena-text-main: #0B1120;
+  --arena-text-muted: #334155;
+  --arena-text-subtle: #64748B;
+
+  --arena-cyan-glow: rgba(10, 132, 255, 0.18);
+  --arena-purple-glow: rgba(139, 92, 246, 0.18);
+  --arena-rose-glow: rgba(244, 63, 94, 0.18);
+  --arena-amber-glow: rgba(245, 158, 11, 0.18);
+  --arena-emerald-glow: rgba(16, 185, 129, 0.18);
+}
+
+/* Dark & OLED Theme Overrides */
+:is(.dark, [data-theme='dark'], [data-theme='oled']) {
+  --arena-page-bg: #060911;
+  --arena-glass-bg: linear-gradient(145deg, rgba(30, 41, 59, 0.72) 0%, rgba(15, 23, 42, 0.52) 100%);
+  --arena-glass-bg-subtle: rgba(15, 23, 42, 0.55);
+  --arena-glass-edge: rgba(255, 255, 255, 0.12);
+  --arena-glass-edge-soft: rgba(255, 255, 255, 0.07);
+  --arena-glass-spec: rgba(255, 255, 255, 0.4);
+  --arena-glass-shadow: 0 28px 56px -12px rgba(0, 0, 0, 0.65), 0 6px 20px -4px rgba(0, 0, 0, 0.45);
+  --arena-glass-shadow-elevated: 0 36px 72px -16px rgba(0, 0, 0, 0.75), 0 12px 32px -6px rgba(0, 0, 0, 0.55);
+
+  --arena-inset-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
+  --arena-inset-edge: rgba(255, 255, 255, 0.08);
+  --arena-inset-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -8px 18px -14px rgba(0, 0, 0, 0.24);
+
+  --arena-dock-bg: linear-gradient(160deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05)), rgba(15, 23, 42, 0.85);
+  --arena-dock-edge: rgba(255, 255, 255, 0.14);
+
+  --arena-text-main: #F8FAFC;
+  --arena-text-muted: #CBD5E1;
+  --arena-text-subtle: #94A3B8;
+
+  --arena-cyan-glow: rgba(6, 182, 212, 0.35);
+  --arena-purple-glow: rgba(168, 85, 247, 0.35);
+  --arena-rose-glow: rgba(244, 63, 94, 0.35);
+  --arena-amber-glow: rgba(245, 158, 11, 0.35);
+  --arena-emerald-glow: rgba(16, 185, 129, 0.35);
+}
+
+/* ============================================================================
+ * 1. ASOSIY SHISHA QATLAMI (Liquid Glass Substrate)
+ * ============================================================================ */
+.arena-glass {
+  position: relative;
+  isolation: isolate;
+  background: var(--arena-glass-bg);
+  -webkit-backdrop-filter: blur(var(--arena-lg-blur)) saturate(var(--arena-lg-sat));
+  backdrop-filter: blur(var(--arena-lg-blur)) saturate(var(--arena-lg-sat));
+  border: 1px solid var(--arena-glass-edge);
+  box-shadow:
+    var(--arena-glass-shadow),
+    inset 0 1px 0 var(--arena-glass-spec);
+  transition:
+    transform 0.35s var(--arena-lg-ease),
+    box-shadow 0.35s var(--arena-lg-ease),
+    border-color 0.35s var(--arena-lg-ease),
+    background 0.35s var(--arena-lg-ease);
+}
+
+/* Specular yorug'lik refleksi */
+.arena-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(120% 70% at 12% -8%, rgba(255, 255, 255, 0.45), transparent 52%),
+    radial-gradient(90% 60% at 100% 110%, rgba(255, 255, 255, 0.08), transparent 60%);
+  opacity: 0.9;
+}
+
+/* Chromatic Masked Rim Border */
+.arena-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02) 62%, rgba(255, 255, 255, 0.35));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.85;
+}
+
+/* ============================================================================
+ * 2. ICHKI CHO'KMA QATLAM (Carved Liquid Inset Well)
+ * ============================================================================ */
+.arena-inset {
+  position: relative;
+  background: var(--arena-inset-bg);
+  border: 1px solid var(--arena-inset-edge);
+  box-shadow: var(--arena-inset-shadow);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  transition:
+    transform 0.25s var(--arena-lg-ease),
+    background 0.25s var(--arena-lg-ease),
+    border-color 0.25s var(--arena-lg-ease),
+    box-shadow 0.25s var(--arena-lg-ease);
+}
+
+/* ============================================================================
+ * 3. TUGMALAR (Fluid Iridescent & Adaptive Buttons)
+ * ============================================================================ */
+.arena-btn {
+  position: relative;
+  border: 1px solid var(--arena-glass-edge);
+  background: var(--arena-glass-bg-subtle);
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.06), inset 0 1px 0 var(--arena-glass-spec);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  color: var(--arena-text-main);
+  transition: transform 0.2s var(--arena-lg-ease), box-shadow 0.2s var(--arena-lg-ease), background 0.2s var(--arena-lg-ease);
+}
+.arena-btn:hover {
+  border-color: var(--arena-glass-edge);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -3px rgba(15, 23, 42, 0.1);
+}
+.arena-btn:active {
+  transform: scale(0.97);
+}
+.arena-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.arena-btn-primary {
+  background: linear-gradient(135deg, #0A84FF 0%, #4F46E5 52%, #7C3AED 100%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 12px 28px -8px rgba(79, 70, 229, 0.55),
+    inset 0 1.25px 0 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.25);
+  color: #FFFFFF;
+  font-weight: 800;
+  transition: transform 0.2s var(--arena-lg-ease), box-shadow 0.2s var(--arena-lg-ease);
+}
+.arena-btn-primary:hover {
+  transform: translateY(-1.5px) scale(1.01);
+  box-shadow:
+    0 16px 36px -8px rgba(79, 70, 229, 0.65),
+    inset 0 1.5px 0 0 rgba(255, 255, 255, 0.55);
+}
+.arena-btn-primary:active {
+  transform: scale(0.98);
+}
+
+/* ============================================================================
+ * 4. SUZUVCHI DOCK / SEGMENTED CONTROLLER (Spatial Dock)
+ * ============================================================================ */
+.arena-dock {
+  background: var(--arena-dock-bg);
+  -webkit-backdrop-filter: blur(44px) saturate(220%);
+  backdrop-filter: blur(44px) saturate(220%);
+  border: 1px solid var(--arena-dock-edge);
+  box-shadow:
+    0 16px 36px -12px rgba(15, 23, 42, 0.12),
+    0 2px 6px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 var(--arena-glass-spec);
+}
+
+/* ============================================================================
+ * 5. SHEEN NUR HARAKATI (Apple HIG Specular Sweep)
+ * ============================================================================ */
+.arena-sheen {
+  position: relative;
+  overflow: hidden;
+}
+.arena-sheen::after {
+  content: '';
+  position: absolute;
+  inset: -30% auto -30% -60%;
+  width: 45%;
+  transform: skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  animation: arena-sheen-sweep 5.5s var(--arena-lg-ease) infinite;
+  pointer-events: none;
+}
+
+@keyframes arena-sheen-sweep {
+  0% { left: -60%; }
+  55%, 100% { left: 130%; }
+}
+
+/* ============================================================================
+ * 6. ATROF-MUHIT FLOATING ORBS (Ambient Spatial Glow)
+ * ============================================================================ */
+.arena-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+  will-change: transform;
+  opacity: 0.35;
+}
+:is(.dark, [data-theme='dark'], [data-theme='oled']) .arena-orb {
+  opacity: 0.55;
+}
+.arena-orb-1 {
+  animation: arena-float-a 24s ease-in-out infinite;
+}
+.arena-orb-2 {
+  animation: arena-float-b 30s ease-in-out infinite;
+}
+.arena-orb-3 {
+  animation: arena-float-a 36s ease-in-out infinite reverse;
+}
+
+@keyframes arena-float-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-30px, 40px, 0) scale(1.1); }
+}
+
+@keyframes arena-float-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(35px, -32px, 0) scale(1.08); }
+}
+
+/* ============================================================================
+ * 7. HORIZONTAL SCROLL SNAP
+ * ============================================================================ */
+.arena-scroll-x {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.arena-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.arena-scroll-x > * {
+  scroll-snap-align: start;
+}

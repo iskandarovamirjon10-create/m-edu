@@ -533,7 +533,7 @@ export function ExpensesPage() {
   /* ── Loading ── */
   if (expenses.isLoading && !data) {
     return (
-      <div className="relative min-h-screen">
+      <div className="relative min-h-full">
         <div className="page-container space-y-4">
           <GlassPageHeader title={t('expenses.title')} subtitle={t('expenses.subtitle')} />
           <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-16 dark:border-white/[0.08] dark:bg-surface-900/80 backdrop-blur-xl">
@@ -549,7 +549,7 @@ export function ExpensesPage() {
   /* ── Error ── */
   if (expenses.isError) {
     return (
-      <div className="relative min-h-screen">
+      <div className="relative min-h-full">
         <div className="page-container space-y-4">
           <GlassPageHeader title={t('expenses.title')} subtitle={t('expenses.subtitle')} />
           <div className="rounded-2xl border border-black/[0.06] bg-white/80 p-12 dark:border-white/[0.08] dark:bg-surface-900/80 backdrop-blur-xl">
@@ -566,7 +566,7 @@ export function ExpensesPage() {
 
   /* ── Main Render ── */
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-rose-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-rose-500/30">
       <AuroraMesh />
 
       <motion.div

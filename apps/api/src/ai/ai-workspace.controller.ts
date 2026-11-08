@@ -15,7 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { EntitlementGuard, RequireEntitlement } from '../subscriptions/guards/entitlement.guard';
 import { Roles } from '../auth/roles.decorator';
-import { STAFF_ROLES } from '../auth/authorization.policy';
+import { STAFF_ROLES, PLATFORM_ROLES } from '../auth/authorization.policy';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AiContext, AiLocale } from '@medu/contracts';
 import { AiContextService } from './application/context.service';
@@ -42,7 +42,7 @@ import type { AiAuthenticatedUser } from './domain/ai.types';
 @Controller('workspace/ai')
 @UseGuards(JwtAuthGuard, RolesGuard, EntitlementGuard)
 @RequireEntitlement('hasAiCopilot')
-@Roles(...STAFF_ROLES)
+@Roles(...STAFF_ROLES, ...PLATFORM_ROLES)
 export class AiWorkspaceController {
   constructor(
     private readonly contextService: AiContextService,

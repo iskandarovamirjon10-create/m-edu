@@ -39,7 +39,6 @@ import type { Paginated, Homework, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { AiHomeworkFeedbackStudio } from '@/components/homework/AiHomeworkFeedbackStudio';
@@ -237,20 +236,13 @@ function hwGradient(name: string): string {
  * ========================================================================== */
 
 function AuroraBackdrop() {
-  const reduced = usePrefersReducedMotion();
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-sky-50/25 dark:from-[#04060C] dark:via-[#0A0F1A] dark:to-[#080A14]" />
       <div className="absolute -left-40 -top-40 h-[580px] w-[580px] rounded-full bg-blue-400/10 blur-[140px] dark:bg-sky-500/10" />
       <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-indigo-400/10 blur-[140px] dark:bg-indigo-500/10" />
       <div className="absolute -bottom-32 left-1/3 h-[460px] w-[460px] rounded-full bg-emerald-400/08 blur-[140px] dark:bg-emerald-500/08" />
-      {!reduced && (
-        <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-indigo-500/[0.02] to-emerald-500/[0.03] blur-[160px]"
-        />
-      )}
+      <div className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-indigo-500/[0.02] to-emerald-500/[0.03] blur-[140px] opacity-70 transform-gpu" />
       <div
         className="absolute inset-0 opacity-[0.015] dark:opacity-[0.022]"
         style={{
@@ -764,7 +756,7 @@ export function HomeworkPage() {
         },
         {
           label: t('homework.sidecar.createdAt'),
-          value: formatDate((item as any).createdAt || new Date().toISOString()),
+          value: formatDate((item as { createdAt?: string }).createdAt || new Date().toISOString()),
         },
       ],
       primaryAction: {
@@ -1084,12 +1076,6 @@ export function HomeworkPage() {
             </div>
           </div>
         </motion.div>
-
-        {isFeedbackStudioOpen && (
-          <motion.div variants={cardVariants}>
-            <AiHomeworkFeedbackStudio />
-          </motion.div>
-        )}
 
         {isFeedbackStudioOpen && (
           <motion.div variants={cardVariants}>

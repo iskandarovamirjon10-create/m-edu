@@ -64,6 +64,13 @@ export const ExecutiveDayEndClosingHub: React.FC = () => {
   const [directorNotes, setDirectorNotes] = useState<string>(
     "Bugungi darslar va kassa to'liq tekshirildi. Davomat va qabullar hisoboti tasdiqlandi. Xonalar ertangi kun uchun tayyor."
   );
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   // Fetch real data from PostgreSQL backend
   useEffect(() => {
@@ -165,7 +172,8 @@ export const ExecutiveDayEndClosingHub: React.FC = () => {
       // ignore storage error
     }
 
-    setTimeout(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
       setIsClosing(false);
       setMetrics((prev) => ({ ...prev, isClosed: true }));
       playSuccess();

@@ -58,173 +58,6 @@ export interface StudentAdmissionProfile {
   };
 }
 
-const PRESET_STUDENT_PROFILES: StudentAdmissionProfile[] = [
-  {
-    id: 'student-01',
-    studentName: 'Sardor Rahimov',
-    targetField: 'Sun‘iy Intellekt & Dasturiy Muhandislik',
-    ieltsScore: 7.5,
-    dtmScore: 182.4,
-    gpaPercent: 96,
-    satScore: 1390,
-    careerGoal: 'AI & Machine Learning Solutions Architect',
-    universities: [
-      {
-        id: 'uni-01',
-        name: 'Yangi O‘zbekiston Universiteti',
-        country: 'O‘zbekiston',
-        faculty: 'Sun‘iy Intellekt va Kiberxavfsizlik',
-        category: 'UZ_INTERNATIONAL',
-        probabilityPercent: 94,
-        grantType: 'Prezident Granti',
-        minIeltsRequired: 7.0,
-        minDtmOrGpa: 'Kirish imtihoni > 85%',
-        ranking: 'Top Milliy Flagi',
-        annualTuitionOrStipend: '100% Bepul + 2,400,000 UZS/oy stipendiya',
-        deadlines: '15-Iyun, 2026',
-      },
-      {
-        id: 'uni-02',
-        name: 'Toshkent shahridagi Vestminster Universiteti (WIUT)',
-        country: 'O‘zbekiston',
-        faculty: 'BSc Business Information Systems (BIS)',
-        category: 'UZ_INTERNATIONAL',
-        probabilityPercent: 91,
-        grantType: '100% Davlat Granti',
-        minIeltsRequired: 6.5,
-        minDtmOrGpa: 'Math Test > 75%',
-        ranking: 'Buyuk Britaniya Standarti',
-        annualTuitionOrStipend: 'Davlat Granti kvotasida bepul',
-        deadlines: '30-Iyun, 2026',
-      },
-      {
-        id: 'uni-03',
-        name: 'O‘zbekiston Milliy Universiteti (O‘zMU)',
-        country: 'O‘zbekiston',
-        faculty: 'Amaliy Matematika va Intellektual Tizimlar',
-        category: 'DTM_STATE',
-        probabilityPercent: 96,
-        grantType: '100% Davlat Granti',
-        minIeltsRequired: 6.0,
-        minDtmOrGpa: '174.5 DTM ball',
-        ranking: 'O‘zbekiston №1 Davlat OTMi',
-        annualTuitionOrStipend: 'Davlat byudjeti hisobidan',
-        deadlines: '20-Iyul, 2026',
-      },
-      {
-        id: 'uni-04',
-        name: 'KAIST (Korea Advanced Institute of Science & Technology)',
-        country: 'Janubiy Koreya',
-        faculty: 'School of Computing & Robotics',
-        category: 'GLOBAL_TOP100',
-        probabilityPercent: 68,
-        grantType: 'Xalqaro Stipendiya',
-        minIeltsRequired: 7.5,
-        minDtmOrGpa: 'GPA 95% + SAT 1400+',
-        ranking: 'QS World #56',
-        annualTuitionOrStipend: 'To‘liq kontrakt + 350,000 KRW/oy',
-        deadlines: '25-Yanvar, 2027',
-      },
-    ],
-    gapAnalysis: [
-      {
-        priority: 'HIGH',
-        action: 'SAT matematika ballini 740 dan 780 ga ko‘tarish (KAIST va xalqaro grantlar uchun)',
-        impact: 'Global top-100 grantiga kirish ehtimolini +22% ga oshiradi',
-      },
-      {
-        priority: 'MEDIUM',
-        action: 'Yangi O‘zbekiston universiteti kirish imtihoni uchun "Mantiqiy masalalar" modulini tugatish',
-        impact: 'Prezident granti reytingida eng yuqori 5% likka kirishni ta‘minlaydi',
-      },
-      {
-        priority: 'LOW',
-        action: 'IELTS Writing inshosini 6.5 dan 7.5 ga ko‘tarish uchun haftada 3 ta Academic Task 2 yozish',
-        impact: 'Xorijiy universitetlar qabul komissiyasi e‘tirofini mustahkamlaydi',
-      },
-    ],
-    careerSalaryForecast: {
-      title: 'AI & Machine Learning Solutions Architect',
-      localSalaryUzs: '35,000,000 – 65,000,000 UZS/oy',
-      remoteSalaryUsd: '$4,500 – $9,000 / oy ($100k+ yillik)',
-      growthProjection: '+165% Keyingi 5 yilda jahon bo‘yicha talab',
-      skillsNeeded: ['PyTorch', 'Transformer Arxitekturalari', 'Distributed Systems', 'MLOps', 'Vector Databases'],
-    },
-  },
-  {
-    id: 'student-02',
-    studentName: 'Madina Usmonova',
-    targetField: 'Xalqaro Moliya & FinTech',
-    ieltsScore: 8.0,
-    dtmScore: 176.8,
-    gpaPercent: 98,
-    satScore: 1450,
-    careerGoal: 'Global Investment & FinTech Lead',
-    universities: [
-      {
-        id: 'uni-05',
-        name: 'Toshkent shahridagi Singapur Menejmentni Rivojlantirish Instituti (MDIST)',
-        country: 'O‘zbekiston / Singapur',
-        faculty: 'BSc Banking & International Finance',
-        category: 'UZ_INTERNATIONAL',
-        probabilityPercent: 95,
-        grantType: '100% Davlat Granti',
-        minIeltsRequired: 6.5,
-        minDtmOrGpa: 'GPA > 90%',
-        ranking: 'Singapur Standarti',
-        annualTuitionOrStipend: 'Davlat granti kvotasi',
-        deadlines: '10-Iyul, 2026',
-      },
-      {
-        id: 'uni-06',
-        name: 'London School of Economics (LSE) / Chevening Fellowship',
-        country: 'Buyuk Britaniya',
-        faculty: 'MSc Financial Technology & Analytics',
-        category: 'GLOBAL_TOP100',
-        probabilityPercent: 74,
-        grantType: 'Xalqaro Stipendiya',
-        minIeltsRequired: 7.5,
-        minDtmOrGpa: 'GPA > 95%',
-        ranking: 'QS World #45 (Moliya bo‘yicha #3)',
-        annualTuitionOrStipend: '£36,000 kontrakt + yotoqxona va stipendiya',
-        deadlines: '1-Noyabr, 2026',
-      },
-      {
-        id: 'uni-07',
-        name: 'Toshkent Davlat Iqtisodiyot Universiteti (TDIU)',
-        country: 'O‘zbekiston',
-        faculty: 'Xalqaro Moliya va Korporativ Boshqaruv',
-        category: 'DTM_STATE',
-        probabilityPercent: 98,
-        grantType: '100% Davlat Granti',
-        minIeltsRequired: 6.0,
-        minDtmOrGpa: '172.0 DTM ball',
-        ranking: 'O‘zbekiston Iqtisodiyot Flagmani',
-        annualTuitionOrStipend: 'Davlat Byudjeti',
-        deadlines: '20-Iyul, 2026',
-      },
-    ],
-    gapAnalysis: [
-      {
-        priority: 'HIGH',
-        action: 'Iqtisodiy tahlil bo‘yicha xalqaro konferensiyada tezis chop etish',
-        impact: 'Buyuk Britaniya Chevening va LSE qabuli uchun portfolioni 2 barobar kuchaytiradi',
-      },
-      {
-        priority: 'MEDIUM',
-        action: 'FinTech va Algoritmik savdo bo‘yicha Python kursini tamomlash',
-        impact: 'Karyera bo‘yicha startap grantlariga da‘vogarlik qilish imkoni',
-      },
-    ],
-    careerSalaryForecast: {
-      title: 'Global Investment & FinTech Lead',
-      localSalaryUzs: '40,000,000 – 75,000,000 UZS/oy',
-      remoteSalaryUsd: '$5,000 – $11,000 / oy',
-      growthProjection: '+140% Xalqaro talab',
-      skillsNeeded: ['Risk Analytics', 'Financial Modeling', 'Blockchain Architecture', 'Quantitative Hedging'],
-    },
-  },
-];
 
 interface Props {
   isOpen: boolean;
@@ -257,20 +90,32 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
   const activeStudents = (propStudents && propStudents.length > 0) ? propStudents : dbStudents;
   
   const studentProfiles = useMemo(() => {
-    if (!activeStudents || activeStudents.length === 0) return PRESET_STUDENT_PROFILES;
-    return activeStudents.slice(0, 10).map((st: any, index) => {
-      const name = [st.user?.firstName || st.firstName, st.user?.lastName || st.lastName].filter(Boolean).join(' ') || (st as any).fullName || (st as any).name || `Talaba ${index + 1}`;
-      const template = PRESET_STUDENT_PROFILES[index % PRESET_STUDENT_PROFILES.length];
+    if (!activeStudents || activeStudents.length === 0) return [];
+    return activeStudents.slice(0, 10).map((st: any) => {
+      const name = [st.user?.firstName || st.firstName, st.user?.lastName || st.lastName].filter(Boolean).join(' ') || (st as any).fullName || (st as any).name || 'Talaba';
       return {
-        ...template,
         id: st.id,
         studentName: name,
-        dtmCurrentScore: Math.min(189, Math.max(90, Math.round(((st as any).attendanceRate ?? 85) * 1.8))),
-      };
+        targetField: st.targetField ?? '—',
+        ieltsScore: Number(st.ieltsScore ?? 0),
+        dtmScore: Number(st.dtmScore ?? 0),
+        gpaPercent: Number(st.gpaPercent ?? st.gradeAverage ?? 0),
+        satScore: st.satScore != null ? Number(st.satScore) : undefined,
+        careerGoal: st.careerGoal ?? '—',
+        universities: [],
+        gapAnalysis: [],
+        careerSalaryForecast: {
+          title: '—',
+          localSalaryUzs: '—',
+          remoteSalaryUsd: '—',
+          growthProjection: '—',
+          skillsNeeded: [],
+        },
+      } as StudentAdmissionProfile;
     });
   }, [activeStudents]);
 
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(() => studentProfiles[0]?.id || PRESET_STUDENT_PROFILES[0].id);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(() => studentProfiles[0]?.id || '');
 
   // Sync selectedStudentId when profiles update
   useEffect(() => {
@@ -281,6 +126,14 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
 
   const [activeTab, setActiveTab] = useState<'universities' | 'gap_analysis' | 'career_salary' | 'print_roadmap'>('universities');
   const [isSimulating, setIsSimulating] = useState(false);
+  const simTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    };
+  }, []);
+
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'DTM_STATE' | 'UZ_INTERNATIONAL' | 'GLOBAL_TOP100'>('ALL');
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -288,10 +141,11 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
   const haptics = useHaptics();
 
   const currentStudent = useMemo(() => {
-    return studentProfiles.find((s) => s.id === selectedStudentId) || studentProfiles[0] || PRESET_STUDENT_PROFILES[0];
-  }, [selectedStudentId]);
+    return studentProfiles.find((s) => s.id === selectedStudentId) || studentProfiles[0] || null;
+  }, [selectedStudentId, studentProfiles]);
 
   const filteredUniversities = useMemo(() => {
+    if (!currentStudent) return [];
     if (categoryFilter === 'ALL') return currentStudent.universities;
     return currentStudent.universities.filter((u) => u.category === categoryFilter);
   }, [currentStudent, categoryFilter]);
@@ -300,7 +154,8 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
     haptics.medium();
     playPop();
     setIsSimulating(true);
-    setTimeout(() => {
+    if (simTimerRef.current) clearTimeout(simTimerRef.current);
+    simTimerRef.current = setTimeout(() => {
       setIsSimulating(false);
       playSuccess();
       haptics.success();
@@ -314,6 +169,33 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
   };
 
   if (!isOpen) return null;
+
+  if (studentProfiles.length === 0) {
+    return (
+      <GlassModal open={isOpen} onClose={onClose} title="" size="full" className="w-full max-w-6xl overflow-hidden p-0">
+        <div className="flex h-full max-h-[92vh] flex-col bg-slate-950 text-slate-100">
+          <div className="flex items-center gap-3 border-b border-white/10 bg-slate-900/80 px-4 py-4 sm:px-6">
+            <MeduAiLogo size="md" glow />
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-white sm:text-lg">
+                AI Abituriyent & Karyera Admission Pathfinder
+              </h2>
+              <p className="text-[11px] text-slate-400 sm:text-xs">Real talabalar ma'lumotlari asosida ishlaydi</p>
+            </div>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-10 text-center">
+            <div className="text-sm font-semibold text-white">Talabalar topilmadi</div>
+            <div className="max-w-md text-xs text-slate-400">
+              Admission prognozi uchun bazada talaba profillari bo'lishi kerak. Talaba qo'shilgach, tahlil shu yerda avtomatik shakllanadi.
+            </div>
+            <GlassButton variant="ghost" onClick={onClose} className="mt-3 !rounded-xl text-xs">
+              Yopish
+            </GlassButton>
+          </div>
+        </div>
+      </GlassModal>
+    );
+  }
 
   return (
     <GlassModal
@@ -389,7 +271,7 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
           </div>
           <div>
             <span className="text-slate-400">DTM / Aniq Fanlar:</span>
-            <div className="font-bold text-emerald-400 text-sm">{currentStudent.dtmScore} / 189.0</div>
+            <div className="font-bold text-emerald-400 text-sm">{currentStudent.dtmScore}</div>
           </div>
           <div>
             <span className="text-slate-400">Maktab Attestat GPA:</span>
@@ -549,6 +431,18 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
                       </div>
                     </div>
                   ))}
+
+                  {filteredUniversities.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-white/15 bg-slate-900/40 p-6 text-center lg:col-span-2">
+                      <p className="text-sm font-semibold text-slate-200">
+                        Bu o‘quvchi uchun OTM ma’lumotlari kiritilmagan
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Grant ehtimolini hisoblash uchun o‘quvchi profilida IELTS, DTM va attestat GPA
+                        ko‘rsatkichlarini to‘ldiring.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -592,10 +486,17 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
                         <p className="text-sm font-medium text-slate-200">{gap.action}</p>
                       </div>
                     ))}
+
+                    {currentStudent.gapAnalysis.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-white/15 bg-slate-950/40 p-5 text-center text-xs text-slate-400">
+                        Bu o‘quvchi uchun bo‘shliqlar tahlili hali kiritilmagan.
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-6 rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-xs text-cyan-300">
-                    💡 <strong>O‘quv Markazi Kuratori Maslahati:</strong> Ushbu reja bo‘yicha talabaga individual mentor biriktirilsa, keyingi 45 kunda DTM mock test natijalari o‘rtacha +12 ball o‘sishi isbotlangan.
+                  <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs text-slate-300">
+                    💡 <strong>Eslatma:</strong> bu reja faqat o‘quvchi profilidagi haqiqiy
+                    ko‘rsatkichlar asosida tuziladi; hech qanday prognoz kafolatlanmaydi.
                   </div>
                 </div>
               </motion.div>
@@ -624,7 +525,7 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
                     </div>
 
                     <GlassBadge variant="info" size="md">
-                      Yuqori Daromadli IT Sektori
+                      Karyera prognozi
                     </GlassBadge>
                   </div>
 

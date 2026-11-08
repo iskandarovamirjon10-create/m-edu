@@ -4,11 +4,12 @@
  * ESP32 turnstile relay heartbeat, offline sync queues, and local cache consumption.
  */
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
 import { cn } from '@/lib/design';
+import { apiUrl } from '@/lib/api';
 
 interface TelemetryMetrics {
   pingMs: number;
@@ -32,61 +33,92 @@ export const SystemTelemetryHUD = memo(function SystemTelemetryHUD({
   const { playTick, playSuccess, playLaserScan } = usePremiumSound();
 
   const [isTestingRelay, setIsTestingRelay] = useState(false);
+  const pingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const relayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pingTimerRef.current) clearTimeout(pingTimerRef.current);
+      if (relayTimerRef.current) clearTimeout(relayTimerRef.current);
+    };
+  }, []);
+
   const [metrics, setMetrics] = useState<TelemetryMetrics>({
-    pingMs: 18,
-    cameraFps: 30,
-    relayArmed: true,
+    pingMs: 0,
+    cameraFps: 0,
+    relayArmed: false,
     offlineQueueCount: 0,
-    cacheUsageMb: 4.8,
-    lastSyncAt: 'Hozir',
+    cacheUsageMb: 0,
+    lastSyncAt: '—',
   });
 
-  // Simulated micro-heartbeat for live telemetry
+  const measurePing = useCallback(async (): Promise<number | null> => {
+    const startedAt = performance.now();
+    try {
+      await fetch(apiUrl('/observability/health'), {
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      return Math.max(1, Math.round(performance.now() - startedAt));
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Real health-check heartbeat for live telemetry
   useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
 
-    const interval = setInterval(() => {
-      setMetrics((prev) => ({
-        ...prev,
-        pingMs: Math.max(12, Math.min(38, Math.round(18 + (Math.random() * 8 - 4)))),
-        cameraFps: 30,
-      }));
-    }, 2500);
+    const tick = async () => {
+      const ping = await measurePing();
+      if (!cancelled && ping !== null) {
+        setMetrics((prev) => ({ ...prev, pingMs: ping, lastSyncAt: 'Hozir' }));
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [isOpen]);
+    void tick();
+    const interval = setInterval(() => void tick(), 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isOpen, measurePing]);
 
   const handleTestPing = useCallback(() => {
     playTick();
-    const start = performance.now();
-    setTimeout(() => {
-      const duration = Math.round(performance.now() - start);
-      setMetrics((prev) => ({ ...prev, pingMs: Math.max(14, duration % 28) }));
+    void (async () => {
+      const ping = await measurePing();
+      if (ping === null) {
+        push('error', "Server bilan aloqa o'rnatilmadi");
+        return;
+      }
+      setMetrics((prev) => ({ ...prev, pingMs: ping, lastSyncAt: 'Hozir' }));
       playSuccess();
-      push('success', "Server bilan aloqa barqaror: " + Math.max(14, duration % 28) + " ms");
-    }, 120);
-  }, [playTick, playSuccess, push]);
+      push('success', "Server bilan aloqa barqaror: " + ping + " ms");
+    })();
+  }, [playTick, playSuccess, push, measurePing]);
 
   const handleTestRelay = useCallback(() => {
     setIsTestingRelay(true);
     playLaserScan();
     push('info', "ESP32 Turniket relésiga 500ms ochilish impulsi yuborildi...");
 
-    setTimeout(() => {
+    if (relayTimerRef.current) clearTimeout(relayTimerRef.current);
+    relayTimerRef.current = setTimeout(() => {
       setIsTestingRelay(false);
       playSuccess();
       push('success', "Turniket javob berdi: RELAY_PULSE_OK (200 OK)");
     }, 1200);
   }, [playLaserScan, playSuccess, push]);
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md"
-        onClick={onClose}
-      >
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md"
+          onClick={onClose}
+        >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -226,6 +258,7 @@ export const SystemTelemetryHUD = memo(function SystemTelemetryHUD({
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 });

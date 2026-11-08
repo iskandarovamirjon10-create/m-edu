@@ -55,22 +55,38 @@ export function TurnstileTelegramNotificationBridge({
         if (attRes.status === 'fulfilled' && attRes.value) {
           const items = Array.isArray((attRes.value as any)?.items) ? (attRes.value as any).items : Array.isArray(attRes.value) ? attRes.value : [];
           if (items.length > 0) {
-            const mapped: TelegramPassNotification[] = items.map((a: any, idx: number) => {
-              const studentName = a.student ? `${a.student.firstName} ${a.student.lastName || ''}`.trim() : (a.studentName || `Talaba #${idx + 1}`);
-              const passTime = a.createdAt ? new Date(a.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '08:14:00';
-              const phone = a.student?.user?.phone || a.student?.guardianPhone || '+998 90 123 45 67';
-              return {
-                id: a.id || `tg-${idx + 1}`,
-                studentName,
-                parentPhone: phone,
-                telegramChatId: `@family_${idx + 1}`,
-                turnstileId: a.notes || `Turniket A-${(idx % 2) + 1}`,
-                passTime,
-                status: a.status === 'present' ? 'delivered' : 'failed',
-                latencyMs: 180 + (idx * 25),
-                messageText: `🔔 Hurmatli ota-ona! Farzandingiz ${studentName} soat ${passTime} da maktab hududiga kirdi.`,
-              };
-            });
+            // Faqat haqiqiy davomat yozuvlaridan foydalanamiz — ism, telefon,
+            // qurilma va telegram holati bo'lmasa, o'ylab topilgan qiymat yozilmaydi.
+            const mapped: TelegramPassNotification[] = items
+              .map((a: any, idx: number): TelegramPassNotification | null => {
+                const studentName = a.student
+                  ? `${a.student.firstName || ''} ${a.student.lastName || ''}`.trim()
+                  : (a.studentName || '');
+                if (!studentName) return null;
+
+                const passTime = a.createdAt
+                  ? new Date(a.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })
+                  : '—';
+
+                const notified = a.telegramSent === true || a.telegramNotified === true;
+
+                return {
+                  id: String(a.id ?? `attendance-${idx}`),
+                  studentName,
+                  parentPhone: a.student?.user?.phone || a.student?.guardianPhone || '—',
+                  telegramChatId: a.student?.user?.telegramChatId || '—',
+                  turnstileId: a.deviceName || a.camera?.name || '—',
+                  passTime,
+                  status: notified ? 'delivered' : 'failed',
+                  latencyMs: Number(a.telegramLatencyMs) || 0,
+                  messageText: `🔔 Hurmatli ota-ona! Farzandingiz ${studentName} soat ${passTime} da maktab hududiga kirdi.`,
+                };
+              })
+              .filter((n: TelegramPassNotification | null): n is TelegramPassNotification => n !== null);
             setNotifications(mapped);
             setSelectedNotification(mapped[0]);
           }
@@ -97,7 +113,7 @@ export function TurnstileTelegramNotificationBridge({
               .reduce((sum, n) => sum + n.latencyMs, 0) / delivered
           )
         : 0;
-    const deliveryRate = total > 0 ? Math.round((delivered / total) * 100) : 100;
+    const deliveryRate = total > 0 ? Math.round((delivered / total) * 100) : 0;
 
     return { total, delivered, failed, avgLatency, deliveryRate };
   }, [notifications]);
@@ -114,6 +130,7 @@ export function TurnstileTelegramNotificationBridge({
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, status: 'sending' } : n))
       );
+      const retryStartedAt = performance.now();
 
       try {
         await telegramApi.testNotification();
@@ -123,7 +140,7 @@ export function TurnstileTelegramNotificationBridge({
               ? {
                   ...n,
                   status: 'delivered',
-                  latencyMs: Math.floor(180 + Math.random() * 50),
+                  latencyMs: Math.max(1, Math.round(performance.now() - retryStartedAt)),
                 }
               : n
           )
@@ -146,30 +163,34 @@ export function TurnstileTelegramNotificationBridge({
     setIsTesting(true);
     sounds.playLaserScan();
 
-    let chosenStudent = 'Faol Talaba';
+    let chosenStudent = '';
     try {
       const stRes = await studentsApi.list({ limit: 5 }).catch(() => null);
       const items = Array.isArray((stRes as any)?.items) ? (stRes as any).items : [];
       if (items.length > 0) {
-        const randomSt = items[Math.floor(Math.random() * items.length)];
-        chosenStudent = `${randomSt.firstName} ${randomSt.lastName || ''}`.trim();
+        const firstStudent = items[0];
+        chosenStudent = `${firstStudent.firstName || ''} ${firstStudent.lastName || ''}`.trim();
       }
     } catch {
-      // Fallback
+      // Tarmoq xatosi — pastda foydalanuvchiga xabar beriladi
     }
 
     const timeNow = new Date().toLocaleTimeString();
 
+    // O'quvchi topilmasa ham kanal sinovi ishlaydi — lekin o'ylab topilgan ism
+    // bilan emas, aniq tizim sinov xabari bilan.
     const newNotif: TelegramPassNotification = {
       id: `tg-${Date.now()}`,
-      studentName: chosenStudent,
-      parentPhone: '+998 90 999 88 77',
-      telegramChatId: '@parent_bot_direct',
-      turnstileId: 'Turniket A-1 (Markaziy)',
+      studentName: chosenStudent || 'Tizim sinovi',
+      parentPhone: '—',
+      telegramChatId: '—',
+      turnstileId: '—',
       passTime: timeNow,
       status: 'sending',
       latencyMs: 0,
-      messageText: `🔔 Hurmatli ota-ona! Farzandingiz ${chosenStudent} soat ${timeNow} da maktab hududiga kirdi.`,
+      messageText: chosenStudent
+        ? `🔔 Hurmatli ota-ona! Farzandingiz ${chosenStudent} soat ${timeNow} da maktab hududiga kirdi.`
+        : `🔔 Sinov xabarnomasi: turniket tizimi Telegram ulanishi tekshirilmoqda (${timeNow}).`,
     };
 
     setNotifications((prev) => [newNotif, ...prev]);
@@ -183,23 +204,26 @@ export function TurnstileTelegramNotificationBridge({
       setNotifications((prev) =>
         prev.map((n) =>
           n.id === newNotif.id
-            ? { ...n, status: 'delivered', latencyMs: latency > 0 ? latency : 210 }
+            ? { ...n, status: 'delivered', latencyMs: latency }
             : n
         )
       );
       sounds.playSuccess();
-      toast.success('Ota-onaga Telegram push yetkazildi', `${chosenStudent} (${latency || 210} ms)`);
+      toast.success(
+        'Telegram push yetkazildi',
+        `${newNotif.studentName} (${latency} ms)`,
+      );
     } catch {
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === newNotif.id
-            ? { ...n, status: 'delivered', latencyMs: 224 }
-            : n
-        )
-      );
-      sounds.playSuccess();
-      toast.success('Ota-onaga Telegram push yetkazildi', `${chosenStudent} (224 ms)`);
-    } finally {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === newNotif.id
+              ? { ...n, status: 'failed', latencyMs: 0 }
+              : n
+          )
+        );
+        sounds.playError();
+        toast.error("Telegram push yetkazilmadi", 'Tarmoq xatosi');
+      } finally {
       setIsTesting(false);
     }
   }, [sounds, toast]);

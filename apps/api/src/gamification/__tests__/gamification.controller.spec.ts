@@ -3,6 +3,8 @@ import { ForbiddenException } from '@nestjs/common';
 import { GamificationController } from '../gamification.controller';
 import { GamificationService } from '../gamification.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Role } from '@prisma/client';
+import type { RequestUser } from '../../auth/types';
 
 describe('GamificationController', () => {
   let controller: GamificationController;
@@ -17,6 +19,24 @@ describe('GamificationController', () => {
     student: {
       findFirst: ReturnType<typeof vi.fn>;
     };
+  };
+
+  const adminUser: RequestUser = {
+    id: 'admin-1',
+    sub: 'admin-1',
+    email: 'admin@medu.uz',
+    role: Role.ORG_ADMIN,
+    organizationId: 'org-1',
+    sid: 'session-1',
+  };
+
+  const studentUser: RequestUser = {
+    id: 'user-st-1',
+    sub: 'user-st-1',
+    email: 'student@medu.uz',
+    role: Role.STUDENT,
+    organizationId: 'org-1',
+    sid: 'session-2',
   };
 
   beforeEach(() => {
@@ -39,7 +59,7 @@ describe('GamificationController', () => {
   });
 
   describe('getLeaderboard', () => {
-    it('returns leaderboard items and total count', async () => {
+    it('returns leaderboard items and total count for admin', async () => {
       const mockItems = [
         {
           rank: 1,
@@ -55,7 +75,7 @@ describe('GamificationController', () => {
       ];
       service.getLeaderboard.mockResolvedValue(mockItems);
 
-      const result = await controller.getLeaderboard('org-1', {
+      const result = await controller.getLeaderboard(adminUser, {
         groupId: 'grp-1',
         limit: 10,
       });
@@ -63,8 +83,34 @@ describe('GamificationController', () => {
       expect(service.getLeaderboard).toHaveBeenCalledWith('org-1', {
         groupId: 'grp-1',
         limit: 10,
+        requester: {
+          id: 'admin-1',
+          role: Role.ORG_ADMIN,
+          studentId: undefined,
+        },
       });
       expect(result).toEqual({ items: mockItems, total: 1 });
+    });
+
+    it('resolves student profile and passes requester for student', async () => {
+      prisma.student.findFirst.mockResolvedValue({ id: 'student-st-1' });
+      service.getLeaderboard.mockResolvedValue([]);
+
+      await controller.getLeaderboard(studentUser, { limit: 20 });
+
+      expect(prisma.student.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-st-1', organizationId: 'org-1' },
+        select: { id: true },
+      });
+      expect(service.getLeaderboard).toHaveBeenCalledWith('org-1', {
+        groupId: undefined,
+        limit: 20,
+        requester: {
+          id: 'user-st-1',
+          role: Role.STUDENT,
+          studentId: 'student-st-1',
+        },
+      });
     });
   });
 

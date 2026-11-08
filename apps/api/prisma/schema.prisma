@@ -24,6 +24,8 @@ model Organization {
   website                 String?
   subscriptionId          String?                   @db.Uuid
   settings                Json?
+  status                  String?                   @default("ACTIVE")
+  isActive                Boolean                   @default(true)
   accessWhitelists        AccessWhitelist[]
   AiAction                AiAction[]
   AiConversation          AiConversation[]
@@ -96,6 +98,13 @@ model Organization {
   sessions                Session[]
   students                Student[]
   StudentGamification     StudentGamification[]
+  gamificationRewards     GamificationReward[]
+  rewardClaims            RewardClaim[]
+  studentDuelProfiles     StudentDuelProfile[]
+  studentAvatarUnlocks    StudentAvatarUnlock[]
+  studentArenaTitles      StudentArenaTitle[]
+  duelRooms               DuelRoom[]
+  arenaQuestions          ArenaQuestion[]
   StudentObjectiveMastery StudentObjectiveMastery[]
   StudentProgressSnapshot StudentProgressSnapshot[]
   Subject                 Subject[]
@@ -106,6 +115,8 @@ model Organization {
   telegramAccounts        TelegramAccount[]
   telegramLinkTokens      TelegramLinkToken[]
   users                   User[]
+  memberships             OrganizationMembership[]
+  cashShifts              CashShift[]
 
   @@index([email])
 }
@@ -113,8 +124,10 @@ model Organization {
 model User {
   id                                                             String                   @id @default(uuid()) @db.Uuid
   organizationId                                                 String                   @db.Uuid
+  username                                                       String?                  @unique
   email                                                          String                   @unique
   passwordHash                                                   String?
+  mustChangePassword                                             Boolean                  @default(false)
   firstName                                                      String
   lastName                                                       String
   phone                                                          String?
@@ -178,8 +191,15 @@ model User {
   organization                                                   Organization             @relation(fields: [organizationId], references: [id])
   userRoles                                                      UserRole[]
   settings                                                       UserSettings?
+  memberships                                                    OrganizationMembership[]
+  passwordHistories                                              PasswordHistory[]
+  receivedPayments                                               Payment[]                @relation("PaymentReceivedBy")
+  cashShifts                                                     CashShift[]              @relation("CashierShifts")
+  authoredArenaQuestions                                         ArenaQuestion[]          @relation("ArenaQuestionAuthor")
+  reviewedArenaQuestions                                         ArenaQuestion[]          @relation("ArenaQuestionReviewer")
 
   @@index([organizationId])
+  @@index([username])
   @@index([email(ops: raw("gin_trgm_ops"))], map: "user_email_trgm_idx", type: Gin)
   @@index([firstName(ops: raw("gin_trgm_ops"))], map: "user_first_name_trgm_idx", type: Gin)
   @@index([lastName(ops: raw("gin_trgm_ops"))], map: "user_last_name_trgm_idx", type: Gin)
@@ -311,6 +331,12 @@ model Student {
   organization            Organization              @relation(fields: [organizationId], references: [id])
   user                    User                      @relation(fields: [userId], references: [id])
   StudentGamification     StudentGamification?
+  rewardClaims            RewardClaim[]
+  duelProfile             StudentDuelProfile?
+  avatarUnlocks           StudentAvatarUnlock[]
+  arenaTitles             StudentArenaTitle[]
+  duelParticipations      DuelParticipant[]
+  duelRoundAnswers        DuelRoundAnswer[]
   groups                  StudentGroup[]
   StudentObjectiveMastery StudentObjectiveMastery[]
   StudentProgressSnapshot StudentProgressSnapshot[]
@@ -489,6 +515,8 @@ model Payment {
   dueDate         DateTime?
   method          String?
   reference       String?
+  receivedById    String?              @db.Uuid
+  shiftId         String?              @db.Uuid
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   invoiceId       String?              @db.Uuid
@@ -498,6 +526,8 @@ model Payment {
   Invoice         Invoice?             @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
   organization    Organization         @relation(fields: [organizationId], references: [id])
   student         Student              @relation(fields: [studentId], references: [id])
+  receivedBy      User?                @relation("PaymentReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull)
+  shift           CashShift?           @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   transactions    PaymentTransaction[]
   refunds         Refund[]
 
@@ -508,6 +538,8 @@ model Payment {
   @@index([studentId])
   @@index([invoiceId])
   @@index([reference])
+  @@index([receivedById])
+  @@index([shiftId])
   @@index([description(ops: raw("gin_trgm_ops"))], map: "payment_description_trgm_idx", type: Gin)
   @@index([reference(ops: raw("gin_trgm_ops"))], map: "payment_reference_trgm_idx", type: Gin)
 }
@@ -2204,6 +2236,7 @@ model Branch {
   organization   Organization @relation(fields: [organizationId], references: [id])
   groups         Group[]
   students       Student[]
+  cashShifts     CashShift[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -2268,6 +2301,46 @@ model StudentGamification {
 
   @@index([organizationId, level])
   @@index([organizationId, xp])
+}
+
+model GamificationReward {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @db.Uuid
+  title          String
+  description    String?
+  costCoins      Int
+  type           String        @default("PRODUCT") // PRODUCT (tovar) | COUPON (kupon)
+  category       String?       @default("MERCH")   // MERCH | DISCOUNT | BOOK | PERK | OTHER
+  icon           String?       @default("🎁")
+  imageUrl       String?
+  stock          Int?                              // null = cheksiz
+  couponCode     String?                           // Agar COUPON bo'lsa
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  claims         RewardClaim[]
+
+  @@index([organizationId, isActive])
+}
+
+model RewardClaim {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String             @db.Uuid
+  rewardId       String             @db.Uuid
+  studentId      String             @db.Uuid
+  costCoins      Int
+  couponCode     String?
+  status         String             @default("CLAIMED") // CLAIMED | DELIVERED | CANCELLED
+  createdAt      DateTime           @default(now())
+
+  reward         GamificationReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  student        Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, studentId])
+  @@index([rewardId])
 }
 
 model NotificationDedup {
@@ -2948,6 +3021,7 @@ model Subject {
   Material                Material[]
   Question                Question[]
   StudentObjectiveMastery StudentObjectiveMastery[]
+  duelRooms               DuelRoom[]
   Course                  Course?                   @relation(fields: [courseId], references: [id])
   Organization            Organization              @relation(fields: [organizationId], references: [id])
 
@@ -3016,6 +3090,43 @@ enum PaymentStatus {
   OVERDUE
   CANCELLED
   PARTIALLY_PAID
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+model CashShift {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  branchId        String?      @db.Uuid
+  cashierId       String       @db.Uuid
+  openedAt        DateTime     @default(now())
+  closedAt        DateTime?
+  status          ShiftStatus  @default(OPEN)
+  openingBalance  Decimal      @default(0) @db.Decimal(12, 2)
+  cashPayments    Decimal      @default(0) @db.Decimal(12, 2)
+  cardPayments    Decimal      @default(0) @db.Decimal(12, 2)
+  otherPayments   Decimal      @default(0) @db.Decimal(12, 2)
+  cashExpenses    Decimal      @default(0) @db.Decimal(12, 2)
+  expectedCash    Decimal      @default(0) @db.Decimal(12, 2)
+  actualCash      Decimal?     @db.Decimal(12, 2)
+  difference      Decimal?     @db.Decimal(12, 2)
+  handoverAmount  Decimal?     @db.Decimal(12, 2)
+  openingNote     String?
+  closingNote     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch          Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  cashier         User         @relation("CashierShifts", fields: [cashierId], references: [id], onDelete: Restrict)
+  payments        Payment[]
+
+  @@index([organizationId, status])
+  @@index([cashierId])
+  @@index([openedAt])
 }
 
 enum ExpenseCategory {
@@ -3422,6 +3533,46 @@ enum UserStatus {
   SUSPENDED
   REVOKED
   DEACTIVATED
+  INVITED
+  DISABLED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  DISABLED
+}
+
+model OrganizationMembership {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  organizationId String           @db.Uuid
+  role           Role             @default(STUDENT)
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model PasswordHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model PlatformInvitation {
@@ -3461,4 +3612,392 @@ model SecurityEvent {
   @@index([userId])
   @@index([resourceId])
   @@index([correlationId])
+}
+
+// ============================================================================
+// M-EDU MIND ARENA (AQL DUELLARI) — PHASE 1 DOMAIN MODELS
+// ============================================================================
+
+enum AvatarRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum DuelMode {
+  SOLO_1V1
+  TEAM_2V2
+}
+
+enum DuelRoomStatus {
+  WAITING
+  MATCHED
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model ArenaAvatar {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug             String                @unique
+  name             String
+  title            String
+  description      String
+  element          String                @default("NEON")
+  rarity           AvatarRarity          @default(COMMON)
+  thumbnailUrl     String
+  defaultRenderUrl String
+  battleRenderUrl  String
+  victoryRenderUrl String
+  isDefault        Boolean               @default(true)
+  isActive         Boolean               @default(true)
+  sortOrder        Int                   @default(0)
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  studentProfiles  StudentDuelProfile[]
+  unlocks          StudentAvatarUnlock[]
+
+  @@index([rarity])
+  @@index([isActive, sortOrder])
+}
+
+model StudentDuelProfile {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId              String             @unique @db.Uuid
+  organizationId         String             @db.Uuid
+  activeAvatarId         String?            @db.Uuid
+  activeTitleId          String?            @db.Uuid
+  rating                 Int                @default(1000)
+  peakRating             Int                @default(1000)
+  totalDuels             Int                @default(0)
+  wins                   Int                @default(0)
+  losses                 Int                @default(0)
+  draws                  Int                @default(0)
+  winStreak              Int                @default(0)
+  bestStreak             Int                @default(0)
+  totalQuestionsAnswered Int                @default(0)
+  correctAnswersCount    Int                @default(0)
+  totalSpeedBonus        Int                @default(0)
+  seasonNumber           Int                @default(1)
+  lastBattleAt           DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  student                Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activeAvatar           ArenaAvatar?       @relation(fields: [activeAvatarId], references: [id], onDelete: SetNull)
+  activeTitle            ArenaTitle?        @relation(fields: [activeTitleId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, rating(sort: Desc)])
+  @@index([organizationId, wins(sort: Desc)])
+  @@index([studentId])
+}
+
+model StudentAvatarUnlock {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String       @db.Uuid
+  organizationId String       @db.Uuid
+  avatarId       String       @db.Uuid
+  unlockedAt     DateTime     @default(now())
+  unlockedVia    String       @default("INITIAL_CATALOG")
+
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  avatar         ArenaAvatar  @relation(fields: [avatarId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, avatarId])
+  @@index([organizationId, studentId])
+  @@index([avatarId])
+}
+
+model ArenaTitle {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug             String              @unique
+  name             String
+  description      String
+  icon             String?             @default("🎖️")
+  rarity           AvatarRarity        @default(COMMON)
+  requirementType  String              @default("DEFAULT")
+  requirementValue Int                 @default(0)
+  isSystem         Boolean             @default(true)
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  studentProfiles  StudentDuelProfile[]
+  earnedTitles     StudentArenaTitle[]
+
+  @@index([rarity])
+  @@index([isActive])
+}
+
+model StudentArenaTitle {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId      String       @db.Uuid
+  organizationId String       @db.Uuid
+  titleId        String       @db.Uuid
+  earnedAt       DateTime     @default(now())
+  earnedVia      String       @default("ACHIEVEMENT")
+
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          ArenaTitle   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, titleId])
+  @@index([organizationId, studentId])
+  @@index([titleId])
+}
+
+model DuelRoom {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String            @db.Uuid
+  mode             DuelMode          @default(SOLO_1V1)
+  status           DuelRoomStatus    @default(WAITING)
+  subjectId        String?           @db.Uuid
+  winnerTeam       Int?
+  totalRounds      Int               @default(5)
+  timePerRoundSec  Int               @default(15)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subject          Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  participants     DuelParticipant[]
+  rounds           DuelRound[]
+
+  @@index([organizationId, status])
+  @@index([subjectId])
+}
+
+model DuelParticipant {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId         String       @db.Uuid
+  studentId      String       @db.Uuid
+  teamNumber     Int          @default(1)
+  score          Int          @default(0)
+  accuracy       Float        @default(0.0)
+  speedBonus     Int          @default(0)
+  isWinner       Boolean      @default(false)
+  xpEarned       Int          @default(0)
+  coinsEarned    Int          @default(0)
+  ratingChange   Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  room           DuelRoom     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, studentId])
+  @@index([roomId])
+  @@index([studentId])
+}
+
+// ============================================================================
+// MIND ARENA: QUESTION ENGINE & DUEL ROUND SNAPSHOTS (PHASE 2)
+// ============================================================================
+
+enum ArenaQuestionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum ArenaQuestionSource {
+  AI_GENERATED
+  TEACHER
+  ADMIN
+}
+
+enum ArenaSubjectCategory {
+  MATHEMATICS
+  PHYSICS
+  PROGRAMMING
+  HISTORY
+  ENGLISH
+  LOGIC_PUZZLE
+  GENERAL_SCIENCE
+}
+
+model ArenaQuestion {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String?              @db.Uuid
+  subjectCategory  ArenaSubjectCategory
+  difficulty       QuestionDifficulty   @default(MEDIUM)
+  status           ArenaQuestionStatus  @default(PENDING_REVIEW)
+  source           ArenaQuestionSource  @default(AI_GENERATED)
+  
+  questionText     String               @db.Text
+  codeSnippet      String?              @db.Text
+  codeLanguage     String?              @db.VarChar(32)
+  imageUrl         String?              @db.Text
+  explanation      String?              @db.Text
+  
+  version          Int                  @default(1)
+  tags             String[]             @default([])
+  timeLimitSec     Int                  @default(15)
+  
+  timesUsed        Int                  @default(0)
+  correctCount     Int                  @default(0)
+  
+  createdById      String?              @db.Uuid
+  approvedById     String?              @db.Uuid
+  approvedAt       DateTime?
+  rejectionReason  String?              @db.Text
+  verificationLog  Json?
+  
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  organization     Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdByUser    User?                @relation("ArenaQuestionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedByUser   User?                @relation("ArenaQuestionReviewer", fields: [approvedById], references: [id], onDelete: SetNull)
+  
+  options          ArenaQuestionOption[]
+  duelRounds       DuelRound[]
+
+  @@index([organizationId, status, difficulty])
+  @@index([status, subjectCategory, difficulty])
+  @@index([timesUsed, status])
+}
+
+model ArenaQuestionOption {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  questionId   String        @db.Uuid
+  optionKey    String        @db.VarChar(2)
+  optionText   String        @db.Text
+  isCorrect    Boolean       @default(false)
+  explanation  String?       @db.Text
+  orderIndex   Int           @default(0)
+  createdAt    DateTime      @default(now())
+
+  question     ArenaQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, optionKey])
+  @@index([questionId])
+}
+
+model DuelRound {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  duelRoomId        String            @db.Uuid
+  roundNumber       Int
+  questionId        String?           @db.Uuid
+  
+  questionVersion   Int               @default(1)
+  questionText      String            @db.Text
+  codeSnippet       String?           @db.Text
+  imageUrl          String?           @db.Text
+  correctOptionKey  String            @db.VarChar(2)
+  optionsSnapshot   Json
+  
+  startedAt         DateTime          @default(now())
+  endedAt           DateTime?
+  timeLimitSec      Int               @default(15)
+
+  duelRoom          DuelRoom          @relation(fields: [duelRoomId], references: [id], onDelete: Cascade)
+  arenaQuestion     ArenaQuestion?    @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  answers           DuelRoundAnswer[]
+
+  @@unique([duelRoomId, roundNumber])
+  @@index([duelRoomId])
+  @@index([questionId])
+}
+
+model DuelRoundAnswer {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roundId      String      @db.Uuid
+  studentId    String      @db.Uuid
+  selectedKey  String?     @db.VarChar(2)
+  isCorrect    Boolean     @default(false)
+  timeSpentMs  Int         @default(0)
+  scoreEarned  Int         @default(0)
+  createdAt    DateTime    @default(now())
+
+  round        DuelRound   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  student      Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([roundId, studentId])
+  @@index([studentId])
+  @@index([roundId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// STUDY STUDIO — personal spaced-repetition decks, review log and focus time
+// Decks are intentionally keyed by `userId` + `organizationId` (no relation)
+// so the module stays tenant-isolated without widening the User model.
+// ─────────────────────────────────────────────────────────────────────────
+
+model StudyDeck {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  userId         String  @db.Uuid
+  title          String  @db.VarChar(120)
+  subject        String? @db.VarChar(120)
+  description    String? @db.Text
+  accent         String  @default("indigo") @db.VarChar(24)
+  archived       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cards StudyCard[]
+
+  @@index([userId, archived])
+  @@index([organizationId])
+}
+
+model StudyCard {
+  id       String @id @default(uuid()) @db.Uuid
+  deckId   String @db.Uuid
+  front    String @db.Text
+  back     String @db.Text
+
+  ease           Float    @default(2.5)
+  intervalDays   Int      @default(0)
+  repetitions    Int      @default(0)
+  lapses         Int      @default(0)
+  dueAt          DateTime @default(now())
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deck    StudyDeck    @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  reviews StudyReview[]
+
+  @@index([deckId, dueAt])
+  @@index([dueAt])
+}
+
+model StudyReview {
+  id             String   @id @default(uuid()) @db.Uuid
+  cardId         String   @db.Uuid
+  userId         String   @db.Uuid
+  organizationId String   @db.Uuid
+  rating         String   @db.VarChar(8)
+  intervalDays   Int
+  reviewedAt     DateTime @default(now())
+
+  card StudyCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([userId, reviewedAt])
+  @@index([organizationId, reviewedAt])
+}
+
+model StudyFocusSession {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  minutes        Int
+  mode           String   @default("FOCUS") @db.VarChar(16)
+  completedAt    DateTime @default(now())
+
+  @@index([userId, completedAt])
+  @@index([organizationId, completedAt])
 }

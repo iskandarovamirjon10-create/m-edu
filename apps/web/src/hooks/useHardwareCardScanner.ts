@@ -34,6 +34,14 @@ export function useHardwareCardScanner({
   const bufferRef = useRef<string>('');
   const lastKeyTimeRef = useRef<number>(0);
   const isBusyRef = useRef<boolean>(false);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
+  const playPopRef = useRef(playPop);
+  playPopRef.current = playPop;
+  const playPaymentRef = useRef(playPayment);
+  playPaymentRef.current = playPayment;
+  const hapticsRef = useRef(haptics);
+  hapticsRef.current = haptics;
 
   // 1. USB HID / Laser Scanner Keystroke Interceptor
   useEffect(() => {
@@ -62,10 +70,10 @@ export function useHardwareCardScanner({
           if (!isBusyRef.current) {
             isBusyRef.current = true;
             setLastScannedCode(rawCode);
-            playPop();
-            haptics.medium();
+            playPopRef.current();
+            hapticsRef.current.medium();
 
-            Promise.resolve(onScan(rawCode)).finally(() => {
+            Promise.resolve(onScanRef.current(rawCode)).finally(() => {
               isBusyRef.current = false;
             });
           }
@@ -96,7 +104,7 @@ export function useHardwareCardScanner({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
-  }, [enabled, minCodeLength, onScan, playPop, haptics]);
+  }, [enabled, minCodeLength]);
 
   // 2. WebNFC (NDEFReader) for Android Tablet Kiosks
   useEffect(() => {
@@ -118,10 +126,10 @@ export function useHardwareCardScanner({
           if (serialNumber && !isBusyRef.current) {
             isBusyRef.current = true;
             setLastScannedCode(serialNumber);
-            playPayment();
-            haptics.heavy();
+            playPaymentRef.current();
+            hapticsRef.current.heavy();
 
-            Promise.resolve(onScan(serialNumber)).finally(() => {
+            Promise.resolve(onScanRef.current(serialNumber)).finally(() => {
               isBusyRef.current = false;
             });
           }
@@ -141,7 +149,7 @@ export function useHardwareCardScanner({
       abortController?.abort();
       setIsNfcActive(false);
     };
-  }, [enabled, onScan, playPayment, haptics]);
+  }, [enabled]);
 
   const clearLastScan = useCallback(() => {
     setLastScannedCode(null);

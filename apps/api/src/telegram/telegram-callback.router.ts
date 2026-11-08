@@ -463,7 +463,7 @@ export class TelegramCallbackRouter {
     );
     if (!claimed) {
       this.logger.warn(
-        JSON.stringify({ event: 'telegram_callback_replay_blocked', chatId: ctx.account.id }),
+        JSON.stringify({ event: 'telegram_callback_replay_blocked', chatId: ctx?.account?.id || ctx?.principalId || 'unknown' }),
       );
       return { reply: null, toast: t(ctx.language, 'error.staleCallback') };
     }

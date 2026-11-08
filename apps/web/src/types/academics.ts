@@ -41,6 +41,9 @@ export interface Teacher {
   experience?: number | null;
   user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'isActive'>;
   groups?: Group[];
+  _count?: {
+    groups?: number;
+  };
   metrics?: {
     totalStudents: number;
     weeklyHours: number;

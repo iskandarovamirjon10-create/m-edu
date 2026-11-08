@@ -45,7 +45,7 @@ export class TelegramWebAppAuthController {
 
     const result = await this.webAppAuth.authenticate(dto.initData, meta);
 
-    if (result.authenticated && result.accessToken) {
+    if ('accessToken' in result && result.accessToken) {
       res.cookie('access_token', result.accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',

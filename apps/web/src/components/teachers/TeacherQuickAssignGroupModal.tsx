@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from 'react';
+import { useState, memo, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   GlassModal,
@@ -41,13 +41,25 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
 
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedGroupId('');
+    }
+  }, [isOpen, teacher?.id]);
+
   const groupsQuery = useQuery({
     queryKey: ['groups', 'active-selector'],
     queryFn: () => groupsApi.list({ limit: 100 }),
     enabled: isOpen,
   });
 
-  const groupsList = ((groupsQuery.data as { items?: GroupOption[] } | undefined)?.items || []) as GroupOption[];
+  const groupsList = useMemo<GroupOption[]>(() => {
+    const raw = groupsQuery.data as any;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.items)) return raw.items;
+    if (Array.isArray(raw?.data)) return raw.data;
+    return [];
+  }, [groupsQuery.data]);
   const teacherName = teacher ? fullName(teacher.user?.firstName, teacher.user?.lastName) : '';
 
   const assignMutation = useMutation({
@@ -124,7 +136,7 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
           <GlassButton
             variant="primary"
             className="min-h-[44px]"
-            disabled={!selectedGroupId}
+            disabled={!selectedGroupId || assignMutation.isPending}
             loading={assignMutation.isPending}
             onClick={() => {
               sound.playTick?.();

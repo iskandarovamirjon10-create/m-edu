@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
   ALLOW_ANY_ROLE_KEY,
@@ -64,8 +64,22 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
+    if (user.mustChangePassword) {
+      const req = context.switchToHttp().getRequest();
+      const url = (req.url || req.path || '').toLowerCase();
+      const isAllowedEndpoint =
+        url.includes('/auth/change-password') ||
+        url.includes('/users/change-password') ||
+        url.includes('/auth/me') ||
+        url.includes('/auth/logout') ||
+        url.includes('/auth/refresh');
+      if (!isAllowedEndpoint) {
+        throw new ForbiddenException('Must change initial password before accessing application functionality');
+      }
+    }
+
     // Platform SUPER_ADMIN bypasses every role-restricted route.
-    if (user.role === 'SUPER_ADMIN') {
+    if (user.role === 'PLATFORM_OWNER' || user.role === 'SUPER_ADMIN') {
       return true;
     }
 

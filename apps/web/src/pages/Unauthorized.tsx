@@ -23,7 +23,7 @@ export function UnauthorizedPage() {
   }, [sound]);
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-transparent p-4 selection:bg-brand-500/30">
+    <div className="relative flex min-h-full items-center justify-center overflow-hidden bg-transparent p-4 selection:bg-brand-500/30">
       {/* Soft Apple-style Background Ambient Orbs (Warning Theme) */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <div className="absolute left-[20%] top-[10%] h-[40%] w-[40%] rounded-full bg-rose-500/10 blur-[120px]" />

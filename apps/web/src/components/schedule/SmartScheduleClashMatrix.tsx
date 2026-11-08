@@ -34,6 +34,13 @@ export const SmartScheduleClashMatrix: React.FC = () => {
   const [slots, setSlots] = useState<RoomOccupancySlot[]>([]);
   const [filterMode, setFilterMode] = useState<'ALL' | 'CLASHES_ONLY'>('ALL');
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   // Fetch real schedule & groups from PostgreSQL
   useEffect(() => {
@@ -121,7 +128,8 @@ export const SmartScheduleClashMatrix: React.FC = () => {
     playPop();
     haptics.medium();
 
-    setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
       setIsOptimizing(false);
       setSlots((prev) =>
         prev.map((s, idx) => ({

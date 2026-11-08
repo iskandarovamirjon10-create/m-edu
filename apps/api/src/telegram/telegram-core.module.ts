@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuditModule } from '../audit/audit.module';
 import { TelegramController } from './telegram.controller';
-import { TelegramAdminController } from './telegram-admin.controller';
 import { TelegramObservabilityService } from './telegram-observability.service';
 import { TelegramService } from './telegram.service';
 import { TelegramLinkService } from './telegram-link.service';
@@ -25,7 +24,7 @@ import { TelegramDeliveryService } from './telegram-delivery.service';
  */
 @Module({
   imports: [ConfigModule, AuditModule],
-  controllers: [TelegramController, TelegramAdminController],
+  controllers: [TelegramController],
   providers: [
     TelegramService,
     TelegramObservabilityService,

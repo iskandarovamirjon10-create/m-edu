@@ -19,6 +19,21 @@ import { PrismaService } from '../prisma/prisma.service';
  * configured the service degrades honestly: sendSms() returns false and logs
  * a FAILED SMSLog row — it never fakes success.
  */
+export type SmsFailureCategory =
+  | 'INVALID_PHONE'
+  | 'NOT_CONFIGURED'
+  | 'DAILY_LIMIT_REACHED'
+  | 'INSUFFICIENT_CREDITS'
+  | 'PROVIDER_ERROR'
+  | 'NETWORK_ERROR';
+
+export interface SendSmsResult {
+  ok: boolean;
+  externalId?: string | null;
+  failureCategory?: SmsFailureCategory;
+  errorMessage?: string;
+}
+
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
@@ -214,13 +229,45 @@ export class SmsService {
   }
 
   // ======================================================================
-  // PUBLIC SEND
+  // PUBLIC SEND & DETAILED DELIVERY RESULT
   // ======================================================================
 
-  async sendSms(to: string, message: string, organizationId?: string): Promise<boolean> {
+  private categorizeError(errorText: string): SmsFailureCategory {
+    const lower = errorText.toLowerCase();
+    if (
+      lower.includes('balance') ||
+      lower.includes('credit') ||
+      lower.includes('mablag') ||
+      lower.includes('yetarli') ||
+      lower.includes('402') ||
+      lower.includes('payment') ||
+      lower.includes('tariff')
+    ) {
+      return 'INSUFFICIENT_CREDITS';
+    }
+    if (lower.includes('quota') || lower.includes('limit')) {
+      return 'DAILY_LIMIT_REACHED';
+    }
+    if (
+      lower.includes('timeout') ||
+      lower.includes('econnrefused') ||
+      lower.includes('econnreset') ||
+      lower.includes('fetch failed') ||
+      lower.includes('network')
+    ) {
+      return 'NETWORK_ERROR';
+    }
+    return 'PROVIDER_ERROR';
+  }
+
+  async sendSmsDetailed(
+    to: string,
+    message: string,
+    organizationId?: string,
+  ): Promise<SendSmsResult> {
     if (!to || !message) {
       this.logger.warn('Cannot send SMS: missing phone number or message.');
-      return false;
+      return { ok: false, failureCategory: 'INVALID_PHONE', errorMessage: 'Missing phone number or message' };
     }
 
     if (!this.isConfigured()) {
@@ -236,7 +283,7 @@ export class SmsService {
           errorMessage: `SMS provider not configured (provider=${this.provider})`,
         });
       }
-      return false;
+      return { ok: false, failureCategory: 'NOT_CONFIGURED', errorMessage: `SMS provider not configured (${this.provider})` };
     }
 
     const dailyLimit = Number(this.configService?.get?.<string>('SMS_DAILY_LIMIT_PER_ORG') || 1000);
@@ -252,17 +299,18 @@ export class SmsService {
           },
         });
         if (sentToday >= dailyLimit) {
+          const errMsg = `Daily SMS quota reached (${sentToday}/${dailyLimit})`;
           this.logger.warn(
-            'Daily SMS limit (' + dailyLimit + ') reached for organization ' + organizationId + '. Suppressing SMS.',
+            `Daily SMS limit (${dailyLimit}) reached for organization ${organizationId}. Suppressing SMS.`,
           );
           await this.logSms({
             organizationId,
             recipient: to,
             message,
             status: 'FAILED',
-            errorMessage: 'Daily SMS quota reached (' + sentToday + '/' + dailyLimit + ')',
+            errorMessage: errMsg,
           });
-          return false;
+          return { ok: false, failureCategory: 'DAILY_LIMIT_REACHED', errorMessage: errMsg };
         }
       } catch (countErr) {
         this.logger.warn('Failed to query daily SMS count; proceeding safely', { error: String(countErr) });
@@ -271,6 +319,7 @@ export class SmsService {
 
     let currentAttempt = 0;
     let tokenRefreshed = false;
+    let lastError: unknown = null;
 
     while (currentAttempt < this.maxRetries) {
       try {
@@ -293,8 +342,9 @@ export class SmsService {
             deliveredAt: new Date(),
           });
         }
-        return true;
+        return { ok: true, externalId };
       } catch (error: unknown) {
+        lastError = error;
         // One-shot recovery path for an expired Eskiz token: refresh and
         // retry WITHOUT counting it as a delivery failure attempt.
         if (error instanceof TokenExpiredError && !tokenRefreshed) {
@@ -310,16 +360,21 @@ export class SmsService {
         );
 
         if (currentAttempt >= this.maxRetries) {
+          const errText = error instanceof Error ? error.message : String(error);
           if (organizationId) {
             await this.logSms({
               organizationId,
               recipient: to,
               message,
               status: 'FAILED',
-              errorMessage: error instanceof Error ? error.message : String(error),
+              errorMessage: errText,
             });
           }
-          return false;
+          return {
+            ok: false,
+            failureCategory: this.categorizeError(errText),
+            errorMessage: errText,
+          };
         }
 
         // Exponential backoff between attempts.
@@ -328,7 +383,18 @@ export class SmsService {
         );
       }
     }
-    return false;
+
+    const finalErrText = lastError instanceof Error ? lastError.message : String(lastError || 'Unknown SMS failure');
+    return {
+      ok: false,
+      failureCategory: this.categorizeError(finalErrText),
+      errorMessage: finalErrText,
+    };
+  }
+
+  async sendSms(to: string, message: string, organizationId?: string): Promise<boolean> {
+    const res = await this.sendSmsDetailed(to, message, organizationId);
+    return res.ok;
   }
 
   // ======================================================================

@@ -6,7 +6,7 @@
  *  - buildQuery contract (empty values are dropped, URL-safe encoding)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import request, { setUnauthorizedHandler, buildQuery, reportsApi } from '../api';
+import request, { ApiError, setUnauthorizedHandler, buildQuery, reportsApi } from '../api';
 
 function jsonResponse(status: number, body: unknown, headers: Record<string, string> = {}) {
   return {
@@ -237,5 +237,104 @@ describe('reportsApi.export and downloadFile', () => {
     });
 
     await expect(reportsApi.export('STUDENTS', 'csv')).rejects.toThrow('Unsupported format');
+  });
+});
+
+describe('Professional Data Exchange: Correlation ID & Transient Retry', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    document.cookie = 'XSRF-TOKEN=fake-csrf-token; path=/';
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    vi.unstubAllGlobals();
+  });
+
+  it('generates an X-Request-Id header automatically on requests', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
+    await request('/test-trace');
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['X-Request-Id']).toMatch(/^req_[A-Za-z0-9_-]+$/);
+  });
+
+  it('preserves an explicit X-Request-Id header if passed', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
+    await request('/test-trace', { headers: { 'X-Request-Id': 'req_custom_trace_999' } });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['X-Request-Id']).toBe('req_custom_trace_999');
+  });
+
+  it('captures response X-Request-Id into ApiError on failure', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        400,
+        { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Invalid data', details: { errors: ['Name required'] } },
+        { 'x-request-id': 'req_server_trace_123' },
+      ),
+    );
+    try {
+      await request('/fail');
+      expect.fail('Should have thrown');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.requestId).toBe('req_server_trace_123');
+      expect(apiErr.code).toBe('VALIDATION_ERROR');
+      expect(apiErr.isValidationError()).toBe(true);
+      expect(apiErr.getValidationErrors()).toEqual(['Name required']);
+    }
+  });
+
+  it('automatically retries GET requests on transient 503 errors and succeeds', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(503, { message: 'Service Temporarily Unavailable' }))
+      .mockResolvedValueOnce(jsonResponse(200, { status: 'recovered' }));
+
+    const res = await request<{ status: string }>('/flaky-service', { retryDelayMs: 1 });
+    expect(res).toEqual({ status: 'recovered' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('automatically retries on network TypeError (e.g. Failed to fetch)', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(jsonResponse(200, { data: 'ok' }));
+
+    const res = await request<{ data: string }>('/flaky-network', { retryDelayMs: 1 });
+    expect(res).toEqual({ data: 'ok' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries POST requests if an idempotencyKey is supplied', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(502, { message: 'Bad Gateway' }))
+      .mockResolvedValueOnce(jsonResponse(201, { created: true }));
+
+    const res = await request<{ created: boolean }>('/payments', {
+      method: 'POST',
+      body: JSON.stringify({ amount: 100 }),
+      idempotencyKey: 'idemp_unique_key_1',
+      retryDelayMs: 1,
+    });
+    expect(res).toEqual({ created: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT retry POST requests without an idempotency key to prevent duplicate mutations', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(502, { message: 'Bad Gateway' }));
+
+    await expect(
+      request('/non-idempotent-post', {
+        method: 'POST',
+        body: JSON.stringify({ amount: 100 }),
+        retryDelayMs: 1,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

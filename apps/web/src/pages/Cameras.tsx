@@ -1194,7 +1194,7 @@ export function CamerasPage() {
             setTimeout(() => setCopiedId(null), 1800);
           })
           .catch(() => {
-            push('error', "Nusxalab bo'lmadi");
+            push('error', "Nusxalab bo‘lmadi");
           });
       }
     },
@@ -1383,7 +1383,7 @@ export function CamerasPage() {
 
   /* ── 3. Main Render ───────────────────────────────────────────────── */
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       <AuroraMesh variant="security" opacity={0.65} />
       <motion.div
         variants={containerVariants}
@@ -1619,7 +1619,7 @@ export function CamerasPage() {
           ) : filteredList.length === 0 ? (
             <div className="p-10 text-center">
               <p className="text-[13.5px] font-bold text-[var(--text-primary)]">
-                Filtr bo'yicha kamera topilmadi
+                Filtr bo‘yicha kamera topilmadi
               </p>
               <button
                 type="button"
@@ -2132,7 +2132,7 @@ export function CamerasPage() {
           {/* Creative Addition: Live Synthesized RTSP/ONVIF Endpoint Preview */}
           <div className="rounded-2xl border border-slate-200/80 bg-slate-900/[0.03] px-4 py-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-              Oqim manzili ko'rinishi (Live URI Preview)
+              Oqim manzili ko‘rinishi (Live URI Preview)
             </p>
             <p className="mt-1 truncate font-mono text-[12px] font-semibold text-[#007AFF] dark:text-[#38BDF8]">
               {buildPreviewStreamUri(form)}

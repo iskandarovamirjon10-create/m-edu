@@ -21,6 +21,14 @@ vi.mock('@/hooks/useHaptics', () => ({
   }),
 }));
 
+const mockTeachers = [
+  {
+    id: 'tch-1',
+    user: { firstName: 'Jasur', lastName: 'Alimov' },
+    specializations: ['IELTS Academic Writing & Speaking'],
+  } as any,
+];
+
 describe('TeacherClassroomAuditStudio Component Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,6 +39,7 @@ describe('TeacherClassroomAuditStudio Component Suite', () => {
       <TeacherClassroomAuditStudio
         isOpen={true}
         onClose={vi.fn()}
+        teachers={mockTeachers}
       />
     );
 
@@ -45,6 +54,7 @@ describe('TeacherClassroomAuditStudio Component Suite', () => {
       <TeacherClassroomAuditStudio
         isOpen={true}
         onClose={vi.fn()}
+        teachers={mockTeachers}
       />
     );
 
@@ -62,6 +72,7 @@ describe('TeacherClassroomAuditStudio Component Suite', () => {
       <TeacherClassroomAuditStudio
         isOpen={true}
         onClose={vi.fn()}
+        teachers={mockTeachers}
       />
     );
 
@@ -78,6 +89,7 @@ describe('TeacherClassroomAuditStudio Component Suite', () => {
       <TeacherClassroomAuditStudio
         isOpen={true}
         onClose={vi.fn()}
+        teachers={mockTeachers}
       />
     );
 

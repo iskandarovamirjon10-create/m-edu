@@ -4,7 +4,7 @@
  * Calculates attendance drops, overdue payment friction, exam grade dips, and provides 1-click playbooks.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -40,6 +40,13 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
   const queryClient = useQueryClient();
   const { playSuccess, playPop, playError } = usePremiumSound();
   const toast = useToast();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveInterventionStudent(null);
+      setInterventionNote('');
+    }
+  }, [isOpen]);
 
   const tierParam = selectedTier === 'ALL' ? undefined : selectedTier;
 
@@ -87,8 +94,14 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
       return;
     }
 
+    const targetId = activeInterventionStudent.studentId || activeInterventionStudent.id;
+    if (!targetId) {
+      toast.error("O'quvchi identifikatori topilmadi");
+      return;
+    }
+
     interveneMutation.mutate({
-      studentId: activeInterventionStudent.studentId,
+      studentId: String(targetId),
       type: interventionType,
       notes: interventionNote.trim(),
       followUpDays: Number(followUpDays) || 3,
@@ -247,9 +260,9 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
           </div>
         ) : (
           <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-            {data.students.map((student: any) => (
+            {data.students.map((student: any, idx: number) => (
               <motion.div
-                key={student.studentId}
+                key={student.studentId || student.id || idx}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-xl border border-border/50 bg-card/50 hover:bg-card/75 transition-colors p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"

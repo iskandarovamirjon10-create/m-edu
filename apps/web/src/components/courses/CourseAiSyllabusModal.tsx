@@ -164,6 +164,15 @@ Tahlil qiling:
     },
   });
 
+  // Reset results when course changes or modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSyllabusResult('');
+      setMarketingResult('');
+      setPricingResult('');
+    }
+  }, [isOpen, course?.id]);
+
   // Auto trigger syllabus on open if empty
   useEffect(() => {
     if (isOpen && course && !syllabusResult && !syllabusMutation.isPending) {
@@ -172,7 +181,9 @@ Tahlil qiling:
   }, [isOpen, course?.id]);
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
     sound.playSuccess();
     haptics.light();
     push({

@@ -7,6 +7,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { STAFF_ROLES } from '../auth/authorization.policy';
+import type { RequestUser } from '../auth/types';
 
 @ApiTags('Lessons')
 @ApiBearerAuth()
@@ -49,7 +50,11 @@ export class LessonsController {
     @CurrentUser('organizationId') orgId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLessonStatusDto,
+    @CurrentUser() user?: RequestUser,
   ) {
+    if (user !== undefined) {
+      return this.lessonsService.updateStatus(orgId, id, dto, user);
+    }
     return this.lessonsService.updateStatus(orgId, id, dto);
   }
 
@@ -60,7 +65,11 @@ export class LessonsController {
     @CurrentUser('organizationId') orgId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLessonContentDto,
+    @CurrentUser() user?: RequestUser,
   ) {
+    if (user !== undefined) {
+      return this.lessonsService.updateContent(orgId, id, dto, user);
+    }
     return this.lessonsService.updateContent(orgId, id, dto);
   }
 

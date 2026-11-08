@@ -31,32 +31,6 @@ export interface ProctoredExamStudioProps {
   readonly className?: string;
 }
 
-const DEFAULT_PROCTORED_CANDIDATES: readonly ExamCandidate[] = [
-  {
-    id: 'cand-1',
-    name: 'Jasur Bekmurodov',
-    avatarChar: 'J',
-    currentQuestion: 22,
-    totalQuestions: 25,
-    scorePct: 88,
-    severity: 'normal',
-    tabSwitchCount: 0,
-    isFinished: false,
-  },
-  {
-    id: 'cand-2',
-    name: 'Dilnoza Salimova',
-    avatarChar: 'D',
-    currentQuestion: 19,
-    totalQuestions: 25,
-    scorePct: 76,
-    severity: 'warning',
-    lastAlert: 'Nigoh monitordan chetga burildi (3 soniya)',
-    tabSwitchCount: 1,
-    isFinished: false,
-  },
-];
-
 export function ProctoredExamStudio({
   examTitle = 'JavaScript ES2026 & AI Integration Certification Exam',
   className,
@@ -64,8 +38,8 @@ export function ProctoredExamStudio({
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [candidates, setCandidates] = useState<readonly ExamCandidate[]>(DEFAULT_PROCTORED_CANDIDATES);
-  const [selectedCandidate, setSelectedCandidate] = useState<ExamCandidate | null>(DEFAULT_PROCTORED_CANDIDATES[0]);
+  const [candidates, setCandidates] = useState<readonly ExamCandidate[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState<ExamCandidate | null>(null);
 
   // Connect to real backend exams & students API
   useEffect(() => {

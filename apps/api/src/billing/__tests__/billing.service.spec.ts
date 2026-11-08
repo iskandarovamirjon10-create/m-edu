@@ -178,10 +178,14 @@ describe('BillingService', () => {
 
       expect(res.result?.transaction).toBe('pay-pending');
       expect(res.result?.state).toBe(-1);
+      expect(res.result?.reason).toBe(1);
       expect(prismaMock.subscriptionPayment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'pay-pending' },
-          data: { status: 'CANCELLED' },
+          data: expect.objectContaining({
+            status: 'CANCELLED',
+            rawPayload: { cancelReason: 1 },
+          }),
         }),
       );
     });

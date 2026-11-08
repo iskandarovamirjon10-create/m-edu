@@ -29,6 +29,7 @@ import { searchApi } from '@/lib/api';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { setCommandPaletteOpen, toggleAiCopilot } from '@/stores/ui.store';
 import { acquireScrollLock } from '@/layouts/core/singletons';
+import { isRouteAllowedForRole } from '@/layouts/components/Sidebar';
 import {
   CreditCard,
   ClipboardCheck,
@@ -110,6 +111,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
     description: "O'quvchidan zudlik bilan to'lov qabul qilish [Alt+P]",
     category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['payment', 'tolov', 'pul', 'kassa', 'chek', 'payme', 'click', 'naqd'],
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: <ActionBadge icon={CreditCard} className="bg-emerald-500/15 border-emerald-500/25 text-emerald-500 dark:text-emerald-400" />,
     action: () => {
       window.dispatchEvent(new CustomEvent('open-quick-payment'));
@@ -122,6 +124,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
     description: "Bugungi guruh davomatini 1 daqiqada belgilash [Alt+A]",
     category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['attendance', 'davomat', 'yoqlama', 'keldi', 'dars', 'kelmadi'],
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'ASSISTANT'],
     icon: <ActionBadge icon={ClipboardCheck} className="bg-indigo-500/15 border-indigo-500/25 text-indigo-500 dark:text-indigo-400" />,
     action: () => {
       window.dispatchEvent(new CustomEvent('open-quick-attendance'));
@@ -155,6 +158,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
     category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['gamification', 'coins', 'xp', 'tangalar', 'sovrin', 'leaderboard', 'podium'],
     href: '/gamification',
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER', 'STUDENT'],
     icon: <ActionBadge icon={Trophy} className="bg-amber-500/15 border-amber-500/25 text-amber-500 dark:text-amber-400" />,
   },
   {
@@ -164,6 +168,7 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
     category: "Tezkor Amallar (Spotlight Actions)",
     keywords: ['telegram', 'tg', 'bot', 'webapp', 'ota-ona', 'mobil', 'davomat'],
     href: '/tg-app',
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: <ActionBadge icon={Smartphone} className="bg-sky-500/15 border-sky-500/25 text-sky-500 dark:text-sky-400" />,
   },
 ];
@@ -176,6 +181,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'Main',
     keywords: ['home', 'stats', 'overview', 'asosiy', 'dashboard', 'boshqaruv paneli'],
     href: '/',
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: (
       <ActionBadge icon={Home} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />
     ),
@@ -187,7 +193,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'Management',
     keywords: ['pupils', 'learners', 'enrollment'],
     href: '/students',
-    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: <ActionBadge icon={GraduationCap} className="bg-blue-500/15 border-blue-500/25 text-blue-500 dark:text-blue-400" />,
   },
   {
@@ -227,7 +233,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'Management',
     keywords: ['subjects', 'curriculum', 'syllabus'],
     href: '/courses',
-    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: <ActionBadge icon={BookOpen} className="bg-amber-500/15 border-amber-500/25 text-amber-500 dark:text-amber-400" />,
   },
   {
@@ -285,7 +291,7 @@ const NAV_ITEMS: CommandItemWithRoles[] = [
     category: 'Management',
     keywords: ['diploma', 'award', 'document'],
     href: '/certificates',
-    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER'],
+    roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER'],
     icon: <SimpleIcon>{ICON_NAV}</SimpleIcon>,
   },
   {
@@ -441,6 +447,7 @@ export function CommandPalette() {
 
   const roleFilteredActions = useMemo(() => {
     return QUICK_ACTIONS.filter((item) => {
+      if (item.href && !isRouteAllowedForRole(item.href, userRole)) return false;
       if (!item.roles || item.roles.length === 0) return true;
       if (!userRole) return false;
       return item.roles.includes(userRole);
@@ -449,6 +456,7 @@ export function CommandPalette() {
 
   const roleFilteredItems = useMemo(() => {
     return NAV_ITEMS.filter((item) => {
+      if (item.href && !isRouteAllowedForRole(item.href, userRole)) return false;
       if (!item.roles || item.roles.length === 0) return true;
       if (!userRole) return false;
       return item.roles.includes(userRole);

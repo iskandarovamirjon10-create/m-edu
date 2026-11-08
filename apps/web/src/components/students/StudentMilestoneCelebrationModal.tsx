@@ -87,13 +87,11 @@ export const StudentMilestoneCelebrationModal: React.FC<StudentMilestoneCelebrat
         if (!active) return;
         const list: Student[] = res?.data || res?.items || (Array.isArray(res) ? res : []);
         setStudents(list);
-        if (list.length > 0 && !selectedStudentId) {
-          setSelectedStudentId(defaultStudentId || list[0].id);
-        }
+        setSelectedStudentId((prev) => prev || defaultStudentId || list[0]?.id || '');
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [isOpen, defaultStudentId, selectedStudentId]);
+  }, [isOpen, defaultStudentId]);
 
   // Trigger celebration on open
   useEffect(() => {
@@ -109,11 +107,11 @@ export const StudentMilestoneCelebrationModal: React.FC<StudentMilestoneCelebrat
   }, [students, selectedStudentId]);
 
   const studentName = useMemo(() => {
-    if (!selectedStudent) return "Amirjon Iskandarov";
+    if (!selectedStudent) return "Talaba tanlanmagan";
     return (
       [selectedStudent.user?.firstName, selectedStudent.user?.lastName].filter(Boolean).join(' ') ||
       (selectedStudent as any).name ||
-      "Amirjon Iskandarov"
+      "Talaba"
     );
   }, [selectedStudent]);
 

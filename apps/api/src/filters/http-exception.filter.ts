@@ -22,6 +22,18 @@ import type { Request, Response } from 'express';
 import { FacePlatformError } from '@medu/core';
 import { OAuthRedirectException } from '../auth/oauth-redirect.exception';
 
+
+/**
+ * Redacts any leaked database credentials, connection URLs, or auth secrets from error messages.
+ */
+function sanitizeErrorMessage(msg: string): string {
+  if (!msg || typeof msg !== 'string') return msg;
+  return msg
+    .replace(new RegExp('(postgres(?:ql)?:\\/\\/[^:]+:)[^@]+(@)', 'gi'), '$1***$2')
+    .replace(/(bearer\s+)[a-zA-Z0-9._\-]+/gi, '$1***')
+    .replace(/("password"|"secret"|"token"|"apiKey"|"jwt")\s*:\s*"[^"]+"/gi, '$1: "***"');
+}
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -68,7 +80,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = typeof rawMessage === 'string' ? rawMessage : exception.message;
         const rawCode = b.code;
         code = typeof rawCode === 'string' ? rawCode : undefined;
-        if (Array.isArray(rawMessage)) message = rawMessage.join(', ');
+        if (Array.isArray(rawMessage)) {
+          message = rawMessage.join(', ');
+          details = { ...(details || {}), errors: rawMessage };
+          if (!code) {
+            code = 'VALIDATION_ERROR';
+          }
+        }
+        if (b.error && typeof b.error === 'string' && !code) {
+          code = (b.error as string).toUpperCase().replace(/\s+/g, '_');
+        }
       }
     } else if (
       exception instanceof Error &&
@@ -88,6 +109,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (clientError.details) {
         details = clientError.details;
       }
+    } else if (
+      exception instanceof Error &&
+      (exception.name === 'PrismaClientValidationError' || (exception as any).constructor?.name === 'PrismaClientValidationError')
+    ) {
+      status = HttpStatus.BAD_REQUEST;
+      code = 'DATABASE_VALIDATION_ERROR';
+      message = 'Invalid input query parameters or data format';
+      this.logger.warn(`Prisma validation error on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message.slice(0, 200)}`);
+    } else if (
+      exception instanceof Error &&
+      (exception.name === 'PrismaClientInitializationError' || (exception as any).constructor?.name === 'PrismaClientInitializationError')
+    ) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      code = 'DATABASE_CONNECTION_ERROR';
+      message = 'Database service connection unavailable';
+      this.logger.error(`Prisma initialization error on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message}`);
     } else if (
       exception instanceof Error &&
       'code' in exception &&
@@ -152,7 +189,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       // The raw message is only echoed to the client OUTSIDE production;
       // in production the client always gets the generic message.
       if (process.env.NODE_ENV !== 'production') {
-        message = exception.message;
+        message = sanitizeErrorMessage(exception.message);
       }
       this.logger.error(
         `Unhandled exception on ${request?.method ?? 'UNKNOWN'} ${request?.url ?? ''}: ${exception.message}`,
@@ -163,10 +200,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       code,
-      message,
+      message: sanitizeErrorMessage(message),
       ...(details ? { details } : {}),
       path: request?.url ?? '',
-      requestId: request?.id,
+      requestId: request?.id || (request?.headers?.['x-request-id'] as string | undefined),
       timestamp: new Date().toISOString(),
     });
   }

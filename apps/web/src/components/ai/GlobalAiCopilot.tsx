@@ -104,7 +104,7 @@ function useFocusTrap(
     if (!container) return;
     const restoreTarget = restoreTo.current;
     const previous = document.activeElement as HTMLElement | null;
-    requestAnimationFrame(() => container.focus());
+    const rafId = requestAnimationFrame(() => container.focus());
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return;
@@ -132,6 +132,7 @@ function useFocusTrap(
 
     container.addEventListener('keydown', onKeyDown);
     return () => {
+      cancelAnimationFrame(rafId);
       container.removeEventListener('keydown', onKeyDown);
       const target = restoreTarget ?? previous;
       if (target?.isConnected) target.focus();
@@ -237,14 +238,19 @@ export function GlobalAiCopilot({ onOpen, onClose, initialPrompt }: GlobalAiCopi
   }, [haptics]);
 
   useEffect(() => {
+    let timerId: number | undefined;
     const onOpenWithPrompt = (event: Event) => {
       const detail = (event as CustomEvent<{ prompt?: string }>).detail;
       if (!isOpen) openAiCopilot();
-      if (detail?.prompt) window.setTimeout(() => send(detail.prompt!), 80);
+      if (detail?.prompt) {
+        timerId = window.setTimeout(() => send(detail.prompt!), 80);
+      }
     };
     window.addEventListener('open-ai-copilot', onOpenWithPrompt as EventListener);
-    return () =>
+    return () => {
+      if (timerId !== undefined) window.clearTimeout(timerId);
       window.removeEventListener('open-ai-copilot', onOpenWithPrompt as EventListener);
+    };
   }, [isOpen, send]);
 
   const isExcluded = EXCLUDED_ROUTES.some((route) => pathname.startsWith(route));

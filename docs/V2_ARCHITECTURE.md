@@ -41,17 +41,17 @@ M-EDU v2 professional o'quv markazlar uchun to'liq ERP tizimi. Real face recogni
 
 ### 🔔 Communication & Notifications
 - **Email System** — Templated emails, bulk sending, scheduled notifications
-- **SMS Notifications** — Attendance alerts, payment reminders (Twilio integration)
+- **SMS Notifications** — Attendance alerts, payment reminders (Eskiz / PlayMobile adapters are implemented; Twilio is **not** implemented)
 - **Real-time Collaboration** — WebSocket chat, online status, live attendance updates
 
 ### 💳 Payments & Integrations
-- **Payment Gateways** — Payme, Click, Uzum, Stripe, PayPal
+- **Payment Gateways** — Payme and Click adapters are implemented (`apps/api/src/billing/adapters/`). Uzum, Stripe and PayPal are **planned, not implemented**.
 - **Multi-currency** — Support UZS, USD, RUB
 - **Subscription Plans** — Tiered pricing, trial periods, auto-renewal
 
 ### 🎨 Premium Features
 - **White-label Branding** — Per-organization logos, colors, domains, email templates
-- **Multi-language (i18n)** — Uzbek, Russian, English, RTL support
+- **Multi-language (i18n)** — Uzbek, Russian, English. RTL layout is **not implemented** (the i18n provider forces `dir="ltr"`).
 - **Advanced Permissions** — Granular RBAC, custom roles, data-level permissions
 - **Dark Mode** — System-wide theme support
 - **Audit Logs** — Complete activity tracking for compliance
@@ -578,7 +578,7 @@ POST   /api/payment-gateways/stripe/webhook
 
 ### Phase 3 (Week 5-6) — Communications
 1. Email notification system
-2. SMS integration (Twilio)
+2. SMS integration (Eskiz / PlayMobile; Twilio is **not** implemented)
 3. Real-time chat (WebSocket)
 4. Parent portal
 

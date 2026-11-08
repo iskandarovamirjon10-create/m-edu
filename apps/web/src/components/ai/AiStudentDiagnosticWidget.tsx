@@ -34,7 +34,7 @@ interface AiStudentDiagnosticWidgetProps {
 
 export function AiStudentDiagnosticWidget({
   studentId,
-  studentName,
+  studentName: _studentName,
   onOpenMessageModal,
 }: AiStudentDiagnosticWidgetProps) {
   const [data, setData] = useState<AiStudentDiagnostic | null>(null);
@@ -48,22 +48,8 @@ export function AiStudentDiagnosticWidget({
       const res = await aiApi.diagnoseStudent(studentId);
       setData(res);
     } catch {
-      // Fallback synthetic baseline diagnostic if network/AI is temporarily unavailable
-      setData({
-        studentId,
-        studentName,
-        overallScore: 78,
-        riskLevel: 'medium',
-        attendanceRate: 85,
-        averageGrade: 4.2,
-        balance: 0,
-        groups: ['Asosiy guruh'],
-        summary: `${studentName} o'zlashtirish va faollik darajasi bo'yicha barqaror tendentsiyaga ega.`,
-        strengths: ["Darslarda doimiy faol qatnashish", "Uy vazifalarini vaqtida topshirish"],
-        riskFactors: ["Oxirgi haftalarda davomat bo'yicha e'tibor talab holatlar kuzatildi"],
-        recommendations: ["Qiyin mavzularda qo'shimcha amaliy vazifalar berish tavsiya etiladi"],
-        suggestedParentMessage: `Assalomu alaykum! ${studentName}ning darslardagi faolligi yaxshi, ammo davomatga ko'proq e'tibor qaratishingizni so'raymiz.`,
-      });
+      setData(null);
+
     } finally {
       setLoading(false);
     }
@@ -101,6 +87,27 @@ export function AiStudentDiagnosticWidget({
         };
     }
   };
+
+  if (!data && !loading) {
+    return (
+      <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          AI Pedagogik Diagnostika
+        </h3>
+        <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+          Diagnostika olinmadi — AI xizmati yoki tarmoq javob bermadi. Soxta ko'rsatkich
+          ko'rsatilmaydi.
+        </p>
+        <button
+          type="button"
+          onClick={() => void loadDiagnostic()}
+          className="mt-3 rounded-xl border border-amber-500/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300"
+        >
+          Qayta urinish
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.04] p-5 shadow-sm backdrop-blur-xl space-y-4">

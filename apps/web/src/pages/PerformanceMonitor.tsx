@@ -177,7 +177,7 @@ export function PerformanceMonitorPage() {
   ];
 
   return (
-    <div className="relative min-h-screen px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 lg:px-8">
+    <div className="relative min-h-full px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 lg:px-8">
       {/* Ambient background glows */}
       <AuroraMesh variant="corporate" />
 

@@ -19,6 +19,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import request from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { OnboardingSlipModal, type OnboardingCredentialRecord } from '@/components/iam/OnboardingSlipModal';
 
 export type MigrationSourcePreset = 'modme' | 'alfacrm' | 'universal_excel';
 
@@ -40,12 +41,11 @@ export interface ModmeExcelMigrationStudioProps {
   readonly className?: string;
 }
 
-const SAMPLE_MODME_CSV = `F.I.Sh,Telefon raqami,Guruh nomi,Hisob balansi (UZS),Ota-onasi,Ota-ona telefoni
-Abdurashidov Bilolbek,+998901234567,Frontend React Pro,-450000,Abdurashid aka,+998907654321
-Karimova Rayhona,+998935554433,General English B2,+200000,Dilnoza opa,+998931112233
-Xalilov Jamshid,+998998887766,IELTS Rocket 7.5,-1200000,Botir aka,+998974443322
-Solihov Temur,+998901112244,Python Backend Pro,0,Mahmuda opa,+998909998877
-Tursunova Nilufar,+998946665544,Grafik Dizayn Master,+150000,Farhod aka,+998943332211`;
+/**
+ * Yuklab olinadigan shablon — faqat ustun sarlavhalari. Namunaviy o'quvchilar,
+ * telefon raqamlari yoki balanslar hech qachon paketga kirmaydi.
+ */
+const MIGRATION_TEMPLATE_CSV = `F.I.Sh,Telefon raqami,Guruh nomi,Hisob balansi (UZS),Ota-onasi,Ota-ona telefoni`;
 
 export function ModmeExcelMigrationStudio({
   onMigrationComplete,
@@ -65,6 +65,8 @@ export function ModmeExcelMigrationStudio({
   const [detectedColumns, setDetectedColumns] = useState<readonly string[]>([]);
   const [mode, setMode] = useState<'UPSERT' | 'CREATE'>('UPSERT');
   const [isDryRun, setIsDryRun] = useState(false);
+  const [slipModalOpen, setSlipModalOpen] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState<OnboardingCredentialRecord[]>([]);
 
   // Normalize phone to +998 format
   const normalizeUzPhone = useCallback((raw: string): string => {
@@ -240,20 +242,10 @@ export function ModmeExcelMigrationStudio({
     [parseClientCsv, sound, t, toast]
   );
 
-  // Load sample template for quick testing
-  const handleLoadSample = useCallback(() => {
-    sound.playTick();
-    const parsed = parseClientCsv(SAMPLE_MODME_CSV);
-    setParsedRows(parsed.rows);
-    setDetectedColumns(parsed.columns);
-    setSelectedFile(new File([SAMPLE_MODME_CSV], 'modme_export_sample.csv', { type: 'text/csv' }));
-    toast.push('info', t('migration.toastSampleLoaded', 'Namuna Modme eksport ma’lumotlari yuklandi!'));
-  }, [parseClientCsv, sound, t, toast]);
-
-  // Download Sample Template
+  // Bo'sh shablonni yuklab olish (faqat ustun sarlavhalari)
   const handleDownloadTemplate = useCallback(() => {
     sound.playPop();
-    const blob = new Blob([SAMPLE_MODME_CSV], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([MIGRATION_TEMPLATE_CSV], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -272,16 +264,17 @@ export function ModmeExcelMigrationStudio({
       return;
     }
 
+    if (!selectedFile) {
+      toast.push('warning', t('migration.toastChooseFile', 'Iltimos, avval ko‘chirish uchun fayl tanlang!'));
+      return;
+    }
+
     setIsSubmitting(true);
     sound.playTick();
 
     try {
-      const fileToSend =
-        selectedFile ||
-        new File([SAMPLE_MODME_CSV], 'migration_data.csv', { type: 'text/csv' });
-
       const form = new FormData();
-      form.append('file', fileToSend);
+      form.append('file', selectedFile);
       form.append('entityType', 'STUDENT');
       form.append('mode', mode);
       if (isDryRun) {
@@ -294,12 +287,18 @@ export function ModmeExcelMigrationStudio({
         importedCount?: number;
         total?: number;
         message?: string;
+        credentials?: OnboardingCredentialRecord[];
       }>('/imports', {
         method: 'POST',
         body: form,
       });
 
       const count = res?.importedCount || res?.imported || parsedRows.length;
+
+      if (res?.credentials && Array.isArray(res.credentials) && res.credentials.length > 0) {
+        setGeneratedCredentials(res.credentials);
+        setSlipModalOpen(true);
+      }
 
       sound.playSuccess();
       toast.push(
@@ -494,19 +493,6 @@ export function ModmeExcelMigrationStudio({
           >
             <Icon name="download" className="w-3.5 h-3.5 mr-1.5" />
             {t('migration.downloadTemplate', 'Shablonni Yuklab Olish')}
-          </GlassButton>
-
-          <GlassButton
-            size="sm"
-            variant="secondary"
-            className="w-full sm:w-auto"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleLoadSample();
-            }}
-          >
-            <Icon name="play" className="w-3.5 h-3.5 mr-1.5 text-cyan-400" />
-            {t('migration.testSample', 'Namunaviy Ma’lumotlar bilan Sinash')}
           </GlassButton>
         </div>
       </div>
@@ -718,6 +704,13 @@ export function ModmeExcelMigrationStudio({
           </GlassButton>
         </div>
       </div>
+
+      <OnboardingSlipModal
+        open={slipModalOpen}
+        onClose={() => setSlipModalOpen(false)}
+        records={generatedCredentials}
+        title="Ko'chirilgan O'quvchilar Kirish Varaqalari (Onboarding Slips)"
+      />
     </GlassSurface>
   );
 }

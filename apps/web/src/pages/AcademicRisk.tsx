@@ -475,7 +475,7 @@ export function AcademicRiskPage() {
   const isLoading = studentsQuery.isLoading && !allStudents.length;
   if (isLoading) {
     return (
-      <div className="relative min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      <div className="relative min-h-full px-4 py-8 sm:px-6 lg:px-8">
         <AuroraMesh />
         <div className="mx-auto max-w-7xl">
           <AcademicRiskSkeleton />
@@ -486,7 +486,7 @@ export function AcademicRiskPage() {
 
   if (studentsQuery.isError) {
     return (
-      <div className="relative min-h-screen px-4 py-12 sm:px-6 lg:px-8">
+      <div className="relative min-h-full px-4 py-12 sm:px-6 lg:px-8">
         <AuroraMesh />
         <div className="mx-auto max-w-2xl">
           <div className="liquid-glass-card flex flex-col items-center gap-4 p-10 text-center">
@@ -522,7 +522,7 @@ export function AcademicRiskPage() {
   const totalAtRisk = calculateTotalAtRisk(summary?.high, summary?.medium);
 
   return (
-    <div className="relative min-h-screen px-4 py-6 sm:px-6 lg:px-8 pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full px-4 py-6 sm:px-6 lg:px-8 pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
 
       <motion.div

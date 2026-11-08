@@ -17,7 +17,8 @@ export type PrintDocumentType =
   | 'receipt-a4'
   | 'invoice-a4'
   | 'contract-a4'
-  | 'z-report';
+  | 'z-report'
+  | 'onboarding-slip-a4';
 
 export interface PrintOptions {
   type: PrintDocumentType;
@@ -47,14 +48,22 @@ export function triggerPrint(options: PrintOptions): void {
     onBeforePrint?.();
 
     // 3. Register cleanup on print completion
+    let cleaned = false;
     const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       document.body.removeAttribute('data-print-mode');
       document.title = previousTitle;
       window.removeEventListener('afterprint', cleanup);
+      window.removeEventListener('focus', cleanup);
       onAfterPrint?.();
     };
 
     window.addEventListener('afterprint', cleanup);
+    // Safari/WebKit fallback: focus fires when print dialog closes
+    setTimeout(() => {
+      window.addEventListener('focus', cleanup, { once: true });
+    }, 500);
 
     // 4. Trigger print dialog
     // Small timeout ensures DOM attributes have reflowed before browser rasterizes

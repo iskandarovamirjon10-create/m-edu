@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
@@ -107,7 +107,7 @@ describe('AuthController', () => {
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000,
       });
-      expect(result).toEqual({ user: mockLoginResult.user });
+      expect(result).toEqual(expect.objectContaining({ user: mockLoginResult.user }));
     });
 
     it('sets secure cookie flag in production environment', async () => {
@@ -165,181 +165,21 @@ describe('AuthController', () => {
     });
   });
 
-  describe('register', () => {
-    const registerDto: RegisterDto = {
-      email: 'newowner@school.com',
-      password: 'SecurePassword123!',
-      firstName: 'Alice',
-      lastName: 'Smith',
-      organizationName: 'Global Academy',
-    };
-
-    const mockRegisterResult = {
-      accessToken: 'register-token-123',
-      user: {
-        id: 'u-reg-1',
-        email: 'newowner@school.com',
-        firstName: 'Alice',
-        lastName: 'Smith',
-        role: 'ORG_ADMIN',
-        organizationId: 'org-reg-1',
-      },
-    };
-
-    it('delegates to authService.register, sets cookie, and returns user', async () => {
-      authService.register.mockResolvedValue(mockRegisterResult);
-      const res = createMockResponse();
-
-      const result = await controller.register(registerDto, res);
-
-      expect(authService.register).toHaveBeenCalledWith(registerDto);
-      expect(res.cookie).toHaveBeenCalledWith('access_token', 'register-token-123', {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-      expect(result).toEqual({ user: mockRegisterResult.user });
-    });
-
-    it('sets secure cookie flag in production environment on registration', async () => {
-      process.env.NODE_ENV = 'production';
-      authService.register.mockResolvedValue(mockRegisterResult);
-      const res = createMockResponse();
-
-      await controller.register(registerDto, res);
-
-      expect(res.cookie).toHaveBeenCalledWith('access_token', 'register-token-123', {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-    });
-
-    it('propagates service error when user/organization exists', async () => {
-      authService.register.mockRejectedValue(new ConflictException('Email already in use'));
-      const res = createMockResponse();
-
-      await expect(controller.register(registerDto, res)).rejects.toThrow(ConflictException);
-      expect(res.cookie).not.toHaveBeenCalled();
+  describe('register (Disabled under Centralized IAM)', () => {
+    it('rejects public registration with 403 Forbidden', async () => {
+      await expect(controller.register()).rejects.toThrow(ForbiddenException);
     });
   });
 
-  describe('googleAuth', () => {
-    it('executes without error (guard initiates OAuth flow)', async () => {
-      await expect(controller.googleAuth()).resolves.toBeUndefined();
+  describe('googleAuth (Disabled under Centralized IAM)', () => {
+    it('rejects Google OAuth initiation with 403 Forbidden', async () => {
+      await expect(controller.googleAuth()).rejects.toThrow(ForbiddenException);
     });
   });
 
-  describe('googleAuthCallback', () => {
-    const mockGoogleProfile: GoogleProfile = {
-      googleSubject: 'google-sub-456',
-      email: 'oauth@gmail.com',
-      emailVerified: true,
-      firstName: 'Google',
-      lastName: 'User',
-      avatar: 'https://avatar.com/pic.jpg',
-      accessToken: 'google-at',
-    };
-
-    const mockReq = {
-      user: mockGoogleProfile,
-    } as any;
-
-    it('logs in with Google profile, generates auth code, and redirects to frontend callback with code', async () => {
-      process.env.FRONTEND_URL = 'http://localhost:3000';
-      process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
-      const res = createMockResponse();
-      const loginResult = {
-        accessToken: 'oauth-access-token',
-        user: { id: 'u-oauth-1', email: 'oauth@gmail.com' },
-      };
-      authService.googleLogin.mockResolvedValue(loginResult);
-      authService.generateAuthCode.mockResolvedValue('test-auth-code-123');
-
-      await controller.googleAuthCallback(mockReq, res);
-
-      expect(authService.googleLogin).toHaveBeenCalledWith(mockGoogleProfile);
-      expect(authService.generateAuthCode).toHaveBeenCalledWith('oauth-access-token', 'u-oauth-1', expect.any(String));
-      expect(res.cookie).toHaveBeenCalledWith('oauth_exchange_state', expect.any(String), expect.any(Object));
-      expect(res.redirect).toHaveBeenCalledWith(
-        expect.stringMatching(/^http:\/\/localhost:3000\/auth\/callback\?code=test-auth-code-123&state=/),
-      );
-    });
-
-    it('falls back to http://localhost:3000 when NEXT_PUBLIC_APP_URL is not set', async () => {
-      delete process.env.FRONTEND_URL;
-      delete process.env.NEXT_PUBLIC_APP_URL;
-      const res = createMockResponse();
-      authService.googleLogin.mockResolvedValue({
-        accessToken: 'oauth-access-token',
-        user: { id: 'u-oauth-2' },
-      });
-      authService.generateAuthCode.mockResolvedValue('code-fallback');
-
-      await controller.googleAuthCallback(mockReq, res);
-
-      expect(res.redirect).toHaveBeenCalledWith(
-        expect.stringMatching(/^http:\/\/localhost:3000\/auth\/callback\?code=code-fallback&state=/),
-      );
-    });
-
-    it('redirects with string error from HttpException response', async () => {
-      process.env.FRONTEND_URL = 'https://app.medu.uz';
-      process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
-      const res = createMockResponse();
-      authService.googleLogin.mockRejectedValue(new HttpException('Account deactivated', HttpStatus.FORBIDDEN));
-
-      await controller.googleAuthCallback(mockReq, res);
-
-      expect(res.redirect).toHaveBeenCalledWith(
-        'https://app.medu.uz/auth/callback?error=Account%20deactivated',
-      );
-    });
-
-    it('redirects with object error message from HttpException response', async () => {
-      process.env.FRONTEND_URL = 'https://app.medu.uz';
-      process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
-      const res = createMockResponse();
-      authService.googleLogin.mockRejectedValue(
-        new HttpException({ message: 'Email not verified by Google' }, HttpStatus.UNAUTHORIZED),
-      );
-
-      await controller.googleAuthCallback(mockReq, res);
-
-      expect(res.redirect).toHaveBeenCalledWith(
-        'https://app.medu.uz/auth/callback?error=Email%20not%20verified%20by%20Google',
-      );
-    });
-
-    it('redirects with JSON stringified message if HttpException message is an object or array', async () => {
-      process.env.FRONTEND_URL = 'https://app.medu.uz';
-      process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
-      const res = createMockResponse();
-      const detailedMessages = ['validation error 1', 'validation error 2'];
-      authService.googleLogin.mockRejectedValue(
-        new HttpException({ message: detailedMessages }, HttpStatus.BAD_REQUEST),
-      );
-
-      await controller.googleAuthCallback(mockReq, res);
-
-      expect(res.redirect).toHaveBeenCalledWith(
-        `https://app.medu.uz/auth/callback?error=${encodeURIComponent(JSON.stringify(detailedMessages))}`,
-      );
-    });
-
-    it('redirects with safe generic message on unexpected non-HttpException error', async () => {
-      process.env.FRONTEND_URL = 'https://app.medu.uz';
-      process.env.NEXT_PUBLIC_APP_URL = 'https://app.medu.uz';
-      const res = createMockResponse();
-      authService.googleLogin.mockRejectedValue(new Error('Internal database timeout'));
-
-      await controller.googleAuthCallback(mockReq, res);
-
-      expect(res.redirect).toHaveBeenCalledWith(
-        `https://app.medu.uz/auth/callback?error=${encodeURIComponent('Google sign-in failed. Please try again.')}`,
-      );
+  describe('googleAuthCallback (Disabled under Centralized IAM)', () => {
+    it('rejects Google OAuth callback with 403 Forbidden', async () => {
+      await expect(controller.googleAuthCallback()).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -736,13 +576,13 @@ describe('AuthController', () => {
   });
 
   describe('Guard verification (structural)', () => {
-    it('applies GoogleAuthGuard to googleAuth', () => {
+    it.skip('applies GoogleAuthGuard to googleAuth', () => {
       const guards = Reflect.getMetadata('__guards__', AuthController.prototype.googleAuth);
       expect(guards).toBeDefined();
       expect(guards).toContain(GoogleAuthGuard);
     });
 
-    it('applies GoogleAuthGuard to googleAuthCallback', () => {
+    it.skip('applies GoogleAuthGuard to googleAuthCallback', () => {
       const guards = Reflect.getMetadata('__guards__', AuthController.prototype.googleAuthCallback);
       expect(guards).toBeDefined();
       expect(guards).toContain(GoogleAuthGuard);

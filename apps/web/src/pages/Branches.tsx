@@ -362,7 +362,7 @@ export function BranchesPage() {
 
   const branches = useMemo<Branch[]>(() => {
     if (Array.isArray(rawBranches)) return rawBranches;
-    return (rawBranches as any)?.items || [];
+    return ((rawBranches as { items?: Branch[] })?.items || []) as Branch[];
   }, [rawBranches]);
 
   const { data: users = [] } = useQuery({
@@ -1109,7 +1109,7 @@ export function BranchesPage() {
               className="min-h-[44px]"
               options={[
                 { value: '', label: '—' },
-                ...(Array.isArray(users) ? users : ((users as any)?.items || [])).map((u: any) => ({
+                ...(Array.isArray(users) ? users : ((users as { items?: Array<{ id: string; firstName?: string; lastName?: string; email?: string }> })?.items || [])).map((u) => ({
                   value: u.id,
                   label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '—',
                 })),

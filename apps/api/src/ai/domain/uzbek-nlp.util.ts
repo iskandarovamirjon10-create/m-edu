@@ -16,6 +16,8 @@ export const UZBEK_STOP_WORDS = new Set([
   'qarz', 'qarzdor', 'qarzdorlik', 'status', 'summary', 'about', 'student', 'students',
   'group', 'groups', 'attendance', 'payment', 'payments', 'today', 'report', 'analyze',
   'analysis', 'check', 'details', 'kimga', 'qayerda', 'iltimos', 'aytib',
+  'nega', 'qachon', 'qancha', 'qanchadan', 'kimniki', 'qani', 'bormikan', 'rahmat', 'tashakkur',
+  'bor', 'yoq', 'qilsa', 'boladimi', 'bo‘ladimi',
   'кто', 'сегодня', 'студент', 'студенты', 'группа', 'группы', 'посещаемость', 'оплата', 'долг'
 ]);
 

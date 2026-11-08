@@ -5,12 +5,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-  GlassModal,
-  GlassButton,
-  GlassBadge,
-  useToast,
-} from '@/components/ui';
+import { GlassModal, GlassButton, useToast } from '@/components/ui';
 import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -38,6 +33,13 @@ export const ReferralGrowthEngineModal: React.FC<ReferralGrowthEngineModalProps>
   const [activeTab, setActiveTab] = useState<'share_card' | 'stats' | 'campaign_rules'>('share_card');
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
+  // Sync defaultStudentId prop when changed
+  useEffect(() => {
+    if (defaultStudentId) {
+      setSelectedStudentId(defaultStudentId);
+    }
+  }, [defaultStudentId]);
+
   // Load real students from database
   useEffect(() => {
     if (!isOpen) return;
@@ -47,13 +49,11 @@ export const ReferralGrowthEngineModal: React.FC<ReferralGrowthEngineModalProps>
         if (!active) return;
         const list: Student[] = res?.data || res?.items || (Array.isArray(res) ? res : []);
         setStudents(list);
-        if (list.length > 0 && !selectedStudentId) {
-          setSelectedStudentId(defaultStudentId || list[0].id);
-        }
+        setSelectedStudentId((prev) => prev || defaultStudentId || list[0]?.id || '');
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [isOpen, defaultStudentId, selectedStudentId]);
+  }, [isOpen, defaultStudentId]);
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) || students[0] || null;
@@ -85,7 +85,9 @@ export const ReferralGrowthEngineModal: React.FC<ReferralGrowthEngineModalProps>
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(shareText);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+      }
       setIsCopied(true);
       playSuccess();
       haptics.success();
@@ -125,9 +127,7 @@ export const ReferralGrowthEngineModal: React.FC<ReferralGrowthEngineModalProps>
                 <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
                   Viral Referral & Do'stini Taklif Qilish Tizimi
                 </h3>
-                <GlassBadge variant="success" size="sm" className="font-bold">
-                  +35% Organik O'sish
-                </GlassBadge>
+
               </div>
               <p className="text-xs text-slate-400">
                 Har bir taklif qilingan do'st uchun o'quvchiga bonus, yangi do'stga esa bir martalik chegirma vaucheri
@@ -308,52 +308,10 @@ export const ReferralGrowthEngineModal: React.FC<ReferralGrowthEngineModalProps>
 
           {activeTab === 'stats' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-center">
-                  <div className="text-xs text-slate-400">Taklif qilingan do'stlar</div>
-                  <div className="text-2xl font-bold text-white mt-1">4 nafar</div>
-                  <div className="text-[11px] text-emerald-400 mt-0.5">3 nafari kursga yozildi</div>
-                </div>
-
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
-                  <div className="text-xs font-semibold text-emerald-300">Ishlab topilgan bonus</div>
-                  <div className="text-2xl font-bold text-emerald-400 mt-1">300,000 UZS</div>
-                  <div className="text-[11px] text-emerald-300/70 mt-0.5">O'quvchi balansiga o'tkazildi</div>
-                </div>
-
-                <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-center">
-                  <div className="text-xs font-semibold text-cyan-300">Markaz daromad o'sishi</div>
-                  <div className="text-2xl font-bold text-cyan-400 mt-1">+900,000 UZS</div>
-                  <div className="text-[11px] text-cyan-300/70 mt-0.5">Referral orqali to'lovlar</div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
-                  Do'stlar Ro'yxati & Status
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-                    <div>
-                      <div className="font-semibold text-white">Shaxzod Aliyev</div>
-                      <div className="text-slate-400 text-[11px]">Pc guruhi · 24-Oktabrda qo'shildi</div>
-                    </div>
-                    <GlassBadge variant="success" size="sm">Faol O'quvchi (+100k)</GlassBadge>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-                    <div>
-                      <div className="font-semibold text-white">Bekzod Yo'ldoshev</div>
-                      <div className="text-slate-400 text-[11px]">Frontend kursi · 28-Oktabrda qo'shildi</div>
-                    </div>
-                    <GlassBadge variant="success" size="sm">Faol O'quvchi (+100k)</GlassBadge>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-                    <div>
-                      <div className="font-semibold text-white">Sardor Karimjonov</div>
-                      <div className="text-slate-400 text-[11px]">Sinov darsida · 30-Oktabr</div>
-                    </div>
-                    <GlassBadge variant="warning" size="sm">Sinov Darsi</GlassBadge>
-                  </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-center">
+                <div className="text-sm font-semibold text-white">Referral statistikasi mavjud emas</div>
+                <div className="mt-1 text-xs text-slate-400">
+                  Taklif qilingan do'stlar va bonuslar bo'yicha ma'lumotlar backend'da qayd etilgandan so'ng shu yerda ko'rinadi.
                 </div>
               </div>
             </div>

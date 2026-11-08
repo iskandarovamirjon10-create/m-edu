@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- Background Blur and Glow Filters -->
+    <filter id="glow-pixel-panther" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8.96" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="drop-shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="5.12" stdDeviation="7.68" flood-color="#000000" flood-opacity="0.8" />
+    </filter>
+
+    <!-- Gradients -->
+    <linearGradient id="grad-main-pixel-panther" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF007F" stop-opacity="1" />
+      <stop offset="100%" stop-color="#7928CA" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="grad-glass-pixel-panther" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.45" />
+    </linearGradient>
+    <radialGradient id="grad-core-pixel-panther" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF007F" stop-opacity="0.35" />
+      <stop offset="60%" stop-color="#7928CA" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#0B0F19" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="grad-rim-pixel-panther" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D2FF" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#FF007F" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Deep Aura Core -->
+  <circle cx="128" cy="128" r="123.64799999999998" fill="url(#grad-core-pixel-panther)" />
+
+  <!-- Outer Cyber Rings -->
+  <circle cx="128" cy="128" r="107.52" fill="none" stroke="#FF007F" stroke-width="2.048" stroke-dasharray="10.24 5.12" opacity="0.75" />
+  <circle cx="128" cy="128" r="101.0688" fill="none" stroke="url(#grad-rim-pixel-panther)" stroke-width="1.024" opacity="0.6" />
+
+  
+
+  
+
+  <!-- Main Cyber-Glass Vessel (PBR Spherical Capsule) -->
+  <g filter="url(#drop-shadow)">
+    <!-- Base Body Sphere -->
+    <circle cx="128" cy="128" r="94.6176" fill="#0A0F1D" />
+    <circle cx="128" cy="128" r="94.6176" fill="url(#grad-main-pixel-panther)" opacity="0.32" />
+    <circle cx="128" cy="128" r="94.6176" fill="url(#grad-glass-pixel-panther)" />
+
+    <!-- Inner Radial Glow -->
+    <circle cx="128" cy="128" r="86.016" fill="none" stroke="url(#grad-main-pixel-panther)" stroke-width="3.072" filter="url(#glow-pixel-panther)" opacity="0.85" />
+  </g>
+
+  <!-- Central Character Holographic Silhouette & Monogram Emblem -->
+  <g transform="translate(128, 121.6)">
+    <!-- Emblem Backing Hexagon -->
+    <polygon points="0,-56.32 48.64,-28.16 48.64,28.16 0,56.32 -48.64,28.16 -48.64,-28.16" 
+      fill="rgba(10, 15, 29, 0.7)" stroke="#00D2FF" stroke-width="1.536" opacity="0.9" />
+
+    <!-- 3D Geometric Character Silhouette Anchor -->
+    <circle cx="0" cy="0" r="35.84" fill="url(#grad-main-pixel-panther)" opacity="0.25" filter="url(#glow-pixel-panther)" />
+
+    <!-- Character Symbol Avatar Feature -->
+    <text x="0" y="12.8" font-family="system-ui, -apple-system, sans-serif" font-size="40.96" text-anchor="middle" dominant-baseline="middle" filter="url(#drop-shadow)">🐆</text>
+  </g>
+
+  <!-- Specular Highlights (Liquid Glass Refraction) -->
+  <ellipse cx="128" cy="68.864" rx="51.60959999999999" ry="19.3536" fill="#ffffff" opacity="0.22" />
+  <ellipse cx="79.616" cy="90.368" rx="16.128" ry="8.6016" fill="#ffffff" opacity="0.35" transform="rotate(-25, 79.616, 90.368)" />
+
+  <!-- Lower Cyber Identification Nameplate -->
+  <g transform="translate(128, 197.888)">
+    <rect x="-71.68" y="-12.8" width="143.36" height="23.04" rx="6.4" 
+      fill="rgba(11, 15, 25, 0.85)" stroke="url(#grad-rim-pixel-panther)" stroke-width="1.024" filter="url(#drop-shadow)" />
+    <text x="0" y="-1.28" font-family="'Segoe UI', Roboto, sans-serif" font-size="9.728" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.5">
+      PIXEL PANTHER
+    </text>
+    <text x="0" y="6.656" font-family="'Segoe UI', Roboto, sans-serif" font-size="5.632" font-weight="600" fill="#00D2FF" text-anchor="middle" letter-spacing="1">
+      KIBER PANTERA
+    </text>
+  </g>
+</svg>

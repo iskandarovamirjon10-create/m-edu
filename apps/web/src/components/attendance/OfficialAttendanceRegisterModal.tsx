@@ -26,14 +26,14 @@ interface StudentRollRow {
   readonly id: string;
   readonly name: string;
   readonly phone: string;
-  statuses: ('PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE')[];
+  statuses: ('PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE' | 'UNKNOWN')[];
 }
 
 export function OfficialAttendanceRegisterModal({
   open,
   onClose,
-  initialGroupName = 'Frontend & AI Masterclass — F-01',
-  initialTeacherName = 'Sanjarbek Karimov',
+  initialGroupName = '',
+  initialTeacherName = '',
 }: OfficialAttendanceRegisterModalProps): JSX.Element {
   const { t } = useSafeI18n();
   const { playPop, playSuccess, playTick } = usePremiumSound();
@@ -41,7 +41,9 @@ export function OfficialAttendanceRegisterModal({
 
   const [groupName, setGroupName] = useState(initialGroupName);
   const [teacherName, setTeacherName] = useState(initialTeacherName);
-  const [month, setMonth] = useState('Oktyabr 2026');
+  const [month, setMonth] = useState(() =>
+    new Date().toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }),
+  );
   const [students, setStudents] = useState<StudentRollRow[]>([]);
 
   // Load real registered students and group info from DB
@@ -73,10 +75,10 @@ export function OfficialAttendanceRegisterModal({
           const mapped: StudentRollRow[] = studentItems.map((st: any, idx: number) => {
             const name = `${st.firstName} ${st.lastName || ''}`.trim();
             const phone = st.user?.phone || st.guardianPhone || '+998 -- --- -- --';
-            const statuses: ('PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE')[] = Array.from({ length: 12 }, (_, dIdx) => {
-              const hash = (idx * 7 + dIdx * 3) % 10;
-              return hash === 0 ? 'LATE' : hash === 1 ? 'ABSENT' : hash === 2 ? 'EXCUSED' : 'PRESENT';
-            });
+            const statuses: ('PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE' | 'UNKNOWN')[] = Array.from(
+              { length: 12 },
+              () => 'UNKNOWN' as const,
+            );
             return {
               id: st.id || String(idx + 1),
               name,
@@ -109,6 +111,7 @@ export function OfficialAttendanceRegisterModal({
 
     students.forEach((s) => {
       s.statuses.forEach((st) => {
+        if (st === 'UNKNOWN') return;
         totalSlots++;
         if (st === 'PRESENT') presentCount++;
         else if (st === 'ABSENT') absentCount++;
@@ -129,6 +132,7 @@ export function OfficialAttendanceRegisterModal({
       const targetRow = { ...next[studentIdx], statuses: [...next[studentIdx].statuses] };
       const current = targetRow.statuses[dayIdx];
       const cycleMap: Record<string, 'PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE'> = {
+        UNKNOWN: 'PRESENT',
         PRESENT: 'ABSENT',
         ABSENT: 'LATE',
         LATE: 'EXCUSED',
@@ -202,7 +206,9 @@ export function OfficialAttendanceRegisterModal({
               size="sm"
               onClick={() => {
                 playPop();
-                navigator.clipboard.writeText(verificationUrl);
+                if (navigator?.clipboard?.writeText) {
+                  navigator.clipboard.writeText(verificationUrl).catch(() => {});
+                }
                 success(t('attendance.registerSheet.linkCopied'));
               }}
             >
@@ -292,7 +298,7 @@ export function OfficialAttendanceRegisterModal({
                     else if (status === 'LATE') l++;
                   });
 
-                  const total = st.statuses.length;
+                  const total = st.statuses.filter((status) => status !== 'UNKNOWN').length;
                   const rate = total > 0 ? Math.round(((p + l) / total) * 100) : 0;
 
                   return (

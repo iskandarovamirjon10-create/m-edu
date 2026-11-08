@@ -15,6 +15,11 @@ import {
   Res,
   Headers,
   Logger,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  PayloadTooLargeException,
+  BadGatewayException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
@@ -36,7 +41,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { EntitlementGuard, RequireEntitlement } from '../subscriptions/guards/entitlement.guard';
 import { Roles } from '../auth/roles.decorator';
-import { STAFF_ROLES, isAdminRole } from '../auth/authorization.policy';
+import { ADMIN_ROLES, STAFF_ROLES, isAdminRole } from '../auth/authorization.policy';
 import { AllowPublic } from '../auth/public.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import {
@@ -49,6 +54,7 @@ import {
   TextToSpeechDto,
   DraftDebtRecoveryCampaignDto,
   GenerateAssessmentRubricDto,
+  GenerateSocialPostDto,
 } from './dto/deep-ai.dto';
 import { RenameConversationDto } from './dto/conversation.dto';
 
@@ -194,10 +200,7 @@ export class AiController {
     userId?: string,
   ): asserts organizationId is string {
     if (!organizationId || !userId) {
-      throw new HttpException(
-        'Tenant and user context required',
-        HttpStatus.FORBIDDEN,
-      );
+      throw new ForbiddenException('Tenant and user context required');
     }
   }
 
@@ -231,30 +234,27 @@ export class AiController {
     const MAX_FILE_BASE64_CHARS = 8_000_000; // ~6 MB decoded
 
     if (attachments.length > MAX_FILES) {
-      throw new HttpException(
+      throw new BadRequestException(
         `At most ${MAX_FILES} attachments can be sent at once`,
-        HttpStatus.BAD_REQUEST,
       );
     }
 
     let total = 0;
     for (const attachment of attachments) {
       if (!attachment?.base64) {
-        throw new HttpException('Attachment payload is empty', HttpStatus.BAD_REQUEST);
+        throw new BadRequestException('Attachment payload is empty');
       }
       if (attachment.base64.length > MAX_FILE_BASE64_CHARS) {
-        throw new HttpException(
+        throw new PayloadTooLargeException(
           'Attachment is too large (max ~6 MB per file)',
-          HttpStatus.PAYLOAD_TOO_LARGE,
         );
       }
       total += attachment.base64.length;
     }
 
     if (total > MAX_TOTAL_BASE64_CHARS) {
-      throw new HttpException(
+      throw new PayloadTooLargeException(
         'Attachments are too large in total (max ~9 MB)',
-        HttpStatus.PAYLOAD_TOO_LARGE,
       );
     }
   }
@@ -347,7 +347,7 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     if (!conversationId?.trim()) {
-      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+      throw new BadRequestException('Conversation ID required');
     }
     return this.aiService.getMessages(
       organizationId,
@@ -367,7 +367,7 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     if (!conversationId?.trim()) {
-      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+      throw new BadRequestException('Conversation ID required');
     }
     return this.aiService.renameConversation(
       organizationId,
@@ -387,7 +387,7 @@ export class AiController {
   ): Promise<void> {
     this.assertTenantContext(organizationId, userId);
     if (!conversationId?.trim()) {
-      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+      throw new BadRequestException('Conversation ID required');
     }
     await this.aiService.deleteConversation(
       organizationId,
@@ -407,7 +407,7 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     if (!conversationId?.trim()) {
-      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+      throw new BadRequestException('Conversation ID required');
     }
     const safeFormat = format === 'json' ? 'json' : 'markdown';
     const result = await this.aiService.exportConversation(
@@ -444,7 +444,7 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     if (!conversationId?.trim()) {
-      throw new HttpException('Conversation ID required', HttpStatus.BAD_REQUEST);
+      throw new BadRequestException('Conversation ID required');
     }
     return this.aiService.archiveConversation(
       organizationId,
@@ -495,7 +495,7 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     if (!insightId?.trim()) {
-      throw new HttpException('Insight ID required', HttpStatus.BAD_REQUEST);
+      throw new BadRequestException('Insight ID required');
     }
     this.aiService.dismissInsight(userId, insightId.trim());
     return { ok: true, dismissedId: insightId.trim() };
@@ -522,7 +522,7 @@ export class AiController {
     );
   }
 
-  @Roles(...STAFF_ROLES)
+  @Roles(...ADMIN_ROLES)
   @Get('executive-briefing')
   async getExecutiveBriefing(
     @CurrentUser('organizationId') organizationId: string,
@@ -541,7 +541,7 @@ export class AiController {
   ) {
     this.assertTenantContext(organizationId, userId);
     if (!studentId?.trim()) {
-      throw new HttpException("O'quvchi ID raqami kiritilmadi", HttpStatus.BAD_REQUEST);
+      throw new BadRequestException("O'quvchi ID raqami kiritilmadi");
     }
     return this.aiService.diagnoseStudent(organizationId, studentId.trim());
   }
@@ -580,13 +580,28 @@ export class AiController {
   }
 
   @Roles(...STAFF_ROLES)
+  @Post('generate-social-post')
+  async generateSocialPost(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() body: GenerateSocialPostDto,
+  ) {
+    this.assertTenantContext(organizationId, userId);
+    return this.aiService.generateSocialPost(organizationId, body);
+  }
+
+  @Roles(...STAFF_ROLES)
   @Post('reports')
   async generateReport(
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role: string,
     @Body() body: GenerateReportDto,
   ) {
     this.assertTenantContext(organizationId, userId);
+    if (body.reportType === 'FINANCIAL_SUMMARY' && !this.canIncludeFinancials(role)) {
+      throw new ForbiddenException('Financial reports require executive or accountant permissions');
+    }
     return this.aiService.generateReport(organizationId, body);
   }
 
@@ -602,7 +617,7 @@ export class AiController {
     return this.aiService.analyzeDocument(organizationId, body);
   }
 
-  @Roles(...STAFF_ROLES)
+  @Roles(...ADMIN_ROLES)
   @Get('churn-radar')
   async getChurnRadar(
     @CurrentUser('organizationId') organizationId: string,
@@ -612,7 +627,7 @@ export class AiController {
     return this.aiService.getChurnRadar(organizationId);
   }
 
-  @Roles(...STAFF_ROLES)
+  @Roles(...ADMIN_ROLES)
   @Post('draft-debt-recovery-campaign')
   async draftDebtRecoveryCampaign(
     @CurrentUser('organizationId') organizationId: string,
@@ -687,7 +702,7 @@ export class AiController {
     } catch (e: unknown) {
       if (e instanceof HttpException) throw e;
       const errorMessage = e instanceof Error ? e.message : 'AI service error';
-      throw new HttpException(errorMessage, HttpStatus.BAD_GATEWAY);
+      throw new BadGatewayException(errorMessage);
     }
   }
 

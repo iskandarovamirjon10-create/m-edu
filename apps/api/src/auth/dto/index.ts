@@ -2,12 +2,22 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { normalizeEmail } from '../auth.utils';
+import { normalizeUsername } from '../username.utils';
 
 export class LoginDto {
-  @ApiProperty()
-  @IsEmail()
-  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
-  email: string;
+  @ApiProperty({ description: 'Globally unique case-insensitive username' })
+  @IsString()
+  @IsNotEmpty()
+  @Transform(({ obj, value }) => {
+    const raw = typeof value === 'string' && value.trim() ? value : obj?.email || obj?.username;
+    return typeof raw === 'string' ? normalizeUsername(raw) : '';
+  })
+  username: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  email?: string;
 
   @ApiProperty()
   @IsString()
@@ -17,9 +27,13 @@ export class LoginDto {
 
 export class ParentLoginDto {
   @ApiProperty()
-  @IsEmail()
-  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
-  email: string;
+  @IsString()
+  @IsNotEmpty()
+  @Transform(({ obj, value }) => {
+    const raw = typeof value === 'string' && value.trim() ? value : obj?.email || obj?.username;
+    return typeof raw === 'string' ? normalizeUsername(raw) : '';
+  })
+  username: string;
 
   @ApiProperty()
   @IsString()
@@ -31,7 +45,6 @@ export class ParentLoginDto {
   @IsString()
   organizationId?: string;
 }
-
 
 export class RegisterDto {
   @ApiPropertyOptional({ description: 'Platform invitation code (optional)' })
@@ -77,6 +90,12 @@ export class RegisterDto {
 }
 
 export class BootstrapDto {
+  @ApiPropertyOptional({ description: 'Platform Owner username' })
+  @IsString()
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeUsername(value) : value))
+  username?: string;
+
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
@@ -132,10 +151,19 @@ export class ExchangeAuthCodeDto {
 
 export class ForgotPasswordDto {
   @ApiProperty()
-  @IsEmail()
-  @Transform(({ value }) => (typeof value === 'string' ? normalizeEmail(value) : value))
+  @IsString()
+  @IsNotEmpty()
+  @Transform(({ obj, value }) => {
+    const raw = typeof value === 'string' && value.trim() ? value : obj?.email || obj?.username;
+    return typeof raw === 'string' ? normalizeUsername(raw) : '';
+  })
   @MaxLength(254)
-  email: string;
+  username: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  email?: string;
 }
 
 export class ResetPasswordDto {
@@ -151,8 +179,20 @@ export class ResetPasswordDto {
   @MaxLength(128)
   password: string;
 }
+
+export class ForceChangePasswordDto {
+  @ApiProperty({ description: 'Current temporary or admin-generated password' })
+  @IsString()
+  @IsNotEmpty()
+  currentPassword: string;
+
+  @ApiProperty({ description: 'New permanent password' })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  newPassword: string;
+}
+
 export * from './access-request.dto';
 export * from './accept-invitation.dto';
 export * from './access-whitelist.dto';
-
-

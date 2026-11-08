@@ -54,7 +54,7 @@ export function SchoolLaunchWizardStudio({
   onClose,
   className,
 }: SchoolLaunchWizardStudioProps): JSX.Element {
-  const { t, formatCurrency, formatNumber } = useSafeI18n();
+  const { t } = useSafeI18n();
   const sound = usePremiumSound();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -87,7 +87,7 @@ export function SchoolLaunchWizardStudio({
     id: 'g1',
     groupName: 'IELTS Alpha 2026',
     courseName: 'IELTS & General English Pro',
-    teacherName: 'Azizbek Rahimov',
+    teacherName: '',
     roomName: '101-Auditoriya',
     scheduleDays: 'DU_CHOR_JUM',
     timeSlot: '09:00 - 10:30',

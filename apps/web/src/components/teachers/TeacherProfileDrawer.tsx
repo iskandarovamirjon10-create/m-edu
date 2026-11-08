@@ -38,12 +38,11 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
   const sound = usePremiumSound();
   const haptics = useHaptics();
 
-  if (!isOpen || !teacher) return null;
-
-  const teacherName = fullName(teacher.user?.firstName, teacher.user?.lastName);
-  const isActive = teacher.user?.isActive !== false;
-  const groups = teacher.groups || [];
-  const metrics = (teacher as any).metrics || {
+  const isVisible = isOpen && !!teacher;
+  const teacherName = teacher ? (fullName(teacher.user?.firstName, teacher.user?.lastName) || teacher.user?.phone || 'O‘qituvchi') : '';
+  const isActive = teacher?.user?.isActive !== false;
+  const groups = teacher?.groups || [];
+  const metrics = (teacher as any)?.metrics || {
     totalStudents: 0,
     weeklyHours: 0,
     groupsCount: groups.length,
@@ -71,12 +70,12 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
   }
 
   // Estimated compensation
-  const hourlyRate = Number(teacher.hourlyRate) || 0;
-  const lessonRate = Number(teacher.lessonRate) || 0;
+  const hourlyRate = Number(teacher?.hourlyRate) || 0;
+  const lessonRate = Number(teacher?.lessonRate) || 0;
   let estimatedMonthly = 0;
-  if (teacher.salaryType === 'HOURLY') {
+  if (teacher?.salaryType === 'HOURLY') {
     estimatedMonthly = Math.round(metrics.weeklyHours * 4.2 * hourlyRate);
-  } else if (teacher.salaryType === 'PER_LESSON') {
+  } else if (teacher?.salaryType === 'PER_LESSON') {
     estimatedMonthly = Math.round(metrics.weeklyHours * 4.2) * lessonRate;
   } else {
     estimatedMonthly = 3_500_000 + Math.round(metrics.weeklyHours * 4.2 * 45_000);
@@ -84,27 +83,28 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => {
-            sound.playTick?.();
-            onClose();
-          }}
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-        />
+      {isVisible && teacher && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              sound.playTick?.();
+              onClose();
+            }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+          />
 
-        {/* Drawer panel */}
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-          className="relative w-full max-w-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-l border-slate-200/80 dark:border-white/10 shadow-2xl h-full overflow-y-auto flex flex-col z-10"
-        >
+          {/* Drawer panel */}
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="relative w-full max-w-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-l border-slate-200/80 dark:border-white/10 shadow-2xl h-full overflow-y-auto flex flex-col z-10"
+          >
           {/* Header */}
           <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-white/[0.06] flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -359,6 +359,7 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+    )}
+  </AnimatePresence>
   );
 });

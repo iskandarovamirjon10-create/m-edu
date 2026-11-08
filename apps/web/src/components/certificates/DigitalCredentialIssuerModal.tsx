@@ -38,6 +38,13 @@ export const DigitalCredentialIssuerModal: React.FC<DigitalCredentialIssuerModal
   const [gradeRank, setGradeRank] = useState<'A+' | 'A' | 'B+'>('A+');
   const [isIssuing, setIsIssuing] = useState<boolean>(false);
   const [isIssued, setIsIssued] = useState<boolean>(false);
+  const issueTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (issueTimerRef.current) clearTimeout(issueTimerRef.current);
+    };
+  }, []);
 
   // Load students & courses
   useEffect(() => {
@@ -52,15 +59,15 @@ export const DigitalCredentialIssuerModal: React.FC<DigitalCredentialIssuerModal
       const cList: Course[] = cRes?.data || cRes?.items || (Array.isArray(cRes) ? cRes : []);
       setStudents(sList);
       setCourses(cList);
-      if (sList.length > 0 && !selectedStudentId) {
-        setSelectedStudentId(defaultStudentId || sList[0].id);
+      if (sList.length > 0) {
+        setSelectedStudentId((prev) => prev || defaultStudentId || sList[0].id);
       }
-      if (cList.length > 0 && !selectedCourseId) {
-        setSelectedCourseId(cList[0].id);
+      if (cList.length > 0) {
+        setSelectedCourseId((prev) => prev || cList[0].id);
       }
     });
     return () => { active = false; };
-  }, [isOpen, defaultStudentId, selectedStudentId, selectedCourseId]);
+  }, [isOpen, defaultStudentId]);
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) || students[0] || null;
@@ -71,11 +78,11 @@ export const DigitalCredentialIssuerModal: React.FC<DigitalCredentialIssuerModal
   }, [courses, selectedCourseId]);
 
   const studentName = useMemo(() => {
-    if (!selectedStudent) return "Amirjon Iskandarov";
+    if (!selectedStudent) return "Talaba tanlanmagan";
     return (
       [selectedStudent.user?.firstName, selectedStudent.user?.lastName].filter(Boolean).join(' ') ||
       (selectedStudent as any).name ||
-      "Amirjon Iskandarov"
+      "Talaba"
     );
   }, [selectedStudent]);
 
@@ -106,7 +113,8 @@ export const DigitalCredentialIssuerModal: React.FC<DigitalCredentialIssuerModal
     playPop();
     haptics.medium();
 
-    setTimeout(() => {
+    if (issueTimerRef.current) clearTimeout(issueTimerRef.current);
+    issueTimerRef.current = setTimeout(() => {
       setIsIssuing(false);
       setIsIssued(true);
       playSuccess();

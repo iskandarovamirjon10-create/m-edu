@@ -55,8 +55,6 @@ export interface I18nContextValue {
   formatRelativeTime: (date: Date | number | string) => string;
 }
 
-const I18nContext = createContext<I18nContextValue | null>(null);
-
 /* ══════════════════════════════════════════════════════════════════════════
  * INTL FORMATTER ENGINE (Apple macOS Sequoia / iOS 18 Localized Formatters)
  * ════════════════════════════════════════════════════════════════════════ */
@@ -154,8 +152,17 @@ export function formatRelativeTime(
 const STATIC_FALLBACK_T: TranslateFn = (key, vars, fb) =>
   translate(DEFAULT_LOCALE, key, vars, fb);
 
-const STATIC_FALLBACK_SET_LOCALE = (_next: Locale) => {
-  /* no-op outside provider */
+const STATIC_FALLBACK_SET_LOCALE = (next: Locale) => {
+  storeLocale(next);
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent(CUSTOM_EVENT_NAME, { detail: { locale: next } }),
+      );
+    } catch {
+      // Continue safely
+    }
+  }
 };
 
 const STATIC_FALLBACK: I18nContextValue = Object.freeze({
@@ -173,6 +180,8 @@ const STATIC_FALLBACK: I18nContextValue = Object.freeze({
   formatRelativeTime: (date: Date | number | string) =>
     formatRelativeTime(DEFAULT_LOCALE, date),
 });
+
+const I18nContext = createContext<I18nContextValue>(STATIC_FALLBACK);
 
 /* ══════════════════════════════════════════════════════════════════════════
  * SYNC TOKENS & BROADCAST CHANNELS
@@ -307,11 +316,12 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
 
   const setLocale = useCallback(
     (next: Locale) => {
-      if (isLocaleLoaded(next)) {
-        applyLocale(next);
-        return;
+      applyLocale(next);
+      if (!isLocaleLoaded(next)) {
+        void loadLocale(next).then(() => {
+          setDictionaryRevision((r) => r + 1);
+        });
       }
-      void loadLocale(next).then(() => applyLocale(next));
     },
     [applyLocale],
   );
@@ -372,13 +382,10 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
-/** Access the active locale and translator. Throws outside the provider. */
+/** Access the active locale and translator. Falls back safely to static singleton if outside provider. */
 export function useI18n(): I18nContextValue {
   const ctx = useContext(I18nContext);
-  if (!ctx) {
-    throw new Error('useI18n must be used within an I18nProvider');
-  }
-  return ctx;
+  return ctx ?? STATIC_FALLBACK;
 }
 
 /**

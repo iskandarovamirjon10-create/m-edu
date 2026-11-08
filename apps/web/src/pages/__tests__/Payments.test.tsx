@@ -75,6 +75,25 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+vi.mock('@/auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: {
+      id: 'usr-admin-1',
+      role: 'ADMIN',
+      organizationId: 'org-1',
+      firstName: 'Admin',
+      lastName: 'User',
+      email: 'admin@example.com',
+    },
+    loading: false,
+    isAuthenticated: true,
+    isBooting: false,
+    roles: ['ADMIN'],
+    hasRole: (r: string) => r === 'ADMIN',
+    hasAnyRole: (...roles: string[]) => roles.includes('ADMIN'),
+  }),
+}));
+
 vi.mock('@/hooks/usePageTitle', () => ({
   usePageTitle: vi.fn(),
 }));

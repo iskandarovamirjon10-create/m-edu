@@ -9,7 +9,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.x-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7.x-d82c20.svg)](https://redis.io/)
 [![Turborepo](https://img.shields.io/badge/Turborepo-2.x-ef4444.svg)](https://turbo.build/)
-[![Tests](https://img.shields.io/badge/Tests-3%2C061_Passed_(100%25)-success.svg)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Tests-CI_reported-lightgrey.svg)](https://vitest.dev/)
 [![License](https://img.shields.io/badge/License-Commercial_Enterprise-gold.svg)](#license)
 
 ---
@@ -63,11 +63,11 @@ Built with modern high-performance micro-monolith architecture, it consolidates 
 education-web-platform/
 ├── apps/
 │   ├── api/                      # NestJS 10 Enterprise API Server
-│   │   ├── prisma/               # Database schema & 38 sequential migrations
+│   │   ├── prisma/               # Database schema & 42 sequential migrations
 │   │   └── src/                  # Modules: Auth, Finance, Attendance, Camera, CRM...
 │   └── web/                      # React 18 + Vite 6 Modern Web Application
 │       ├── src/components/       # Apple Glass Design System components
-│       ├── src/pages/            # 40+ Enterprise dashboard screens
+│       ├── src/pages/            # 84 Enterprise dashboard screens
 │       └── src/i18n/             # Multilingual: Uzbek (uz), Russian (ru), English (en)
 ├── packages/
 │   ├── camera-engine/            # Distributed RTSP stream ingestion workers
@@ -154,21 +154,22 @@ sudo ./deploy.sh
 M-EDU contains an exhaustive automated test suite covering unit, security, multi-tenant isolation, concurrency, and end-to-end integration flows:
 
 ```bash
-# Run all backend tests (2,684 tests across 247 test suites)
-npm run test -w @medu/api
+# Run all backend tests (with coverage)
+npm run test -w @medu/api -- --coverage
 
-# Run all web frontend tests (277 tests across 47 test suites)
-npm run test -w @medu/web
+# Run all web frontend tests (with coverage)
+npm run test -w @medu/web -- --coverage
 
 # Run TypeScript compilation check
 npm run typecheck
 ```
 
 **Results:**
-* ✅ **Backend Tests**: `2,684 / 2,684 PASSED` (100%)
-* ✅ **Frontend Tests**: `277 / 277 PASSED` (100%)
-* ✅ **TypeScript Diagnostics**: `0 errors`
-* ✅ **Production Build**: Successfully passes Vite bundling in ~36 seconds.
+* ℹ️ **Test suite**: 466 test files — 283 backend unit, 122 frontend, 12 API e2e, 1 Playwright smoke.
+* ℹ️ **Pass/fail counts** are produced by CI on every push (`.github/workflows/ci.yml`).
+  This README intentionally does not pin a snapshot number: a hard-coded count goes stale
+  the moment a test is added.
+* ℹ️ **Coverage** is enforced in CI (`vitest --coverage`, thresholds: statements 70, branches 60).
 
 ---
 

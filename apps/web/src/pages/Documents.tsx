@@ -296,7 +296,8 @@ const DOC_PALETTES = [
 ];
 
 function docGradient(title: string): string {
-  const [a, b] = DOC_PALETTES[nameHash(title) % DOC_PALETTES.length];
+  const palette = DOC_PALETTES[Math.abs(nameHash(title || '')) % DOC_PALETTES.length] || DOC_PALETTES[0];
+  const [a, b] = palette;
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 

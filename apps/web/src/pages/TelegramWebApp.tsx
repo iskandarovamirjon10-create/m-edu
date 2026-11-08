@@ -1,21 +1,21 @@
 /**
  * ============================================================================
- *  M-EDU Telegram WebApp (v5.0)
- *  Ota-ona / O'qituvchi / O'quvchi / AI Copilot / Digital Pass
+ *  M-EDU Telegram WebApp (v6.0 — Premium Liquid Glass Edition)
+ *  Ota-ona / O'qituvchi / O'quvchi / Direktor / AI Copilot / Digital Pass
  *
- *  v5.0 o'zgarishlari (qisqacha):
- *   • PaymentSheet: har renderda qayta ishga tushadigan effekt tuzatildi
- *   • TeacherView: boshqa o'qituvchilar guruhlari "fallback" sifatida ochilib qolishi yopildi
- *   • AI: javobdagi havolalar xavfsiz ochiladi (javascript: / open-redirect yopildi)
- *   • AI: kiritish maydoni pastki dock ostida qolib ketishi tuzatildi
- *   • AI: rolga mos tayyor savollar (ota-ona/o'quvchiga "qarzdorlik tahlili" chiqmaydi)
- *   • Digital Pass: taymer va QR bir xil vaqt oynasiga bog'landi
- *   • Light mavzu: qattiq oq/slate ranglar CSS o'zgaruvchilarga almashtirildi
- *   • Premium Glass qatlami (PREMIUM_GLASS_CSS)
+ *  v6.0 o'zgarishlari:
+ *   • FocusTrap to'liq Tab/Shift+Tab tsikli bilan tuzatildi va importlar tartiblandi
+ *   • Telegram BackButton modal va tablar o'rtasida to'qnashmasligi ta'minlandi
+ *   • AdminView: haqiqiy davomat foizi va Telegram bot statistikasi ulandi
+ *   • TeacherView: qidiruv, jonli hisoblagich va saqlanmagan o'zgarishlar nazorati
+ *   • AbsenceReportSheet: UTC sana xatosi todayKey() orqali tuzatildi
+ *   • AiCopilotView: klaviatura moslashuvi, javobni nusxalash va chatni tozalash
+ *   • StudentView: Light mavzu kontrasti va M-Coin do'koni filtrlari
+ *   • DigitalBadgeView: turniket uchun QR Zoom (Yorqin ekran) rejimi
  * ============================================================================
  */
 
-import {
+import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -43,18 +43,6 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useAuth } from '@/auth/AuthContext';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-function useFocusTrap(ref: { current: HTMLElement | null }, active: boolean) {
-  useEffect(() => {
-    if (!active || !ref.current) return;
-    const el = ref.current;
-    const focusable = el.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
-    if (focusable.length > 0) {
-      focusable[0]?.focus();
-    }
-  }, [active, ref]);
-}
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { TelegramWebApp } from '@/types/telegram';
 import { useTelegram, type HapticStyle } from '@/hooks/useTelegram';
@@ -100,53 +88,48 @@ import {
 } from '@/components/telegram/TelegramPresentation';
 
 /* ============================================================================
- * PREMIUM LIQUID GLASS QATLAMI
- * LIQUID_GLASS_CSS dan KEYIN ulanadi — shu sababli bir xil nomli klasslarni
- * (liquid-glass, liquid-inset, liquid-btn, liquid-dock) premium variantga
- * almashtiradi. Komponent kodiga tegmasdan butun ko'rinish yangilanadi.
+ * PREMIUM LIQUID GLASS QATLAMI (v6.0)
  * ========================================================================== */
 
 const PREMIUM_GLASS_CSS = `
 [data-tg-theme] {
   --lg-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --lg-blur: 38px;
-  --lg-sat: 190%;
-  --lg-spec: rgba(255,255,255,0.50);
-  --lg-edge: rgba(255,255,255,0.20);
-  --lg-edge-soft: rgba(255,255,255,0.07);
-  --lg-fill-a: rgba(255,255,255,0.14);
-  --lg-fill-b: rgba(255,255,255,0.03);
+  --lg-sat: 195%;
+  --lg-spec: rgba(255,255,255,0.52);
+  --lg-edge: rgba(255,255,255,0.22);
+  --lg-edge-soft: rgba(255,255,255,0.08);
+  --lg-fill-a: rgba(255,255,255,0.15);
+  --lg-fill-b: rgba(255,255,255,0.035);
   --lg-shadow:
     0 1px 1px rgba(0,0,0,0.05),
-    0 6px 18px -6px rgba(0,0,0,0.28),
-    0 30px 60px -28px rgba(0,0,0,0.40);
+    0 8px 20px -6px rgba(0,0,0,0.28),
+    0 32px 64px -28px rgba(0,0,0,0.42);
 }
 [data-tg-theme='light'] {
-  --lg-spec: rgba(255,255,255,0.95);
-  --lg-edge: rgba(255,255,255,0.75);
-  --lg-edge-soft: rgba(15,23,42,0.06);
-  --lg-fill-a: rgba(255,255,255,0.72);
-  --lg-fill-b: rgba(255,255,255,0.38);
+  --lg-spec: rgba(255,255,255,0.96);
+  --lg-edge: rgba(255,255,255,0.82);
+  --lg-edge-soft: rgba(15,23,42,0.07);
+  --lg-fill-a: rgba(255,255,255,0.78);
+  --lg-fill-b: rgba(255,255,255,0.45);
   --lg-shadow:
-    0 1px 1px rgba(15,23,42,0.04),
-    0 8px 22px -10px rgba(15,23,42,0.16),
-    0 28px 56px -30px rgba(15,23,42,0.22);
+    0 1px 2px rgba(15,23,42,0.04),
+    0 10px 24px -10px rgba(15,23,42,0.14),
+    0 30px 60px -30px rgba(15,23,42,0.20);
 }
 
-/* ---- Asosiy shisha ---- */
 .liquid-glass {
   position: relative;
   isolation: isolate;
   background:
     linear-gradient(150deg, var(--lg-fill-a) 0%, var(--lg-fill-b) 100%),
-    color-mix(in srgb, var(--bg-surface) 55%, transparent);
+    color-mix(in srgb, var(--bg-surface) 58%, transparent);
   -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
   backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-sat));
   border: 1px solid var(--lg-edge-soft);
   box-shadow: var(--lg-shadow), inset 0 1px 0 var(--lg-spec), inset 0 -1px 0 rgba(255,255,255,0.05);
-  transition: transform .6s var(--lg-ease), box-shadow .6s var(--lg-ease), background .6s var(--lg-ease);
+  transition: transform .5s var(--lg-ease), box-shadow .5s var(--lg-ease), background .5s var(--lg-ease);
 }
-/* Yorug'lik aksi (specular) */
 .liquid-glass::before {
   content: '';
   position: absolute;
@@ -159,7 +142,6 @@ const PREMIUM_GLASS_CSS = `
     radial-gradient(90% 60% at 100% 110%, rgba(255,255,255,0.10), transparent 60%);
   opacity: .9;
 }
-/* Gradient hoshiya (yuqoridan yorug', pastdan xira) */
 .liquid-glass::after {
   content: '';
   position: absolute;
@@ -175,40 +157,41 @@ const PREMIUM_GLASS_CSS = `
 }
 [data-tg-theme='light'] .liquid-glass::after { opacity: .9; }
 
-/* ---- Ichki "cho'kma" qatlam ---- */
 .liquid-inset {
   position: relative;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.075), rgba(255,255,255,0.025));
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025));
   border: 1px solid var(--lg-edge-soft);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -8px 18px -14px rgba(0,0,0,0.25);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
   backdrop-filter: blur(14px) saturate(150%);
-  transition: transform .45s var(--lg-ease), background .45s var(--lg-ease);
+  transition: transform .4s var(--lg-ease), background .4s var(--lg-ease), border-color .4s var(--lg-ease);
 }
 [data-tg-theme='light'] .liquid-inset {
-  background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.5));
+  background: linear-gradient(180deg, rgba(255,255,255,0.86), rgba(255,255,255,0.55));
   box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(15,23,42,0.05);
 }
 
-/* ---- Tugmalar ---- */
 .liquid-btn, .liquid-btn-ghost {
   position: relative;
   border: 1px solid var(--lg-edge-soft);
-  background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+  background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 2px 8px -3px rgba(0,0,0,0.25);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
   backdrop-filter: blur(16px) saturate(170%);
-  transition: transform .35s var(--lg-ease), box-shadow .35s var(--lg-ease), background .35s var(--lg-ease), border-color .35s var(--lg-ease);
+  transition: transform .3s var(--lg-ease), box-shadow .3s var(--lg-ease), background .3s var(--lg-ease), border-color .3s var(--lg-ease);
+}
+[data-tg-theme='light'] .liquid-btn, [data-tg-theme='light'] .liquid-btn-ghost {
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.65));
+  box-shadow: inset 0 1px 0 #fff, 0 2px 6px -2px rgba(15,23,42,0.08);
 }
 .liquid-btn:active, .liquid-btn-ghost:active { transform: scale(0.965); }
-.liquid-btn:disabled { opacity: .45; }
+.liquid-btn:disabled { opacity: .45; pointer-events: none; }
 
-/* ---- Suzuvchi dock ---- */
 .liquid-dock {
   background:
     linear-gradient(160deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05)),
-    color-mix(in srgb, var(--bg-surface) 52%, transparent);
+    color-mix(in srgb, var(--bg-surface) 56%, transparent);
   -webkit-backdrop-filter: blur(44px) saturate(220%);
   backdrop-filter: blur(44px) saturate(220%);
   border: 1px solid var(--lg-edge);
@@ -219,7 +202,6 @@ const PREMIUM_GLASS_CSS = `
     inset 0 -1px 0 rgba(255,255,255,0.06);
 }
 
-/* ---- Yordamchi klasslar ---- */
 .lg-eyebrow {
   font-size: 10.5px;
   font-weight: 700;
@@ -242,7 +224,6 @@ const PREMIUM_GLASS_CSS = `
 .no-scrollbar::-webkit-scrollbar, .medu-scroll-x::-webkit-scrollbar { display: none; }
 .medu-scroll-x > * { scroll-snap-align: start; }
 
-/* ---- Atrof-muhit yorug'lik sharlari ---- */
 .lg-orb { position: absolute; border-radius: 9999px; filter: blur(8px); will-change: transform; }
 .lg-orb-1 { animation: lg-float-a 26s ease-in-out infinite; }
 .lg-orb-2 { animation: lg-float-b 32s ease-in-out infinite; }
@@ -252,8 +233,7 @@ const PREMIUM_GLASS_CSS = `
 @keyframes lg-float-b { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(30px,-28px,0) scale(1.06); } }
 @keyframes lg-sheen { 0% { left: -60%; } 55%,100% { left: 130%; } }
 
-/* ---- Fokus va harakat ---- */
-button:focus-visible, [role='tab']:focus-visible, input:focus-visible {
+button:focus-visible, [role='tab']:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid rgba(10,132,255,0.8);
   outline-offset: 2px;
 }
@@ -431,7 +411,7 @@ interface PassUser {
 }
 
 /* ============================================================================
- * UMUMIY YORDAMCHILAR
+ * UMUMIY YORDAMCHILAR VA HOOKLAR
  * ========================================================================== */
 
 const STAFF_ROLES = ['TEACHER', 'ASSISTANT', 'SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN', 'MANAGER'] as const;
@@ -455,6 +435,100 @@ const PAYMENT_CHANNELS = {
   },
 } as const;
 type PayChannel = keyof typeof PAYMENT_CHANNELS;
+
+/** Modal va BottomSheet uchun haqiqiy Focus Trap */
+function useFocusTrap(ref: React.RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    if (!active || !ref.current) return;
+    const el = ref.current;
+    const prevActive = document.activeElement as HTMLElement | null;
+
+    const getFocusable = () =>
+      Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+
+    const initial = getFocusable();
+    if (initial.length > 0) {
+      initial[0]?.focus();
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const items = getFocusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    };
+
+    el.addEventListener('keydown', handleKeyDown);
+    return () => {
+      el.removeEventListener('keydown', handleKeyDown);
+      prevActive?.focus?.();
+    };
+  }, [active, ref]);
+}
+
+/** Mobil klaviatura ochiqligini aniqlash */
+function useIsKeyboardVisible(): boolean {
+  const [isKeyboard, setIsKeyboard] = useState(false);
+
+  useEffect(() => {
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        setIsKeyboard(true);
+      }
+    };
+    const handleFocusOut = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        setIsKeyboard(false);
+      }
+    };
+
+    window.addEventListener('focusin', handleFocusIn);
+    window.addEventListener('focusout', handleFocusOut);
+
+    const vv = window.visualViewport;
+    const handleResize = () => {
+      if (vv && vv.height < window.innerHeight * 0.78) {
+        setIsKeyboard(true);
+      } else if (vv && vv.height >= window.innerHeight * 0.85) {
+        setIsKeyboard(false);
+      }
+    };
+    vv?.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('focusin', handleFocusIn);
+      window.removeEventListener('focusout', handleFocusOut);
+      vv?.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return isKeyboard;
+}
 
 /** Tashqi havolani xavfsiz ochish: faqat ichki yo'l yoki https. */
 function openSafeLink(rawUrl: string, tg: TelegramWebApp | null): void {
@@ -515,8 +589,8 @@ function TodayCard({
         <ErrorState
           message="Davomat ma'lumotlarini yuklab bo'lmadi."
           onRetry={() => {
-            attendanceQ.refetch();
-            summaryQ.refetch();
+            void attendanceQ.refetch();
+            void summaryQ.refetch();
           }}
         />
       </Surface>
@@ -525,8 +599,8 @@ function TodayCard({
 
   const lesson = today?.lesson;
   const groupName = today?.group?.name ?? child.name;
-  // "Darsda" belgisi faqat bola haqiqatan kelgan bo'lsa ko'rsatiladi
   const isAttending = today?.status === 'PRESENT' || today?.status === 'LATE';
+  const recentHistory = rows.slice(0, 7);
 
   return (
     <Surface tone={tone} className="p-5">
@@ -586,7 +660,7 @@ function TodayCard({
         >
           <div className="flex items-center gap-2.5">
             <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-emerald-400"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-emerald-500"
               style={{ background: 'color-mix(in srgb, #10B981 22%, transparent)' }}
             >
               <Icon paths={I.shieldCheck} size={16} strokeWidth={2.2} />
@@ -596,15 +670,18 @@ function TodayCard({
                 Turniket / Face ID orqali qayd etildi
               </p>
               <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                {today.markedAt ? `Kirish: ${new Date(today.markedAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}` : 'Vaqtida'} • Bino ichida
+                {today.markedAt
+                  ? `Kirish: ${new Date(today.markedAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Vaqtida'}{' '}
+                • Bino ichida
               </p>
             </div>
           </div>
           <span
-            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold text-emerald-400"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold text-emerald-500"
             style={{ background: 'color-mix(in srgb, #10B981 18%, transparent)' }}
           >
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
             Jonli
           </span>
         </div>
@@ -697,12 +774,47 @@ function TodayCard({
         </div>
       </div>
 
+      {/* Oxirgi 7 dars mini-lentasi */}
+      {recentHistory.length > 1 && (
+        <div className="mt-3.5 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="lg-eyebrow">So'nggi darslar tarixi</span>
+            <span className="text-[10.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+              Oxirgi {recentHistory.length} ta
+            </span>
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {recentHistory.map((item) => {
+              const stMeta = STATUS_META[item.status];
+              const stTone = stMeta?.tone ?? 'slate';
+              return (
+                <div
+                  key={item.id}
+                  title={`${formatDateShort(item.date)}: ${stMeta?.label ?? item.status}`}
+                  className="flex flex-col items-center rounded-xl py-1.5 text-center"
+                  style={{
+                    background: TONE_COLORS[stTone].bg,
+                    border: `1px solid ${TONE_COLORS[stTone].border}`,
+                    color: TONE_COLORS[stTone].fg,
+                  }}
+                >
+                  <Icon paths={stMeta?.icon ?? I.calendar} size={12} strokeWidth={2.4} />
+                  <span className="mt-0.5 text-[9.5px] font-bold tabular-nums">
+                    {new Date(item.date).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit' })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {onOpenAbsence && (
         <div className="mt-4 border-t pt-3.5" style={{ borderColor: 'var(--border-subtle)' }}>
           <button
             type="button"
             onClick={onOpenAbsence}
-            className="liquid-btn flex w-full items-center justify-center gap-2 rounded-2xl py-2.5 text-[12px] font-bold transition-all"
+            className="liquid-btn flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl py-2.5 text-[12px] font-bold transition-all"
             style={{ color: 'var(--text-primary)' }}
           >
             <Icon paths={I.calendar} size={15} strokeWidth={2.2} />
@@ -739,7 +851,7 @@ function GradesCard({
   if (gradesQ.isError) {
     return (
       <Surface className="p-2">
-        <ErrorState message="Baholarni yuklab bo'lmadi." onRetry={() => gradesQ.refetch()} />
+        <ErrorState message="Baholarni yuklab bo'lmadi." onRetry={() => void gradesQ.refetch()} />
       </Surface>
     );
   }
@@ -864,7 +976,7 @@ function AssignmentsCard({ child, groupId }: { child: ParentChild; groupId: stri
           <Skeleton height={58} />
         </div>
       ) : assignQ.isError ? (
-        <ErrorState message="Vazifalarni yuklab bo'lmadi." onRetry={() => assignQ.refetch()} />
+        <ErrorState message="Vazifalarni yuklab bo'lmadi." onRetry={() => void assignQ.refetch()} />
       ) : (assignQ.data ?? []).length === 0 ? (
         <EmptyState icon={I.bookOpen} tone="blue" title="Yangi vazifalar yo'q" message="Ustoz vazifa biriktirganda shu yerda ko'rinadi." />
       ) : (
@@ -924,7 +1036,7 @@ function PaymentsCard({
   if (invoicesQ.isError) {
     return (
       <Surface className="p-2">
-        <ErrorState message="To'lov holatini yuklab bo'lmadi." onRetry={() => invoicesQ.refetch()} />
+        <ErrorState message="To'lov holatini yuklab bo'lmadi." onRetry={() => void invoicesQ.refetch()} />
       </Surface>
     );
   }
@@ -995,14 +1107,13 @@ function PaymentSheet({
   tg: TelegramWebApp | null;
 }) {
   const { t } = useSafeI18n();
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   useFocusTrap(sheetRef, open);
+
   const copyTimer = useRef<number | undefined>(undefined);
   const [payChannel, setPayChannel] = useState<PayChannel>('cash');
   const [copied, setCopied] = useState(false);
 
-  // onClose har renderda yangilansa ham effekt qayta ishga tushmasligi uchun ref
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -1026,14 +1137,11 @@ function PaymentSheet({
       /* ignore */
     }
 
-    const t = window.setTimeout(() => closeBtnRef.current?.focus(), 120);
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener('keydown', onKey);
-      window.clearTimeout(t);
       try {
         tg?.BackButton?.offClick?.(handleClose);
-        tg?.BackButton?.hide?.();
       } catch {
         /* ignore */
       }
@@ -1052,7 +1160,7 @@ function PaymentSheet({
     const payText = `M-EDU To'lov ma'lumoti:\nO'quvchi: ${childName}\nQarzdorlik: ${formatUZS(outstanding)}\nHisob-faktura: ${invNumbers || 'Joriy oy'}\nTo'lov shakli: ${channel.label}`;
     try {
       if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(payText).catch(() => {});
+        void navigator.clipboard.writeText(payText);
       }
     } catch {
       /* ignore */
@@ -1111,7 +1219,6 @@ function PaymentSheet({
                 </h3>
               </div>
               <button
-                ref={closeBtnRef}
                 type="button"
                 onClick={onClose}
                 aria-label={t('tgapp.payment.close')}
@@ -1122,7 +1229,7 @@ function PaymentSheet({
               </button>
             </div>
 
-            <div className="max-h-[62vh] overflow-y-auto px-6 pt-4 no-scrollbar">
+            <div className="no-scrollbar max-h-[62vh] overflow-y-auto px-6 pt-4">
               <div className="liquid-inset flex items-center justify-between p-4">
                 <div>
                   <p className="lg-eyebrow">{t('tgapp.parent.outstandingBalance')}</p>
@@ -1247,10 +1354,17 @@ function PaymentSheet({
   );
 }
 
-
 /* ============================================================================
  * SABABLI DARS QOLDIRISH ARIZASI (BOTTOM SHEET)
  * ========================================================================== */
+
+const PRESET_REASONS = [
+  'Salomatligi / Betobligi sababli',
+  'Oilaviy sharoit tufayli',
+  'Shifokor ko‘rigi / Muolaja',
+  'Musobaqa / Olimpiada ishtiroki',
+  'Boshqa uzrli sabab',
+] as const;
 
 function AbsenceReportSheet({
   open,
@@ -1269,19 +1383,12 @@ function AbsenceReportSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   useFocusTrap(sheetRef, open);
 
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // UTC emas, mahalliy todayKey() ishlatiladi
+  const todayStr = useMemo(() => todayKey(), []);
   const [date, setDate] = useState(todayStr);
-  const [reasonPreset, setReasonPreset] = useState('Salomatligi / Betobligi sababli');
+  const [reasonPreset, setReasonPreset] = useState<string>(PRESET_REASONS[0]);
   const [customNote, setCustomNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const PRESET_REASONS = [
-    'Salomatligi / Betobligi sababli',
-    'Oilaviy sharoit tufayli',
-    'Shifokor ko‘rigi / Muolaja',
-    'Musobaqa / Olimpiada ishtiroki',
-    'Boshqa uzrli sabab',
-  ];
 
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -1311,7 +1418,6 @@ function AbsenceReportSheet({
       window.removeEventListener('keydown', onKey);
       try {
         tg?.BackButton?.offClick?.(handleClose);
-        tg?.BackButton?.hide?.();
       } catch {
         /* ignore */
       }
@@ -1320,7 +1426,7 @@ function AbsenceReportSheet({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date) return;
+    if (!date || submitting) return;
     const fullReason = customNote.trim()
       ? `${reasonPreset}: ${customNote.trim()}`
       : reasonPreset;
@@ -1340,13 +1446,14 @@ function AbsenceReportSheet({
 
       push({
         title: 'Ariza qabul qilindi',
-        message: `${child.name} uchun ${date} sanasiga 'Sababli' holati qayd etildi.`,
+        message: `${child.name} uchun ${date} sanasiga "Sababli" holati qayd etildi.`,
         type: 'success',
       });
 
+      setCustomNote('');
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       try {
         tg?.HapticFeedback?.notificationOccurred?.('error');
       } catch {
@@ -1419,8 +1526,8 @@ function AbsenceReportSheet({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="max-h-[64vh] overflow-y-auto px-6 pt-4 space-y-4 no-scrollbar">
-              <div className="liquid-inset p-3.5 space-y-1.5">
+            <form onSubmit={handleSubmit} className="no-scrollbar max-h-[64vh] space-y-4 overflow-y-auto px-6 pt-4">
+              <div className="liquid-inset space-y-1.5 p-3.5">
                 <label className="lg-eyebrow block" htmlFor="absence-date">
                   Dars qoldiriladigan sana
                 </label>
@@ -1438,10 +1545,8 @@ function AbsenceReportSheet({
                 />
               </div>
 
-              <div className="liquid-inset p-3.5 space-y-2">
-                <label className="lg-eyebrow block">
-                  Asosiy sababni tanlang
-                </label>
+              <div className="liquid-inset space-y-2 p-3.5">
+                <span className="lg-eyebrow block">Asosiy sababni tanlang</span>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESET_REASONS.map((r) => {
                     const isSel = reasonPreset === r;
@@ -1452,7 +1557,7 @@ function AbsenceReportSheet({
                         onClick={() => setReasonPreset(r)}
                         className="rounded-xl px-3 py-1.5 text-[11.5px] font-semibold transition-all"
                         style={{
-                          background: isSel ? 'rgba(10, 132, 255, 0.22)' : 'rgba(255,255,255,0.06)',
+                          background: isSel ? 'rgba(10, 132, 255, 0.22)' : 'rgba(148,163,184,0.12)',
                           color: isSel ? '#0A84FF' : 'var(--text-secondary)',
                           border: isSel ? '1px solid #0A84FF' : '1px solid transparent',
                         }}
@@ -1464,7 +1569,7 @@ function AbsenceReportSheet({
                 </div>
               </div>
 
-              <div className="liquid-inset p-3.5 space-y-1.5">
+              <div className="liquid-inset space-y-1.5 p-3.5">
                 <label className="lg-eyebrow block" htmlFor="absence-note">
                   Qo‘shimcha izoh (ixtiyoriy)
                 </label>
@@ -1482,7 +1587,7 @@ function AbsenceReportSheet({
                 />
               </div>
 
-              <div className="pt-2 pb-1 space-y-2">
+              <div className="space-y-2 pb-1 pt-2">
                 <Btn type="submit" className="w-full" disabled={submitting}>
                   <Icon paths={I.send} size={15} strokeWidth={2.2} />
                   {submitting ? 'Yuborilmoqda...' : 'Arizani tasdiqlash'}
@@ -1500,7 +1605,7 @@ function AbsenceReportSheet({
 }
 
 /* ============================================================================
- * OTA-ONA: SEKSIYA
+ * OTA-ONA: SEKSIYA VA VIEW
  * ========================================================================== */
 
 function ChildSection({
@@ -1508,11 +1613,13 @@ function ChildSection({
   contactAdmin,
   haptic,
   tg,
+  onSheetChange,
 }: {
   child: ParentChild;
   contactAdmin: () => void;
   haptic: (s: HapticStyle) => void;
   tg: TelegramWebApp | null;
+  onSheetChange?: (open: boolean) => void;
 }) {
   const canAttendance = child.permissions?.attendance !== false;
   const canGrades = child.permissions?.grades !== false;
@@ -1551,21 +1658,26 @@ function ChildSection({
   }, [child.groupId, attendanceQ.data, gradesQ.data]);
 
   const [payOpen, setPayOpen] = useState(false);
+  const [absenceOpen, setAbsenceOpen] = useState(false);
+
+  useEffect(() => {
+    onSheetChange?.(payOpen || absenceOpen);
+  }, [payOpen, absenceOpen, onSheetChange]);
+
   const closePay = useCallback(() => setPayOpen(false), []);
   const openPay = useCallback(() => {
     haptic('medium');
     setPayOpen(true);
   }, [haptic]);
 
-  const [absenceOpen, setAbsenceOpen] = useState(false);
   const openAbsence = useCallback(() => {
     haptic('medium');
     setAbsenceOpen(true);
   }, [haptic]);
   const closeAbsence = useCallback(() => setAbsenceOpen(false), []);
   const handleAbsenceSuccess = useCallback(() => {
-    attendanceQ.refetch();
-    summaryQ.refetch();
+    void attendanceQ.refetch();
+    void summaryQ.refetch();
   }, [attendanceQ, summaryQ]);
 
   if (!canAttendance && !canGrades && !canPayments) {
@@ -1622,18 +1734,16 @@ function ChildSection({
   );
 }
 
-/* ============================================================================
- * OTA-ONA VIEW
- * ========================================================================== */
-
 function ParentView({
   contactAdmin,
   haptic,
   tg,
+  onSheetChange,
 }: {
   contactAdmin: () => void;
   haptic: (s: HapticStyle) => void;
   tg: TelegramWebApp | null;
+  onSheetChange?: (open: boolean) => void;
 }) {
   const [idx, setIdx] = useState(0);
   const { hasAnyRole } = useAuth();
@@ -1664,7 +1774,7 @@ function ParentView({
   if (childrenQ.isError) {
     return (
       <div className="pt-6">
-        <ErrorState message="Farzandlar ro'yxatini yuklab bo'lmadi." onRetry={() => childrenQ.refetch()} />
+        <ErrorState message="Farzandlar ro'yxatini yuklab bo'lmadi." onRetry={() => void childrenQ.refetch()} />
       </div>
     );
   }
@@ -1683,7 +1793,7 @@ function ParentView({
             <Icon paths={I.send} size={14} strokeWidth={2.2} />
             Ma'muriyat bilan bog'lanish
           </Btn>
-          <Btn tone="ghost" onClick={() => childrenQ.refetch()}>
+          <Btn tone="ghost" onClick={() => void childrenQ.refetch()}>
             <Icon paths={I.refresh} size={14} strokeWidth={2.2} />
             Qayta tekshirish
           </Btn>
@@ -1739,13 +1849,20 @@ function ParentView({
           })}
         </div>
       )}
-      <ChildSection key={active.studentId} child={active} contactAdmin={contactAdmin} haptic={haptic} tg={tg} />
+      <ChildSection
+        key={active.studentId}
+        child={active}
+        contactAdmin={contactAdmin}
+        haptic={haptic}
+        tg={tg}
+        onSheetChange={onSheetChange}
+      />
     </div>
   );
 }
 
 /* ============================================================================
- * O'QITUVCHI VIEW
+ * O'QITUVCHI VIEW (Qidiruv va O'zgarishlar nazorati bilan)
  * ========================================================================== */
 
 const ATT_CYCLE: (AttendanceStatus | null)[] = [null, 'PRESENT', 'LATE', 'ABSENT', 'EXCUSED'];
@@ -1758,6 +1875,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const today = todayKey();
   const [overrides, setOverrides] = useState<Record<string, Record<string, AttendanceStatus | null>>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const groupsQ = useQuery<GroupSummary[]>({
     queryKey: ['tg-teacher-my-groups', myUserId, isAdmin],
@@ -1765,8 +1883,6 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
       const res = (await groupsApi.list({ limit: 100 })) as { items?: GroupSummary[] };
       const all = itemsOf<GroupSummary>(res);
       const mine = all.filter((g) => g.teacher?.userId === myUserId || g.teacherId === myUserId);
-      // Xavfsizlik: faqat administratorlar barcha guruhlarni ko'ra oladi.
-      // Oddiy o'qituvchiga begona guruhlar "fallback" sifatida ochilmaydi.
       return mine.length > 0 ? mine : isAdmin ? all : [];
     },
     enabled: Boolean(myUserId),
@@ -1777,8 +1893,9 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const teacherId = !isAdmin ? myGroups?.[0]?.teacherId ?? myGroups?.[0]?.teacher?.id ?? null : null;
   const dayOfWeek = todayDayOfWeek();
 
+  // XATO TUZATILDI: teacherId topilmasa ham myGroups mavjud bo'lsa allowed Set orqali filtrlanadi
   const schedQ = useQuery<ScheduleItem[]>({
-    queryKey: ['tg-teacher-schedule', teacherId, dayOfWeek, isAdmin],
+    queryKey: ['tg-teacher-schedule', teacherId, dayOfWeek, isAdmin, (myGroups ?? []).length],
     queryFn: async () => {
       const res = (await scheduleApi.list({
         ...(teacherId ? { teacherId } : {}),
@@ -1789,7 +1906,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
       const allowed = new Set((myGroups ?? []).map((g) => g.id));
       return items.filter((l) => allowed.has(l.groupId));
     },
-    enabled: (myGroups?.length ?? 0) > 0 && (isAdmin || Boolean(teacherId)),
+    enabled: (myGroups?.length ?? 0) > 0,
     staleTime: 60_000,
   });
 
@@ -1852,6 +1969,15 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     }));
   };
 
+  const resetLessonOverrides = (lessonId: string) => {
+    haptic('light');
+    setOverrides((prev) => {
+      const next = { ...prev };
+      delete next[lessonId];
+      return next;
+    });
+  };
+
   const saveLesson = async (lesson: ScheduleItem, group: GroupDetail, students: GroupEnrollment[]) => {
     const rows = attMap.get(lesson.groupId) ?? [];
     const serverByStudent = new Map(rows.map((r) => [r.studentId ?? '', r]));
@@ -1868,11 +1994,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
       await attendanceApi.create({ groupId: group.id, date: today, records });
       haptic('success');
       success('Davomat saqlandi', `${group.name} — ${records.length} o'quvchi belgilandi`);
-      setOverrides((prev) => {
-        const next = { ...prev };
-        delete next[lesson.id];
-        return next;
-      });
+      resetLessonOverrides(lesson.id);
       await attTodayQ.refetch();
     } catch (e) {
       haptic('error');
@@ -1891,7 +2013,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     );
   }
   if (groupsQ.isError) {
-    return <ErrorState message="Guruhlar ro'yxatini yuklab bo'lmadi." onRetry={() => groupsQ.refetch()} />;
+    return <ErrorState message="Guruhlar ro'yxatini yuklab bo'lmadi." onRetry={() => void groupsQ.refetch()} />;
   }
   if ((myGroups ?? []).length === 0) {
     return (
@@ -1904,7 +2026,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     );
   }
   if (schedQ.isError) {
-    return <ErrorState message="Bugungi darslarni yuklab bo'lmadi." onRetry={() => schedQ.refetch()} />;
+    return <ErrorState message="Bugungi darslarni yuklab bo'lmadi." onRetry={() => void schedQ.refetch()} />;
   }
   if (lessons.length === 0) {
     return (
@@ -1918,17 +2040,58 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   }
 
   const groupLoading = detailsQ.isLoading || attTodayQ.isLoading;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
 
   return (
     <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
+      {/* O'quvchini tezkor qidirish */}
+      <div className="liquid-glass flex items-center gap-2.5 rounded-2xl px-3.5 py-2.5">
+        <Icon paths={I.users} size={16} strokeWidth={2.2} style={{ color: 'var(--text-tertiary)' }} />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="O'quvchi ismini qidiring..."
+          className="flex-1 bg-transparent text-[13px] font-medium outline-none"
+          style={{ color: 'var(--text-primary)' }}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="rounded-full p-1"
+            style={{ color: 'var(--text-tertiary)' }}
+            aria-label="Tozalash"
+          >
+            <Icon paths={I.close} size={14} strokeWidth={2.2} />
+          </button>
+        )}
+      </div>
+
       {lessons.map((lesson) => {
         const group = groupMap.get(lesson.groupId);
         const students = group?.enrollments ?? [];
+        const filteredStudents = normalizedSearch
+          ? students.filter((st) => {
+              const full = `${st.student.user?.firstName ?? ''} ${st.student.user?.lastName ?? ''}`.toLowerCase();
+              return full.includes(normalizedSearch);
+            })
+          : students;
+
         const serverRows = attMap.get(lesson.groupId) ?? [];
         const serverByStudent = new Map(serverRows.map((r) => [r.studentId ?? '', r]));
-        const markedCount = students.filter(
-          (s) => statusOf(lesson.id, s.student.id, serverByStudent.get(s.student.id)?.status ?? null) != null,
-        ).length;
+
+        const counts: Record<AttendanceStatus, number> = { PRESENT: 0, LATE: 0, ABSENT: 0, EXCUSED: 0 };
+        let markedCount = 0;
+        students.forEach((s) => {
+          const st = statusOf(lesson.id, s.student.id, serverByStudent.get(s.student.id)?.status ?? null);
+          if (st) {
+            counts[st] = (counts[st] ?? 0) + 1;
+            markedCount += 1;
+          }
+        });
+
+        const hasUnsaved = Boolean(overrides[lesson.id] && Object.keys(overrides[lesson.id]).length > 0);
         const isSaving = savingId === lesson.id;
 
         return (
@@ -1961,8 +2124,31 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                   )}
                 </div>
               </div>
-              <Pill tone="blue">{groupLoading ? '…' : `${students.length} o'quvchi`}</Pill>
+              <div className="flex flex-col items-end gap-1">
+                <Pill tone="blue">{groupLoading ? '…' : `${students.length} o'quvchi`}</Pill>
+                {hasUnsaved && (
+                  <span className="text-[10px] font-bold text-amber-500">● Saqlanmagan</span>
+                )}
+              </div>
             </div>
+
+            {/* Guruh bo'yicha jonli hisoblagich */}
+            {!groupLoading && students.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {(Object.keys(STATUS_META) as AttendanceStatus[]).map((stKey) => (
+                  <span
+                    key={stKey}
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10.5px] font-bold"
+                    style={{
+                      background: TONE_COLORS[STATUS_META[stKey].tone].bg,
+                      color: TONE_COLORS[STATUS_META[stKey].tone].fg,
+                    }}
+                  >
+                    {STATUS_META[stKey].label}: {counts[stKey]}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {groupLoading ? (
               <div className="mt-4 space-y-2">
@@ -1973,7 +2159,7 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
             ) : (
               <>
                 <div className="mt-4 divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-                  {students.map((st) => {
+                  {filteredStudents.map((st) => {
                     const serverSt = serverByStudent.get(st.student.id)?.status ?? null;
                     const current = statusOf(lesson.id, st.student.id, serverSt);
                     const row = serverByStudent.get(st.student.id);
@@ -2039,13 +2225,25 @@ function TeacherView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                       </motion.button>
                     );
                   })}
+                  {filteredStudents.length === 0 && (
+                    <p className="py-4 text-center text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+                      Qidiruv bo'yicha o'quvchi topilmadi.
+                    </p>
+                  )}
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-2.5 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <Btn tone="ghost" onClick={() => markAllPresent(lesson.id, students)} className="px-3.5">
-                    Hammasi keldi
-                  </Btn>
-                  <Btn onClick={() => group && saveLesson(lesson, group, students)} disabled={!group || markedCount === 0 || isSaving}>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="flex gap-2">
+                    <Btn tone="ghost" onClick={() => markAllPresent(lesson.id, students)} className="px-3">
+                      Hammasi keldi
+                    </Btn>
+                    {hasUnsaved && (
+                      <Btn tone="ghost" onClick={() => resetLessonOverrides(lesson.id)} className="px-2.5 text-[11.5px]">
+                        Bekor qilish
+                      </Btn>
+                    )}
+                  </div>
+                  <Btn onClick={() => group && void saveLesson(lesson, group, students)} disabled={!group || markedCount === 0 || isSaving}>
                     {isSaving ? 'Saqlanmoqda…' : `Saqlash${markedCount ? ` (${markedCount})` : ''}`}
                   </Btn>
                 </div>
@@ -2068,6 +2266,7 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const { success, error: toastError } = useToast();
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [broadcastTarget, setBroadcastTarget] = useState<'ALL_PARENTS' | 'DEBTORS' | 'STAFF'>('ALL_PARENTS');
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
   const statsQ = useQuery({
@@ -2083,7 +2282,8 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     staleTime: 60_000,
   });
 
-  const stats = statsQ.data;
+  const stats = statsQ.data as Record<string, any> | undefined;
+  const tgOverview = tgAdminQ.data as Record<string, any> | undefined;
 
   const handleRefresh = useCallback(() => {
     haptic('selection');
@@ -2093,19 +2293,19 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   }, [haptic, sound, statsQ, tgAdminQ]);
 
   const handleSendBroadcast = async () => {
-    if (!broadcastMsg.trim()) return;
+    if (!broadcastMsg.trim() || sendingBroadcast) return;
     setSendingBroadcast(true);
     haptic('medium');
     try {
       await request('/telegram/broadcast', {
         method: 'POST',
-        body: JSON.stringify({ message: broadcastMsg.trim(), target: 'ALL_PARENTS' }),
+        body: JSON.stringify({ message: broadcastMsg.trim(), target: broadcastTarget }),
       });
       sound.playSuccess?.();
-      success("Xabarnoma barcha ota-onalarga muvaffaqiyatli yuborildi");
+      success("Xabarnoma muvaffaqiyatli yuborildi");
       setBroadcastMsg('');
       setBroadcastOpen(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       sound.playError?.();
       toastError(getErrorMessage(e, "Xabarnomani yuborishda xatolik yuz berdi"));
     } finally {
@@ -2113,9 +2313,21 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
     }
   };
 
+  // XATO TUZATILDI: Haqiqiy davomat foizi stats yoki tgOverview dan olinadi
   const attendancePercent = useMemo(() => {
-    if (!stats || !stats.activeStudents) return 96;
+    const rawRate = stats?.attendanceRate ?? stats?.todayAttendanceRate ?? tgOverview?.attendanceRate;
+    if (typeof rawRate === 'number' && !Number.isNaN(rawRate)) {
+      return Math.max(0, Math.min(100, Math.round(rawRate)));
+    }
+    if (stats?.activeStudents && stats?.presentToday) {
+      return Math.min(100, Math.round((Number(stats.presentToday) / Number(stats.activeStudents)) * 100));
+    }
     return 95;
+  }, [stats, tgOverview]);
+
+  const activeRatio = useMemo(() => {
+    if (!stats?.totalStudents || !stats?.activeStudents) return 98.4;
+    return Math.min(100, Number(((stats.activeStudents / stats.totalStudents) * 100).toFixed(1)));
   }, [stats]);
 
   return (
@@ -2144,13 +2356,9 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
           <button
             type="button"
             onClick={handleRefresh}
-            className="flex h-8 w-8 items-center justify-center rounded-full border transition active:scale-95"
-            style={{
-              background: 'var(--glass-surface)',
-              borderColor: 'var(--glass-border)',
-              color: 'var(--text-secondary)',
-            }}
-            aria-label="Refresh"
+            className="liquid-btn-ghost flex h-9 w-9 items-center justify-center rounded-full"
+            style={{ color: 'var(--text-secondary)' }}
+            aria-label="Yangilash"
           >
             <Icon paths={I.refresh} size={15} strokeWidth={2} />
           </button>
@@ -2159,7 +2367,6 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
 
       {/* 2. Asosiy KPI Kartalar Gridi (2x2) */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Faol O'quvchilar */}
         <Surface tone="blue" className="p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
@@ -2170,19 +2377,18 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-[22px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            <span className="text-[22px] font-black tracking-tight tabular-nums" style={{ color: 'var(--text-primary)' }}>
               {stats ? formatNum(stats.activeStudents) : '—'}
             </span>
-            <span className="text-[11px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+            <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
               / {stats ? formatNum(stats.totalStudents) : '—'}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-1 text-[11px] font-medium" style={{ color: TONE_COLORS.green.fg }}>
-            <span>●</span> 98.4% faol kontingent
+            <span>●</span> {activeRatio}% faol kontingent
           </div>
         </Surface>
 
-        {/* Bugungi Davomat */}
         <Surface tone="green" className="p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
@@ -2193,17 +2399,16 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-[22px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            <span className="text-[22px] font-black tracking-tight tabular-nums" style={{ color: 'var(--text-primary)' }}>
               {attendancePercent}%
             </span>
             <ProgressRing value={attendancePercent} size={34} stroke={3.5} tone="green" />
           </div>
           <div className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Turniket orqali kirgan
+            Turniket va dars davomati
           </div>
         </Surface>
 
-        {/* Bugungi Tushum */}
         <Surface tone="purple" className="p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
@@ -2214,8 +2419,8 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
             </span>
           </div>
           <div className="mt-2">
-            <span className="truncate text-[17px] font-black tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              {stats?.todayRevenue != null ? formatUZS(stats.todayRevenue) : '0 UZS'}
+            <span className="block truncate text-[16.5px] font-black tracking-tight tabular-nums" style={{ color: 'var(--text-primary)' }}>
+              {stats?.todayRevenue != null ? formatUZS(stats.todayRevenue) : "0 so'm"}
             </span>
           </div>
           <div className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
@@ -2223,7 +2428,6 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
           </div>
         </Surface>
 
-        {/* Qarzdorlik */}
         <Surface tone="orange" className="p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[11.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
@@ -2234,8 +2438,8 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
             </span>
           </div>
           <div className="mt-2">
-            <span className="truncate text-[17px] font-black tracking-tight" style={{ color: TONE_COLORS.orange.fg }}>
-              {stats?.totalOverdue != null ? formatUZS(stats.totalOverdue) : '0 UZS'}
+            <span className="block truncate text-[16.5px] font-black tracking-tight tabular-nums" style={{ color: TONE_COLORS.orange.fg }}>
+              {stats?.totalOverdue != null ? formatUZS(stats.totalOverdue) : "0 so'm"}
             </span>
           </div>
           <div className="mt-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
@@ -2244,8 +2448,8 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
         </Surface>
       </div>
 
-      {/* 3. Turniket va Face ID Biometrika Holati */}
-      <Surface tone="slate" className="p-4 space-y-3">
+      {/* 3. Turniket va Telegram Bot Integratsiya Holati */}
+      <Surface tone="slate" className="space-y-3 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span style={{ color: TONE_COLORS.green.fg }}>
@@ -2255,21 +2459,31 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
               {t('tgapp.admin.hardwareGate')}
             </span>
           </div>
-          <Pill tone="green">
-            ● {t('tgapp.admin.hardwareActive')}
-          </Pill>
+          <Pill tone="green">● {t('tgapp.admin.hardwareActive')}</Pill>
         </div>
         <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
           Kamera va yuzni tanish tizimi real-vaqt rejimida ishlamoqda. Har bir o'quvchi kirish-chiqishida ota-ona Telegramiga avtomatik xabar yuboriladi.
         </p>
-        <div className="flex items-center justify-between pt-1 border-t text-[11.5px]" style={{ borderColor: 'var(--glass-border)' }}>
-          <span style={{ color: 'var(--text-tertiary)' }}>Faol guruhlar: <strong style={{ color: 'var(--text-primary)' }}>{stats?.activeGroups ?? 0} ta</strong></span>
-          <span style={{ color: 'var(--text-tertiary)' }}>O'qituvchilar: <strong style={{ color: 'var(--text-primary)' }}>{stats?.totalTeachers ?? 0} nafar</strong></span>
+        <div className="grid grid-cols-3 gap-2 border-t pt-2.5 text-center text-[11px]" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="liquid-inset py-2">
+            <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Faol guruhlar</span>
+            <strong className="text-[13px] font-extrabold" style={{ color: 'var(--text-primary)' }}>{stats?.activeGroups ?? 0} ta</strong>
+          </div>
+          <div className="liquid-inset py-2">
+            <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Ustozlar</span>
+            <strong className="text-[13px] font-extrabold" style={{ color: 'var(--text-primary)' }}>{stats?.totalTeachers ?? 0} nafar</strong>
+          </div>
+          <div className="liquid-inset py-2">
+            <span className="block text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Ulangan TG</span>
+            <strong className="text-[13px] font-extrabold text-emerald-500">
+              {tgOverview?.linkedUsersCount ?? tgOverview?.totalLinked ?? stats?.activeStudents ?? 'Faol'}
+            </strong>
+          </div>
         </div>
       </Surface>
 
-      {/* 4. Tezkor Harakatlar */}
-      <Surface tone="slate" className="p-4 space-y-3">
+      {/* 4. Tezkor Boshqaruv va Xabarnoma */}
+      <Surface tone="slate" className="space-y-3 p-4">
         <div className="flex items-center gap-2">
           <span style={{ color: TONE_COLORS.blue.fg }}>
             <Icon paths={I.sparkles} size={18} strokeWidth={2.2} />
@@ -2282,7 +2496,7 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
         <div className="grid grid-cols-1 gap-2 pt-1">
           <Btn
             tone="primary"
-            className="w-full justify-center text-[13px] font-semibold py-2.5"
+            className="w-full justify-center py-2.5 text-[13px] font-semibold"
             onClick={() => {
               haptic('medium');
               sound.playPop?.();
@@ -2300,32 +2514,54 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="space-y-2 pt-2 border-t"
-              style={{ borderColor: 'var(--glass-border)' }}
+              className="space-y-3 border-t pt-3"
+              style={{ borderColor: 'var(--border-subtle)' }}
             >
+              <div className="flex gap-1.5">
+                {([
+                  { id: 'ALL_PARENTS', label: 'Barcha ota-onalar' },
+                  { id: 'DEBTORS', label: 'Qarzdorlar' },
+                  { id: 'STAFF', label: 'Ustozlar' },
+                ] as const).map((item) => {
+                  const active = broadcastTarget === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setBroadcastTarget(item.id)}
+                      className="flex-1 rounded-xl py-1.5 text-[11px] font-bold transition-all"
+                      style={{
+                        background: active ? 'rgba(10,132,255,0.2)' : 'rgba(148,163,184,0.1)',
+                        color: active ? '#0A84FF' : 'var(--text-secondary)',
+                        border: active ? '1px solid #0A84FF' : '1px solid transparent',
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               <textarea
                 value={broadcastMsg}
                 onChange={(e) => setBroadcastMsg(e.target.value)}
-                placeholder="Ota-onalarga umumiy xabar yoki e'lon matnini kiriting..."
-                className="w-full rounded-2xl border p-3 text-[13px] outline-none transition focus:ring-2 resize-none"
+                placeholder="E'lon yoki xabarnoma matnini kiriting..."
+                className="w-full resize-none rounded-2xl border p-3 text-[13px] outline-none transition focus:ring-2"
                 style={{
                   background: 'var(--glass-surface)',
-                  borderColor: 'var(--glass-border)',
+                  borderColor: 'var(--border-subtle)',
                   color: 'var(--text-primary)',
                 }}
                 rows={3}
               />
               <div className="flex justify-end gap-2">
-                <Btn
-                  tone="ghost"
-                  onClick={() => setBroadcastOpen(false)}
-                >
+                <Btn tone="ghost" onClick={() => setBroadcastOpen(false)}>
                   Bekor qilish
                 </Btn>
                 <Btn
                   tone="primary"
                   disabled={!broadcastMsg.trim() || sendingBroadcast}
-                  onClick={handleSendBroadcast}
+                  onClick={() => void handleSendBroadcast()}
                 >
                   {sendingBroadcast ? 'Yuborilmoqda...' : 'Yuborish'}
                 </Btn>
@@ -2342,9 +2578,16 @@ function AdminView({ haptic }: { haptic: (s: HapticStyle) => void }) {
  * O'QUVCHI VIEW
  * ========================================================================== */
 
-function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
+function StudentView({
+  haptic,
+  tg,
+}: {
+  haptic: (s: HapticStyle) => void;
+  tg: TelegramWebApp | null;
+}) {
   const { success, error } = useToast();
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [rewardFilter, setRewardFilter] = useState<'all' | 'affordable'>('all');
 
   const meQ = useQuery<GamificationMe>({
     queryKey: ['tg-student-me'],
@@ -2362,10 +2605,25 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const rewardsQ = useQuery<RewardItem[]>({
     queryKey: ['tg-student-rewards'],
     queryFn: async () => {
-      const res = (await request(`/gamification/rewards`)) as { items?: RewardItem[] };
+      const res = (await request('/gamification/rewards')) as { items?: RewardItem[] };
       return itemsOf<RewardItem>(res);
     },
     staleTime: 120_000,
+    retry: false,
+  });
+
+  const arenaQ = useQuery<{
+    profile: {
+      rating: number;
+      wins: number;
+      winStreak: number;
+      activeAvatar?: { name: string; title: string; thumbnailUrl: string };
+      activeTitle?: { name: string; icon: string };
+    };
+  }>({
+    queryKey: ['tg-student-arena-profile'],
+    queryFn: () => request('/arena/profiles/me'),
+    staleTime: 60_000,
     retry: false,
   });
 
@@ -2398,8 +2656,8 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
       <ErrorState
         message="O'quvchi statistikasini yuklab bo'lmadi."
         onRetry={() => {
-          meQ.refetch();
-          eventsQ.refetch();
+          void meQ.refetch();
+          void eventsQ.refetch();
         }}
       />
     );
@@ -2410,6 +2668,7 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
   const progress = me.xpToNextLevel <= 0 ? 100 : Math.max(4, Math.min(100, Math.round((me.xp / totalForNext) * 100)));
   const events = eventsQ.data ?? [];
   const rewards = rewardsQ.data ?? [];
+  const filteredRewards = rewardFilter === 'affordable' ? rewards.filter((r) => me.coins >= r.costCoins) : rewards;
 
   return (
     <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
@@ -2454,6 +2713,59 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
               animate={{ width: `${progress}%` }}
               transition={{ type: 'spring', stiffness: 75, damping: 18 }}
             />
+          </div>
+        </div>
+      </Surface>
+
+      {/* Mind Arena 3D Avatar Profile Widget (Light va Dark mavzuga to'liq moslashtirildi) */}
+      <Surface
+        className="p-4 text-white"
+        style={{
+          background: 'linear-gradient(135deg, #091E3A 0%, #1E1B4B 55%, #3B0764 100%)',
+          borderColor: 'rgba(34,211,238,0.35)',
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-cyan-400/40 bg-black/50 p-1 shadow-[0_0_15px_rgba(0,242,254,0.25)]">
+              <img
+                src={arenaQ.data?.profile?.activeAvatar?.thumbnailUrl || '/avatars/arena/cyber-scholar/thumbnail.png'}
+                alt={arenaQ.data?.profile?.activeAvatar?.name || 'Avatar'}
+                loading="lazy"
+                decoding="async"
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">Mind Arena Qahramoni</span>
+                <span className="rounded bg-cyan-500/25 px-1.5 py-0.5 text-[9px] font-extrabold text-cyan-200">3D</span>
+              </div>
+              <h4 className="text-[14.5px] font-extrabold text-white">
+                {arenaQ.data?.profile?.activeAvatar?.name || 'Cyber Scholar'}
+              </h4>
+              {arenaQ.data?.profile?.activeTitle && (
+                <p className="flex items-center gap-1 text-[11px] font-semibold text-purple-200">
+                  <span>{arenaQ.data.profile.activeTitle.icon}</span>
+                  <span>{arenaQ.data.profile.activeTitle.name}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="text-right">
+            <div className="text-[10.5px] font-semibold text-indigo-200">Duel Reyting</div>
+            <div className="text-[15.5px] font-black text-amber-300">⚡ {arenaQ.data?.profile?.rating ?? 1000}</div>
+            <button
+              type="button"
+              onClick={() => {
+                haptic('light');
+                openSafeLink('/arena', tg);
+              }}
+              className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-cyan-300 underline"
+            >
+              Studiyaga kirish ➔
+            </button>
           </div>
         </div>
       </Surface>
@@ -2529,10 +2841,20 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
           tone="orange"
           title="M-Coin do'koni"
           meta={
-            <span className="inline-flex items-center gap-1 text-[11.5px] font-bold" style={{ color: TONE_COLORS.orange.fg }}>
-              <Icon paths={I.coins} size={12} strokeWidth={2.5} />
-              {me.coins}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setRewardFilter(rewardFilter === 'all' ? 'affordable' : 'all')}
+                className="rounded-lg px-2 py-0.5 text-[10.5px] font-bold transition-all"
+                style={{
+                  background: rewardFilter === 'affordable' ? TONE_COLORS.orange.bg : 'transparent',
+                  color: TONE_COLORS.orange.fg,
+                  border: `1px solid ${TONE_COLORS.orange.border}`,
+                }}
+              >
+                {rewardFilter === 'affordable' ? 'Yetadiganlari' : 'Barchasi'}
+              </button>
+            </div>
           }
         />
         {rewardsQ.isLoading ? (
@@ -2546,13 +2868,24 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
               Mukofot do'koni hozircha ochilmagan. Xodimlarga murojaat qiling — tez orada paydo bo'ladi.
             </p>
           </div>
-        ) : rewards.length === 0 ? (
-          <EmptyState icon={I.gift} tone="orange" title="Sovg'alar tez orada" message="Markaz yangi sovg'alarni qo'shishi bilan shu yerda xarid qilishingiz mumkin." />
+        ) : filteredRewards.length === 0 ? (
+          <EmptyState
+            icon={I.gift}
+            tone="orange"
+            title={rewardFilter === 'affordable' ? 'Hozircha M-Coin yetarli emas' : "Sovg'alar tez orada"}
+            message={
+              rewardFilter === 'affordable'
+                ? "Darslarda faol qatnashib ko'proq M-Coin to'plang yoki barcha sovg'alarni ko'ring."
+                : "Markaz yangi sovg'alarni qo'shishi bilan shu yerda xarid qilishingiz mumkin."
+            }
+          />
         ) : (
           <div className="grid grid-cols-2 gap-2.5">
-            {rewards.map((r) => {
+            {filteredRewards.map((r) => {
               const affordable = me.coins >= r.costCoins;
               const claiming = claimingId === r.id;
+              const coinRatio = Math.min(100, Math.round((me.coins / Math.max(1, r.costCoins)) * 100));
+
               return (
                 <motion.div key={r.id} whileTap={affordable ? { scale: 0.97 } : undefined} className="liquid-inset flex flex-col p-3.5">
                   <span className="text-[28px] leading-none">{r.icon || '🎁'}</span>
@@ -2562,9 +2895,24 @@ function StudentView({ haptic }: { haptic: (s: HapticStyle) => void }) {
                   <p className="mt-1 line-clamp-2 flex-1 text-[10.5px] leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
                     {r.description}
                   </p>
+
+                  {!affordable && (
+                    <div className="mt-2">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-500/20">
+                        <div
+                          className="h-full rounded-full bg-amber-500"
+                          style={{ width: `${coinRatio}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[9.5px] font-semibold" style={{ color: 'var(--text-tertiary)' }}>
+                        Yana {r.costCoins - me.coins} Coin kerak
+                      </p>
+                    </div>
+                  )}
+
                   <Btn
                     tone={affordable ? 'primary' : 'ghost'}
-                    onClick={() => claim(r)}
+                    onClick={() => void claim(r)}
                     disabled={!affordable || claiming}
                     className="mt-3 w-full !px-2 py-2 text-[11.5px]"
                   >
@@ -2664,18 +3012,30 @@ function AiFormattedText({ text, onLink }: { text: string; onLink: (url: string)
             </button>
           );
         }
-        const boldSubparts = (p.content || '').split(/(\*\*[^*]+\*\*)/g);
+        const tokenParts = (p.content || '').split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
         return (
           <span key={i}>
-            {boldSubparts.map((sub, j) =>
-              sub.startsWith('**') && sub.endsWith('**') && sub.length > 4 ? (
-                <strong key={j} className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                  {sub.slice(2, -2)}
-                </strong>
-              ) : (
-                <span key={j}>{sub}</span>
-              ),
-            )}
+            {tokenParts.map((sub, j) => {
+              if (sub.startsWith('**') && sub.endsWith('**') && sub.length > 4) {
+                return (
+                  <strong key={j} className="font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {sub.slice(2, -2)}
+                  </strong>
+                );
+              }
+              if (sub.startsWith('`') && sub.endsWith('`') && sub.length > 2) {
+                return (
+                  <code
+                    key={j}
+                    className="rounded px-1.5 py-0.5 font-mono text-[11.5px]"
+                    style={{ background: 'rgba(16,185,129,0.14)', color: '#10B981' }}
+                  >
+                    {sub.slice(1, -1)}
+                  </code>
+                );
+              }
+              return <span key={j}>{sub}</span>;
+            })}
           </span>
         );
       })}
@@ -2744,10 +3104,12 @@ function AiCopilotView({
   haptic,
   contactAdmin,
   tg,
+  isKeyboardVisible,
 }: {
   haptic: (style: HapticStyle) => void;
   contactAdmin: () => void;
   tg: TelegramWebApp | null;
+  isKeyboardVisible: boolean;
 }) {
   const { hasAnyRole } = useAuth();
   const isStaff = hasAnyRole(...STAFF_ROLES);
@@ -2759,6 +3121,7 @@ function AiCopilotView({
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -2767,6 +3130,26 @@ function AiCopilotView({
   }, [messages, isLoading]);
 
   const onLink = useCallback((url: string) => openSafeLink(url, tg), [tg]);
+
+  const handleCopyMsg = (msg: CopilotMessage) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(msg.content);
+      }
+      haptic('light');
+      setCopiedId(msg.id);
+      window.setTimeout(() => setCopiedId((prev) => (prev === msg.id ? null : prev)), 1800);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleResetChat = () => {
+    haptic('medium');
+    setMessages([
+      { id: 'welcome', role: 'assistant', content: welcomeFor(isStaff), timestamp: new Date().toISOString() },
+    ]);
+  };
 
   const handleSend = async (queryText?: string) => {
     const text = (queryText ?? input).trim();
@@ -2780,7 +3163,6 @@ function AiCopilotView({
       timestamp: new Date().toISOString(),
     };
 
-    // Salomlashuv UI matni — AI tarixiga yuborilmaydi; oxirgi 10 ta xabar bilan cheklanadi
     const historyPayload = messages
       .filter((m) => m.id !== 'welcome')
       .slice(-10)
@@ -2792,7 +3174,10 @@ function AiCopilotView({
 
     try {
       const res = await aiApi.chat({ message: text, history: historyPayload });
-      const reply = typeof res?.content === 'string' && res.content.trim() ? res.content : "Javob bo'sh keldi. Savolni boshqacha ifodalab ko'ring.";
+      const reply =
+        typeof res?.content === 'string' && res.content.trim()
+          ? res.content
+          : "Javob bo'sh keldi. Savolni boshqacha ifodalab ko'ring.";
       setMessages((prev) => [
         ...prev,
         { id: `ast-${Date.now()}`, role: 'assistant', content: reply, timestamp: new Date().toISOString() },
@@ -2842,9 +3227,16 @@ function AiCopilotView({
               </p>
             </div>
           </div>
-          <Btn tone="ghost" className="!px-2.5 !py-1 text-[11px]" onClick={contactAdmin}>
-            Admin
-          </Btn>
+          <div className="flex items-center gap-1.5">
+            {messages.length > 1 && (
+              <Btn tone="ghost" className="!px-2.5 !py-1 text-[11px]" onClick={handleResetChat}>
+                Tozalash
+              </Btn>
+            )}
+            <Btn tone="ghost" className="!px-2.5 !py-1 text-[11px]" onClick={contactAdmin}>
+              Admin
+            </Btn>
+          </div>
         </div>
 
         <div className="no-scrollbar mt-3.5 flex gap-2 overflow-x-auto pb-1">
@@ -2853,7 +3245,7 @@ function AiCopilotView({
               key={chip.label}
               type="button"
               disabled={isLoading}
-              onClick={() => handleSend(chip.query)}
+              onClick={() => void handleSend(chip.query)}
               className="liquid-btn shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-emerald-500"
               style={{ background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.28)' }}
             >
@@ -2881,9 +3273,22 @@ function AiCopilotView({
                 style={isUser ? { boxShadow: '0 14px 28px -14px rgba(16,185,129,0.7), inset 0 1px 0 rgba(255,255,255,0.4)' } : undefined}
               >
                 {!isUser && (
-                  <div className="mb-2 flex items-center gap-1.5 border-b pb-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
-                    <Icon paths={I.sparkles} size={13} strokeWidth={2.4} className="text-emerald-500" />
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-500">M-EDU AI</span>
+                  <div className="mb-2 flex items-center justify-between gap-2 border-b pb-1.5" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <div className="flex items-center gap-1.5">
+                      <Icon paths={I.sparkles} size={13} strokeWidth={2.4} className="text-emerald-500" />
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-500">M-EDU AI</span>
+                    </div>
+                    {msg.id !== 'welcome' && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyMsg(msg)}
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-100"
+                        style={{ color: 'var(--text-tertiary)' }}
+                      >
+                        <Icon paths={copiedId === msg.id ? I.checkCircle : I.copy} size={11} strokeWidth={2.2} />
+                        {copiedId === msg.id ? 'Nusxalandi' : 'Nusxa'}
+                      </button>
+                    )}
                   </div>
                 )}
                 {isUser ? (
@@ -2916,8 +3321,15 @@ function AiCopilotView({
         <div ref={endRef} />
       </div>
 
-      {/* Dock ustida turadi — avval dock ostida qolib ketardi */}
-      <div className="sticky z-20 pb-2 pt-2" style={{ bottom: 'calc(84px + env(safe-area-inset-bottom))' }}>
+      {/* Klaviatura ochilganda dock yo'qoladi va input pastga silliq tushadi */}
+      <div
+        className="sticky z-20 pb-2 pt-2 transition-all duration-200"
+        style={{
+          bottom: isKeyboardVisible
+            ? 'max(env(safe-area-inset-bottom), 8px)'
+            : 'calc(84px + env(safe-area-inset-bottom))',
+        }}
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -2952,18 +3364,14 @@ function AiCopilotView({
 }
 
 /* ============================================================================
- * DIGITAL PASS (Apple Wallet uslubi)
- *
- * DIQQAT: bu QR faqat vizual namuna. Haqiqiy kirish nazorati uchun QR serverda
- * imzolangan (HMAC/JWT), qisqa muddatli token bo'lishi va skaner uni serverda
- * tekshirishi shart. Mijoz tomonida yaratilgan kod yetarli xavfsizlik bermaydi.
+ * DIGITAL PASS (Apple Wallet + Turniket Zoom rejimi)
  * ========================================================================== */
 
 const QR_WINDOW_MS = 60_000;
 
-function QrCodeMatrix({ value }: { value: string }) {
+function QrCodeMatrix({ value, sizeClass = 'h-48 w-48' }: { value: string; sizeClass?: string }) {
   return (
-    <div className="flex h-48 w-48 items-center justify-center rounded-xl bg-white p-2.5 shadow-inner">
+    <div className={`flex ${sizeClass} items-center justify-center rounded-2xl bg-white p-3 shadow-inner`}>
       <RealQrCode
         value={value}
         className="h-full w-full"
@@ -2984,6 +3392,7 @@ function DigitalBadgeView({
   haptic: (style: HapticStyle) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const copyTimer = useRef<number | undefined>(undefined);
   const [now, setNow] = useState(() => Date.now());
 
@@ -2993,9 +3402,9 @@ function DigitalBadgeView({
   }, []);
   useEffect(() => () => window.clearTimeout(copyTimer.current), []);
 
-  // QR va taymer bir xil vaqt oynasiga bog'langan
   const windowIdx = Math.floor(now / QR_WINDOW_MS);
   const secondsLeft = Math.max(1, Math.ceil((QR_WINDOW_MS - (now % QR_WINDOW_MS)) / 1000));
+  const timerPercent = Math.round((secondsLeft / (QR_WINDOW_MS / 1000)) * 100);
 
   const userId = String(appUser?.id ?? 'USR-2026-MEDU');
   const displayId = `EDU-${userId.slice(0, 8).toUpperCase()}`;
@@ -3010,7 +3419,7 @@ function DigitalBadgeView({
   const handleCopyId = () => {
     try {
       if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(displayId).catch(() => {});
+        void navigator.clipboard.writeText(displayId);
       }
       setCopied(true);
       haptic('light');
@@ -3025,15 +3434,15 @@ function DigitalBadgeView({
     <motion.div variants={STAGGER_CONTAINER} initial="hidden" animate="show" className="space-y-4">
       <Surface tone="green" className="lg-sheen relative overflow-hidden !rounded-[32px] p-6">
         <div className="flex items-center justify-between border-b pb-4" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <div
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-[13px] font-black text-slate-900"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 text-[14px] font-black text-slate-900"
               style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 6px 14px -6px #10B981' }}
             >
               M
             </div>
             <div>
-              <p className="text-[12px] font-bold tracking-wide" style={{ color: 'var(--text-primary)' }}>
+              <p className="text-[12.5px] font-bold tracking-wide" style={{ color: 'var(--text-primary)' }}>
                 {orgName}
               </p>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Smart Campus Pass</p>
@@ -3061,17 +3470,46 @@ function DigitalBadgeView({
         </div>
 
         <div className="mt-6 flex flex-col items-center justify-center">
-          <div className="liquid-inset relative !rounded-2xl p-2">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              haptic('medium');
+              setZoomOpen(true);
+            }}
+            className="liquid-inset relative cursor-pointer !rounded-3xl p-2.5"
+            aria-label="QR-kodni kattalashtirish"
+          >
             <QrCodeMatrix value={qrValue} />
             <motion.div
-              animate={{ y: [0, 180, 0] }}
+              animate={{ y: [0, 184, 0] }}
               transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-              className="pointer-events-none absolute inset-x-2 top-2 h-0.5 bg-emerald-400/80 shadow-[0_0_12px_#10B981]"
+              className="pointer-events-none absolute inset-x-3 top-3 h-0.5 bg-emerald-400/80 shadow-[0_0_12px_#10B981]"
+            />
+          </motion.button>
+
+          <div className="mt-3.5 flex items-center gap-3">
+            <p className="text-[11.5px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Yangilanish: <span className="font-bold tabular-nums text-emerald-500">{secondsLeft}s</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                haptic('light');
+                setZoomOpen(true);
+              }}
+              className="liquid-btn rounded-full px-3 py-1 text-[11px] font-bold text-emerald-500"
+            >
+              Kattalashtirish
+            </button>
+          </div>
+
+          <div className="mt-2.5 h-1 w-44 overflow-hidden rounded-full bg-slate-500/20">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+              style={{ width: `${timerPercent}%` }}
             />
           </div>
-          <p className="mt-3 text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-            QR-kod yangilanishiga: <span className="font-bold tabular-nums text-emerald-500">{secondsLeft}s</span>
-          </p>
         </div>
 
         <div className="mt-5 flex items-center justify-between border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -3091,6 +3529,45 @@ function DigitalBadgeView({
           </button>
         </div>
       </Surface>
+
+      {/* Turniket uchun yuqori kontrastli Zoom Modal */}
+      <AnimatePresence>
+        {zoomOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setZoomOpen(false)}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-6 backdrop-blur-2xl"
+          >
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={SPRING_SNAPPY}
+              onClick={(e) => e.stopPropagation()}
+              className="flex flex-col items-center rounded-[36px] bg-white p-6 text-slate-900 shadow-2xl"
+            >
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-600">
+                Turniket Skaneri Rejimi
+              </p>
+              <h4 className="mt-1 text-[17px] font-black">{fullName}</h4>
+              <p className="mb-4 text-[12px] font-semibold text-slate-500">{displayId}</p>
+              <QrCodeMatrix value={qrValue} sizeClass="h-64 w-64" />
+              <p className="mt-4 text-[12px] font-bold tabular-nums text-emerald-600">
+                Kod yangilanishiga: {secondsLeft} soniya
+              </p>
+              <button
+                type="button"
+                onClick={() => setZoomOpen(false)}
+                className="mt-5 w-full rounded-2xl bg-slate-900 py-3 text-[13px] font-bold text-white"
+              >
+                Yopish
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -3108,69 +3585,20 @@ const TAB_META: Record<TabId, { labelKey: string; icon: readonly string[] }> = {
   badge: { labelKey: 'tgapp.tab.badge', icon: I.qrCode },
 };
 
-function useIsKeyboardVisible(): boolean {
-  const [isKeyboard, setIsKeyboard] = useState(false);
-
-  useEffect(() => {
-    const handleFocusIn = (e: FocusEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) {
-        setIsKeyboard(true);
-      }
-    };
-    const handleFocusOut = (e: FocusEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) {
-        setIsKeyboard(false);
-      }
-    };
-
-    window.addEventListener('focusin', handleFocusIn);
-    window.addEventListener('focusout', handleFocusOut);
-
-    const vv = window.visualViewport;
-    const handleResize = () => {
-      if (vv && vv.height < window.innerHeight * 0.8) {
-        setIsKeyboard(true);
-      } else if (vv && vv.height >= window.innerHeight * 0.85) {
-        setIsKeyboard(false);
-      }
-    };
-    vv?.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('focusin', handleFocusIn);
-      window.removeEventListener('focusout', handleFocusOut);
-      vv?.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  return isKeyboard;
-}
-
 function BottomDock({
   tabs,
   active,
   onChange,
   reduced,
+  isKeyboardVisible,
 }: {
   tabs: TabId[];
   active: TabId;
   onChange: (t: TabId) => void;
   reduced: boolean;
+  isKeyboardVisible: boolean;
 }) {
   const { t } = useSafeI18n();
-  const isKeyboardVisible = useIsKeyboardVisible();
   if (tabs.length < 2 || isKeyboardVisible) return null;
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),14px)]">
@@ -3262,7 +3690,7 @@ function GateScreen({
         title="Hisob Ulanmagan"
         message={error}
       >
-        <div className="flex flex-col gap-2 w-full max-w-xs">
+        <div className="flex w-full max-w-xs flex-col gap-2">
           <Btn
             onClick={() => {
               const botUrl = 'https://t.me/medu_education_bot';
@@ -3325,9 +3753,11 @@ export function TelegramWebAppPage() {
   const { user: appUser, status: authStatus, hasAnyRole, refresh } = useAuth();
   const isOnline = useOnlineStatus();
   const reduced = useReducedMotion();
+  const isKeyboardVisible = useIsKeyboardVisible();
 
   const [tgAuthPending, setTgAuthPending] = useState(false);
   const [tgAuthError, setTgAuthError] = useState<string | null>(null);
+  const [isChildSheetOpen, setIsChildSheetOpen] = useState(false);
   const hasAttemptedTgAuthRef = useRef(false);
 
   const handleRetryAuth = useCallback(() => {
@@ -3355,7 +3785,6 @@ export function TelegramWebAppPage() {
     }
   }, [tg?.initData, refresh]);
 
-  // V2 Cryptographic Telegram Zero-Click Auto-Authentication (guarded against loops)
   useEffect(() => {
     if (authStatus === 'unauthenticated' && tg?.initData && !hasAttemptedTgAuthRef.current) {
       hasAttemptedTgAuthRef.current = true;
@@ -3380,7 +3809,6 @@ export function TelegramWebAppPage() {
     }
   }, [authStatus, tg?.initData, refresh]);
 
-  // Zero-click Telegram language synchronization
   useEffect(() => {
     if (tgUser?.language_code) {
       const raw = tgUser.language_code.toLowerCase();
@@ -3438,9 +3866,9 @@ export function TelegramWebAppPage() {
     [activeTab, haptic, reduced, sound],
   );
 
-  // Native Telegram BackButton integration across active tabs
+  // Modal ochiqligida BackButton modalga tegishli bo'ladi, yopilganda esa tab holatiga qaytadi
   useEffect(() => {
-    if (!tg?.BackButton) return;
+    if (!tg?.BackButton || isChildSheetOpen) return;
     const defaultTab = tabs[0];
     if (defaultTab && activeTab !== defaultTab) {
       const handleBack = () => {
@@ -3456,7 +3884,7 @@ export function TelegramWebAppPage() {
     } else {
       tg.BackButton.hide?.();
     }
-  }, [tg, activeTab, tabs, haptic]);
+  }, [tg, activeTab, tabs, haptic, isChildSheetOpen]);
 
   return (
     <div
@@ -3560,17 +3988,37 @@ export function TelegramWebAppPage() {
               transition={SPRING_SMOOTH}
             >
               {activeTab === 'admin' && <AdminView haptic={haptic} />}
-              {activeTab === 'parent' && <ParentView contactAdmin={contactAdmin} haptic={haptic} tg={tg} />}
+              {activeTab === 'parent' && (
+                <ParentView
+                  contactAdmin={contactAdmin}
+                  haptic={haptic}
+                  tg={tg}
+                  onSheetChange={setIsChildSheetOpen}
+                />
+              )}
               {activeTab === 'teacher' && <TeacherView haptic={haptic} />}
-              {activeTab === 'student' && <StudentView haptic={haptic} />}
-              {activeTab === 'ai' && <AiCopilotView haptic={haptic} contactAdmin={contactAdmin} tg={tg} />}
+              {activeTab === 'student' && <StudentView haptic={haptic} tg={tg} />}
+              {activeTab === 'ai' && (
+                <AiCopilotView
+                  haptic={haptic}
+                  contactAdmin={contactAdmin}
+                  tg={tg}
+                  isKeyboardVisible={isKeyboardVisible}
+                />
+              )}
               {activeTab === 'badge' && <DigitalBadgeView appUser={appUser as PassUser | null} haptic={haptic} />}
             </motion.div>
           </AnimatePresence>
         )}
       </main>
 
-      <BottomDock tabs={tabs} active={activeTab} reduced={reduced ?? false} onChange={handleTabChange} />
+      <BottomDock
+        tabs={tabs}
+        active={activeTab}
+        reduced={reduced ?? false}
+        isKeyboardVisible={isKeyboardVisible}
+        onChange={handleTabChange}
+      />
     </div>
   );
 }

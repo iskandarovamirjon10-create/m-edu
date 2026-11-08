@@ -3,7 +3,7 @@
  * Interactive Luxury Audio & Haptic Feedback Controller for Apple VisionOS / Taptic Audio
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   usePremiumSound,
@@ -142,12 +142,20 @@ export function AcousticSoundStudio() {
 
   const [activePreset, setActivePreset] = useState<AcousticPreset | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<'all' | SoundPresetMeta['category']>('all');
+  const testTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (testTimerRef.current) clearTimeout(testTimerRef.current);
+    };
+  }, []);
 
   const handleTestSound = useCallback(
     (id: AcousticPreset) => {
       setActivePreset(id);
       playPreset(id);
-      setTimeout(() => {
+      if (testTimerRef.current) clearTimeout(testTimerRef.current);
+      testTimerRef.current = setTimeout(() => {
         setActivePreset((prev) => (prev === id ? null : prev));
       }, 600);
     },
@@ -280,10 +288,19 @@ export function AcousticSoundStudio() {
           return (
             <motion.div
               key={preset.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`${preset.title} ovozini tinglash`}
               whileHover={{ scale: 1.015 }}
               whileTap={{ scale: 0.985 }}
-              className="group cursor-pointer"
+              className="group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded-2xl"
               onClick={() => handleTestSound(preset.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTestSound(preset.id);
+                }
+              }}
             >
               <GlassCard
                 className={`relative flex h-full flex-col justify-between p-4 transition-all ${

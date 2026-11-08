@@ -79,6 +79,8 @@ function convert(schema: ZodLike): JsonSchemaNode {
       return convert(def?.innerType as ZodLike);
     case 'ZodLiteral':
       return withDescription({ type: typeof def?.value, enum: [def?.value] });
+    case 'ZodEffects':
+      return convert((def as { schema?: ZodLike })?.schema as ZodLike);
     default:
       return withDescription({ type: 'string' });
   }

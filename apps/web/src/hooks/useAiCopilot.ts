@@ -627,7 +627,7 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
         }
       }
     },
-    [getContext, updateStatus, explicitModel],
+    [getContext, updateStatus, explicitModel, explicitRoute],
   );
 
   const retry = useCallback(async () => {

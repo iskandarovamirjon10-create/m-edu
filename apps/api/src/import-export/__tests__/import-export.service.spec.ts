@@ -6,7 +6,7 @@ import { ImportExportService } from '../import-export.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const STUDENT_HEADERS = [
-  'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender',
+  'firstName', 'lastName', 'username', 'email', 'phone', 'dateOfBirth', 'gender',
   'address', 'parentName', 'parentPhone', 'enrollmentDate', 'balance', 'groupName', 'isActive',
 ];
 
@@ -22,6 +22,7 @@ const MOCK_STUDENT = {
   user: {
     firstName: 'Jane',
     lastName: 'Doe',
+    username: 'jane.doe',
     email: 'jane@example.com',
     phone: '555-5678',
   },
@@ -101,6 +102,10 @@ describe('ImportExportService', () => {
     student: { findMany: ReturnType<typeof import('vitest').vi.fn>; create: ReturnType<typeof import('vitest').vi.fn> };
     teacher: { create: ReturnType<typeof import('vitest').vi.fn> };
     group: { findFirst: ReturnType<typeof import('vitest').vi.fn> };
+    user: { findFirst: ReturnType<typeof import('vitest').vi.fn>; create: ReturnType<typeof import('vitest').vi.fn> };
+    organizationMembership: { create: ReturnType<typeof import('vitest').vi.fn> };
+    passwordHistory: { create: ReturnType<typeof import('vitest').vi.fn> };
+    $transaction: ReturnType<typeof import('vitest').vi.fn>;
   };
 
   beforeEach(async () => {
@@ -109,6 +114,10 @@ describe('ImportExportService', () => {
       student: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn().mockResolvedValue({ id: 's1' }) },
       teacher: { create: vi.fn().mockResolvedValue({ id: 't1' }) },
       group: { findFirst: vi.fn().mockResolvedValue({ id: 'g1', name: 'English B1' }) },
+      user: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'u1' }) },
+      organizationMembership: { create: vi.fn().mockResolvedValue({ id: 'm1' }) },
+      passwordHistory: { create: vi.fn().mockResolvedValue({ id: 'ph1' }) },
+      $transaction: vi.fn(async (cb: (tx: any) => Promise<any>) => cb(prisma)),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -454,6 +463,60 @@ describe('ImportExportService', () => {
       const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
       expect(result.success).toBe(true);
       expect(result.importedCount).toBe(1);
+    });
+
+    it('generates collision-free usernames and onboarding credentials with temporary passwords for imported students', async () => {
+      const csv = [
+        'firstName,lastName,email,phone',
+        'Anvar,Qosimov,anvar1@example.com,+998901112233',
+        'Anvar,Qosimov,anvar2@example.com,+998904445566',
+      ].join('\n');
+
+      const file = {
+        buffer: Buffer.from(csv, 'utf-8'),
+        originalname: 'students.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
+      expect(result.success).toBe(true);
+      expect(result.importedCount).toBe(2);
+      expect(result.credentials).toBeDefined();
+      expect(result.credentials?.length).toBe(2);
+
+      const first = result.credentials![0];
+      const second = result.credentials![1];
+
+      expect(first.username).toBe('anvar.qosimov');
+      expect(first.temporaryPassword).toMatch(/^Medu!/);
+      expect(first.temporaryPassword.length).toBeGreaterThanOrEqual(8);
+      expect(first.role).toBe('STUDENT');
+
+      // Second identical name must get resolved collision suffix
+      expect(second.username).toBe('anvar.qosimov2');
+      expect(second.temporaryPassword).toMatch(/^Medu!/);
+    });
+
+    it('transliterates Cyrillic Uzbek names into Latin usernames during bulk import', async () => {
+      const csv = [
+        'firstName,lastName,email,phone',
+        'Шаҳзод,Раҳимов,shahzod@example.com,+998901234567',
+      ].join('\n');
+
+      const file = {
+        buffer: Buffer.from(csv, 'utf-8'),
+        originalname: 'cyrillic_students.csv',
+        mimetype: 'text/csv',
+      };
+
+      const result = await service.startImport('org1', { entityType: 'STUDENT', mode: 'CREATE' }, file);
+      expect(result.success).toBe(true);
+      expect(result.importedCount).toBe(1);
+      expect(result.credentials).toBeDefined();
+
+      const cred = result.credentials![0];
+      expect(cred.username).toBe('shahzod.rahimov');
+      expect(cred.temporaryPassword).toMatch(/^Medu!/);
     });
   });
 });

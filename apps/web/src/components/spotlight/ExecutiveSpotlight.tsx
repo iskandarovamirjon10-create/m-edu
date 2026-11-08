@@ -51,7 +51,10 @@ export const ExecutiveSpotlight = memo(function ExecutiveSpotlight({
 
   const [internalOpen, setInternalOpen] = useState(false);
   const isCurrentlyOpen = isOpen !== undefined ? isOpen : internalOpen;
-  const handleClose = onClose || (() => setInternalOpen(false));
+  const handleClose = useCallback(() => {
+    if (onClose) onClose();
+    else setInternalOpen(false);
+  }, [onClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -305,15 +308,14 @@ export const ExecutiveSpotlight = memo(function ExecutiveSpotlight({
     }
   }, [selectedIndex]);
 
-  if (!isCurrentlyOpen) return null;
-
   return (
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[9999] flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/60 backdrop-blur-xl"
-        onClick={handleClose}
-      >
-        <motion.div
+      {isCurrentlyOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/60 backdrop-blur-xl"
+          onClick={handleClose}
+        >
+          <motion.div
           initial={{ opacity: 0, scale: 0.94, y: -16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: -10 }}
@@ -449,6 +451,7 @@ export const ExecutiveSpotlight = memo(function ExecutiveSpotlight({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 });

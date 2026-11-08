@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { routeConfig, type RouteConfig } from '../index';
-import { STAFF_ROLES } from '@/lib/roles';
+import { ADMIN_ROLES, STAFF_ROLES } from '@/lib/roles';
 import { sanitizeReturnTo } from '../guards';
 
 function flattenRoutes(routes: RouteConfig[], prefix = ''): { path: string; roles?: readonly string[] }[] {
@@ -24,22 +24,17 @@ describe('Route RBAC Security (M-EDU-TEN-001)', () => {
   const allRoutes = flattenRoutes(routeConfig);
   const routeMap = new Map(allRoutes.map((r) => [r.path, r]));
 
-  const staffOnlyPaths = [
+  const adminOnlyPaths = [
     '/payments',
     '/invoices',
     '/reports',
     '/expenses',
     '/leads',
     '/teachers',
-    '/students',
     '/students/new',
-    '/students/:id',
-    '/students/:id/360',
     '/students/:id/edit',
     '/groups/new',
     '/groups/:id/edit',
-    '/face',
-    '/face/enroll',
     '/cameras',
     '/users',
     '/audit',
@@ -48,7 +43,32 @@ describe('Route RBAC Security (M-EDU-TEN-001)', () => {
     '/early-warning',
     '/academic-risk',
     '/communication-history',
+    '/resources',
   ];
+
+  const staffOnlyPaths = [
+    '/students',
+    '/students/:id',
+    '/students/:id/360',
+    '/subjects',
+    '/curriculum',
+    '/assessment',
+    '/courses',
+    '/courses/:id',
+    '/attendance',
+    '/face',
+    '/face/enroll',
+    '/exams',
+    '/certificates',
+    '/certificates/:id',
+  ];
+
+  it.each(adminOnlyPaths)('requires ADMIN_ROLES for %s', (path) => {
+    const route = routeMap.get(path);
+    expect(route).toBeDefined();
+    expect(route?.roles).toBeDefined();
+    expect(route?.roles).toEqual(ADMIN_ROLES);
+  });
 
   it.each(staffOnlyPaths)('requires STAFF_ROLES for %s', (path) => {
     const route = routeMap.get(path);
@@ -57,10 +77,10 @@ describe('Route RBAC Security (M-EDU-TEN-001)', () => {
     expect(route?.roles).toEqual(STAFF_ROLES);
   });
 
-  it('restricts parent-portal to PARENT role', () => {
+  it('restricts parent-portal to PARENT and ADMIN_ROLES', () => {
     const route = routeMap.get('/parent-portal');
     expect(route).toBeDefined();
-    expect(route?.roles).toEqual(['PARENT']);
+    expect(route?.roles).toEqual(['PARENT', ...ADMIN_ROLES]);
   });
 
   describe('sanitizeReturnTo (DEP-03 Open Redirect Protection)', () => {

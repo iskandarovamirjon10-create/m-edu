@@ -99,6 +99,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         - VITE_API_URL=${VITE_API_URL:-/api}
+        # PERF-01: keep production bundles minified by default.
+        - VITE_MINIFY=${VITE_MINIFY:-true}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"

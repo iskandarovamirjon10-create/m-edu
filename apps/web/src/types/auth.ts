@@ -6,6 +6,7 @@ export type Role =
   | 'PLATFORM_OWNER'
   | 'SUPER_ADMIN'
   | 'ORG_ADMIN'
+  | 'ADMIN'
   | 'MANAGER'
   | 'TEACHER'
   | 'ASSISTANT'
@@ -34,7 +35,10 @@ export interface UserSettings {
 
 export interface User {
   id: string;
-  email: string;
+  username?: string;
+  email?: string;
+  mustChangePassword?: boolean;
+  memberships?: Array<{ organizationId: string; organizationName?: string; role: Role; status: string }>;
   firstName: string;
   lastName: string;
   phone?: string | null;
@@ -45,10 +49,14 @@ export interface User {
   lastLoginAt?: string | null;
   organization?: Organization;
   settings?: UserSettings | null;
+  createdAt?: string;
+  updatedAt?: string;
+  faceEnrolled?: boolean;
 }
 
 export interface AuthResponse {
   accessToken: string;
+  mustChangePassword?: boolean;
   user: User;
 }
 

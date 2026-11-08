@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateLessonContentDto, UpdateLessonStatusDto } from './lesson.dto';
 import { parsePagination } from '../lib/pagination';
@@ -115,8 +115,27 @@ export class LessonsService {
     return lesson;
   }
 
-  async updateStatus(organizationId: string, id: string, dto: UpdateLessonStatusDto) {
+  async updateStatus(
+    organizationId: string,
+    id: string,
+    dto: UpdateLessonStatusDto,
+    currentUser?: { id?: string; role?: string; sub?: string },
+  ) {
     const lesson = await this.findOne(organizationId, id);
+
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id || currentUser.sub, organizationId },
+        select: { id: true },
+      });
+      const isMyLesson = Boolean(
+        (teacher && lesson.teacherId === teacher.id) ||
+        (teacher && (lesson.Group as any)?.teacherId === teacher.id),
+      );
+      if (!isMyLesson) {
+        throw new ForbiddenException('Siz faqat o‘zingiz biriktirilgan darslar holatini o‘zgartira olasiz');
+      }
+    }
 
     const updateData: any = { status: dto.status };
     if (dto.status === 'CANCELLED') {
@@ -133,8 +152,27 @@ export class LessonsService {
     });
   }
 
-  async updateContent(organizationId: string, id: string, dto: UpdateLessonContentDto) {
+  async updateContent(
+    organizationId: string,
+    id: string,
+    dto: UpdateLessonContentDto,
+    currentUser?: { id?: string; role?: string; sub?: string },
+  ) {
     const lesson = await this.findOne(organizationId, id);
+
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id || currentUser.sub, organizationId },
+        select: { id: true },
+      });
+      const isMyLesson = Boolean(
+        (teacher && lesson.teacherId === teacher.id) ||
+        (teacher && (lesson.Group as any)?.teacherId === teacher.id),
+      );
+      if (!isMyLesson) {
+        throw new ForbiddenException('Siz faqat o‘zingiz biriktirilgan darslar mazmunini tahrirlay olasiz');
+      }
+    }
 
     if (dto.topicId) {
       // Tenant isolation: only a topic that resolves back to the caller's

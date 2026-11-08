@@ -27,6 +27,7 @@ export class AssignmentsService {
     // SECURITY: family roles must never list every assignment in the org
     // (titles, due dates, submission counts of other groups). Scope them to
     // their own enrolled groups (student) / linked children's groups (parent).
+    // Teachers are scoped to their assigned groups.
     let allowedGroupIds: string[] | undefined;
     if (requester?.role === 'STUDENT') {
       const student = await this.prisma.student.findUnique({
@@ -55,10 +56,21 @@ export class AssignmentsService {
       });
       allowedGroupIds = enrollments.map((e) => e.groupId);
       where.groupId = { in: allowedGroupIds };
+    } else if (requester?.role === 'TEACHER' || requester?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      const teacherGroups = await this.prisma.group.findMany({
+        where: { teacherId: teacher?.id || '00000000-0000-0000-0000-000000000000', organizationId },
+        select: { id: true },
+      });
+      allowedGroupIds = teacherGroups.map((g) => g.id);
+      where.groupId = { in: allowedGroupIds };
     }
 
     // SECURITY: intersect the requested group with the allowed set instead of
-    // overwriting it, otherwise `?groupId=other` bypasses the family scoping.
+    // overwriting it, otherwise `?groupId=other` bypasses the scoping.
     if (query.groupId) {
       where.groupId =
         allowedGroupIds !== undefined
@@ -123,14 +135,39 @@ export class AssignmentsService {
     });
 
     if (!assignment) throw new NotFoundException('Assignment not found');
+
+    if (requester?.role === 'TEACHER' || requester?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      const group = await this.prisma.group.findFirst({
+        where: { id: assignment.groupId, organizationId },
+        select: { teacherId: true },
+      });
+      if (!teacher || group?.teacherId !== teacher.id) {
+        throw new ForbiddenException('Teachers can only view assignments for their assigned groups');
+      }
+    }
+
     return assignment;
   }
 
-  async create(organizationId: string, dto: CreateAssignmentDto) {
+  async create(organizationId: string, dto: CreateAssignmentDto, requester?: { id: string; role: string }) {
     const group = await this.prisma.group.findFirst({
       where: { id: dto.groupId, organizationId },
     });
     if (!group) throw new NotFoundException('Group not found');
+
+    if (requester?.role === 'TEACHER' || requester?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || group.teacherId !== teacher.id) {
+        throw new ForbiddenException('Teachers can only create assignments for their assigned groups');
+      }
+    }
 
     if (dto.lessonId) {
       const lesson = await this.prisma.lesson.findFirst({
@@ -166,6 +203,11 @@ export class AssignmentsService {
     });
     if (!student || student.organizationId !== organizationId) {
       throw new NotFoundException('Student profile not found');
+    }
+
+    // Security: ensure student submissions are strictly tied to the authenticated student's record
+    if ((dto as any).studentId && (dto as any).studentId !== student.id) {
+      throw new ForbiddenException('Cannot submit assignment on behalf of another student');
     }
 
     // Check enrollment
@@ -212,6 +254,7 @@ export class AssignmentsService {
     submissionId: string,
     graderUserId: string,
     dto: GradeSubmissionDto,
+    requester?: { id: string; role: string },
   ) {
     const submission = await this.prisma.assignmentSubmission.findUnique({
       where: { id: submissionId },
@@ -219,6 +262,21 @@ export class AssignmentsService {
     });
     if (!submission || submission.Assignment.organizationId !== organizationId) {
       throw new NotFoundException('Submission not found');
+    }
+
+    // Object-level authorization: Teachers can only grade submissions for students in their assigned groups
+    if (requester?.role === 'TEACHER' || requester?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      const group = await this.prisma.group.findFirst({
+        where: { id: submission.Assignment.groupId, organizationId },
+        select: { teacherId: true },
+      });
+      if (!teacher || group?.teacherId !== teacher.id) {
+        throw new ForbiddenException('Teachers can only grade submissions for students in their assigned groups');
+      }
     }
 
     if (dto.score > submission.Assignment.maxScore) {

@@ -265,8 +265,8 @@ export function MultiCameraAttendanceDirector({
                       className="absolute w-28 h-36 rounded-xl border-2 border-cyan-400 bg-cyan-400/10 flex flex-col justify-between p-1.5 pointer-events-none"
                     >
                       <div className="flex items-center justify-between text-[8px] font-mono text-cyan-300 bg-black/80 px-1 rounded">
-                        <span>ID: #9941</span>
-                        <span>98.4%</span>
+                        <span>SIM</span>
+                        <span>—</span>
                       </div>
                       <div className="text-[8px] font-bold text-center text-white bg-cyan-500/80 rounded py-0.5">
                         Talaba Aniqlangan

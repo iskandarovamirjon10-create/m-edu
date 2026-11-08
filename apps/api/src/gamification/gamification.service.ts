@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isFamilyRole } from '../auth/authorization.policy';
 
 /** XP/coin rewards per gamified event. */
 export const XP_RULES = {
@@ -104,9 +105,29 @@ export interface RewardItem {
   title: string;
   description: string;
   costCoins: number;
-  category: 'MERCH' | 'DISCOUNT' | 'BOOK' | 'PERK';
+  type?: 'PRODUCT' | 'COUPON' | string;
+  category: 'MERCH' | 'DISCOUNT' | 'BOOK' | 'PERK' | string;
   icon: string;
+  imageUrl?: string | null;
+  stock?: number | null;
+  couponCode?: string | null;
+  isActive?: boolean;
 }
+
+export interface CreateRewardInput {
+  title: string;
+  description?: string;
+  costCoins: number;
+  type?: 'PRODUCT' | 'COUPON';
+  category?: string;
+  icon?: string;
+  imageUrl?: string;
+  stock?: number;
+  couponCode?: string;
+  isActive?: boolean;
+}
+
+export interface UpdateRewardInput extends Partial<CreateRewardInput> {}
 
 export const REWARD_CATALOG: RewardItem[] = [
   {
@@ -280,10 +301,10 @@ export class GamificationService {
   async getMyStats(studentId: string, organizationId: string) {
     const stats = await this.prisma.studentGamification.findUnique({
       where: { studentId },
-      select: { xp: true, coins: true, level: true, updatedAt: true },
+      select: { xp: true, coins: true, level: true, updatedAt: true, organizationId: true },
     });
 
-    if (!stats) {
+    if (!stats || (stats.organizationId && stats.organizationId !== organizationId)) {
       return {
         xp: 0,
         coins: 0,
@@ -325,9 +346,15 @@ export class GamificationService {
    */
   async getLeaderboard(
     organizationId: string,
-    options: { groupId?: string; limit?: number } = {},
+    options: {
+      groupId?: string;
+      limit?: number;
+      requester?: { id: string; role: string; studentId?: string };
+    } = {},
   ): Promise<Array<LeaderboardEntry>> {
     const limit = Math.min(Math.max(1, options.limit ?? 20), 100);
+    const isStaff = options.requester?.role ? !isFamilyRole(options.requester.role) : true;
+    const requestingStudentId = options.requester?.studentId;
 
     if (options.groupId) {
       // Group-scoped ranking: rank computed within the group.
@@ -375,6 +402,8 @@ export class GamificationService {
       const totalCount = rows.length;
       return rows.map((row) => {
         const rank = Number(row.rank);
+        // Security: Students can only view their own coins. Other students' coins are masked as 0.
+        const coins = isStaff || (requestingStudentId && row.studentId === requestingStudentId) ? row.coins : 0;
         return {
           rank,
           studentId: row.studentId,
@@ -383,7 +412,7 @@ export class GamificationService {
           groupId: row.group_id,
           groupName: row.group_name,
           xp: row.xp,
-          coins: row.coins,
+          coins,
           level: row.level,
           league: leagueForXp(row.xp),
           zone: computeZone(rank, totalCount),
@@ -430,6 +459,8 @@ export class GamificationService {
     const totalCount = rows.length;
     return rows.map((row) => {
       const rank = Number(row.rank);
+      // Security: Students can only view their own coins. Other students' coins are masked as 0.
+      const coins = isStaff || (requestingStudentId && row.studentId === requestingStudentId) ? row.coins : 0;
       return {
         rank,
         studentId: row.studentId,
@@ -438,7 +469,7 @@ export class GamificationService {
         groupId: row.group_id,
         groupName: row.group_name,
         xp: row.xp,
-        coins: row.coins,
+        coins,
         level: row.level,
         league: leagueForXp(row.xp),
         zone: computeZone(rank, totalCount),
@@ -497,46 +528,241 @@ export class GamificationService {
     };
   }
   /** Get all redeemable items in the M-Coins reward store. */
-  async getRewards(): Promise<RewardItem[]> {
-    return REWARD_CATALOG;
+  async getRewards(organizationId?: string, includeInactive = false): Promise<RewardItem[]> {
+    if (!organizationId) {
+      return REWARD_CATALOG;
+    }
+
+    const items = await this.prisma.gamificationReward.findMany({
+      where: {
+        organizationId,
+        ...(includeInactive ? {} : { isActive: true }),
+      },
+      orderBy: [{ isActive: 'desc' }, { costCoins: 'asc' }],
+    });
+
+    if (items.length === 0) {
+      return REWARD_CATALOG;
+    }
+
+    return items.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description ?? '',
+      costCoins: r.costCoins,
+      type: r.type,
+      category: r.category ?? 'MERCH',
+      icon: r.icon ?? '🎁',
+      imageUrl: r.imageUrl,
+      stock: r.stock,
+      couponCode: r.couponCode,
+      isActive: r.isActive,
+    }));
+  }
+
+  /** Create new reward in catalog (Admin only). */
+  async createReward(organizationId: string, input: CreateRewardInput): Promise<RewardItem> {
+    const created = await this.prisma.gamificationReward.create({
+      data: {
+        organizationId,
+        title: input.title,
+        description: input.description ?? '',
+        costCoins: Math.max(1, input.costCoins),
+        type: input.type ?? (input.couponCode ? 'COUPON' : 'PRODUCT'),
+        category: input.category ?? 'MERCH',
+        icon: input.icon ?? (input.type === 'COUPON' ? '🎟️' : '🎁'),
+        imageUrl: input.imageUrl ?? null,
+        stock: input.stock !== undefined ? input.stock : null,
+        couponCode: input.couponCode ?? null,
+        isActive: input.isActive ?? true,
+      },
+    });
+
+    return {
+      id: created.id,
+      title: created.title,
+      description: created.description ?? '',
+      costCoins: created.costCoins,
+      type: created.type,
+      category: created.category ?? 'MERCH',
+      icon: created.icon ?? '🎁',
+      imageUrl: created.imageUrl,
+      stock: created.stock,
+      couponCode: created.couponCode,
+      isActive: created.isActive,
+    };
+  }
+
+  /** Update reward in catalog (Admin only). */
+  async updateReward(organizationId: string, rewardId: string, input: UpdateRewardInput): Promise<RewardItem> {
+    const existing = await this.prisma.gamificationReward.findFirst({
+      where: { id: rewardId, organizationId },
+    });
+    if (!existing) {
+      throw new BadRequestException('Mukofot topilmadi');
+    }
+
+    const updated = await this.prisma.gamificationReward.update({
+      where: { id: rewardId },
+      data: {
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.costCoins !== undefined ? { costCoins: Math.max(1, input.costCoins) } : {}),
+        ...(input.type !== undefined ? { type: input.type } : {}),
+        ...(input.category !== undefined ? { category: input.category } : {}),
+        ...(input.icon !== undefined ? { icon: input.icon } : {}),
+        ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+        ...(input.stock !== undefined ? { stock: input.stock } : {}),
+        ...(input.couponCode !== undefined ? { couponCode: input.couponCode } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    return {
+      id: updated.id,
+      title: updated.title,
+      description: updated.description ?? '',
+      costCoins: updated.costCoins,
+      type: updated.type,
+      category: updated.category ?? 'MERCH',
+      icon: updated.icon ?? '🎁',
+      imageUrl: updated.imageUrl,
+      stock: updated.stock,
+      couponCode: updated.couponCode,
+      isActive: updated.isActive,
+    };
+  }
+
+  /** Delete reward (Admin only). */
+  async deleteReward(organizationId: string, rewardId: string): Promise<{ success: boolean }> {
+    const existing = await this.prisma.gamificationReward.findFirst({
+      where: { id: rewardId, organizationId },
+    });
+    if (!existing) {
+      throw new BadRequestException('Mukofot topilmadi');
+    }
+
+    await this.prisma.gamificationReward.delete({
+      where: { id: rewardId },
+    });
+
+    return { success: true };
   }
 
   /** Spend M-Coins to claim a reward item. */
   async claimReward(studentId: string, organizationId: string, rewardId: string) {
-    const reward = REWARD_CATALOG.find((r) => r.id === rewardId);
-    if (!reward) {
-      throw new BadRequestException('Bunday mukofot do’konda topilmadi');
+    // 1. Look up reward from DB
+    const dbReward = this.prisma.gamificationReward
+      ? await this.prisma.gamificationReward.findFirst({
+          where: { id: rewardId, organizationId, isActive: true },
+        })
+      : null;
+
+    let costCoins = 0;
+    let title = '';
+    let isCoupon = false;
+    let couponCode: string | null = null;
+    let returnReward: RewardItem;
+
+    if (dbReward) {
+      if (dbReward.stock !== null && dbReward.stock <= 0) {
+        throw new BadRequestException('Ushbu mukofot omborda tugagan');
+      }
+      costCoins = dbReward.costCoins;
+      title = dbReward.title;
+      isCoupon = dbReward.type === 'COUPON';
+      couponCode = dbReward.couponCode;
+      returnReward = {
+        id: dbReward.id,
+        title: dbReward.title,
+        description: dbReward.description ?? '',
+        costCoins: dbReward.costCoins,
+        type: dbReward.type,
+        category: dbReward.category ?? 'MERCH',
+        icon: dbReward.icon ?? '🎁',
+        imageUrl: dbReward.imageUrl,
+        stock: dbReward.stock,
+        couponCode: dbReward.couponCode,
+        isActive: dbReward.isActive,
+      };
+    } else {
+      const fallback = REWARD_CATALOG.find((r) => r.id === rewardId);
+      if (!fallback) {
+        throw new BadRequestException('Bunday mukofot do’konda topilmadi');
+      }
+      costCoins = fallback.costCoins;
+      title = fallback.title;
+      isCoupon = fallback.category === 'DISCOUNT' || fallback.category === 'PERK';
+      returnReward = fallback;
+    }
+
+    // Verify student belongs to this organization
+    const student = await this.prisma.student.findFirst({
+      where: { id: studentId, organizationId },
+      select: { id: true },
+    });
+    if (!student) {
+      throw new BadRequestException('Talaba profili topilmadi');
     }
 
     // Atomic debit: the conditional update only lands while the balance still
-    // covers the cost, so two concurrent claims can never go negative.
+    // covers the cost and belongs to the correct organization, so two concurrent claims can never go negative.
     const debit = await this.prisma.studentGamification.updateMany({
-      where: { studentId, coins: { gte: reward.costCoins } },
-      data: { coins: { decrement: reward.costCoins } },
+      where: { studentId, organizationId, coins: { gte: costCoins } },
+      data: { coins: { decrement: costCoins } },
     });
 
     if (debit.count === 0) {
-      const current = await this.prisma.studentGamification.findUnique({
-        where: { studentId },
+      const current = await this.prisma.studentGamification.findFirst({
+        where: { studentId, organizationId },
         select: { coins: true },
       });
       throw new BadRequestException(
-        `Coinlar yetarli emas. Sizda: ${current?.coins ?? 0}, kerak: ${reward.costCoins}`,
+        `Coinlar yetarli emas. Sizda: ${current?.coins ?? 0}, kerak: ${costCoins}`,
       );
     }
 
-    const updated = await this.prisma.studentGamification.findUniqueOrThrow({
-      where: { studentId },
+    // If reward was in DB and has finite stock, decrement stock
+    if (dbReward && dbReward.stock !== null && dbReward.stock > 0 && this.prisma.gamificationReward) {
+      await this.prisma.gamificationReward.update({
+        where: { id: dbReward.id },
+        data: { stock: { decrement: 1 } },
+      }).catch(() => {});
+    }
+
+    // Create claim record in DB
+    if (dbReward && this.prisma.rewardClaim) {
+      await this.prisma.rewardClaim.create({
+        data: {
+          organizationId,
+          rewardId: dbReward.id,
+          studentId,
+          costCoins,
+          couponCode: isCoupon ? couponCode : null,
+          status: 'CLAIMED',
+        },
+      }).catch((err) => {
+        this.logger.warn(`Failed to record reward claim: ${err?.message}`);
+      });
+    }
+
+    const updated = await this.prisma.studentGamification.findFirstOrThrow({
+      where: { studentId, organizationId },
       select: { coins: true, xp: true, level: true },
     });
 
-    this.logger.log(`Student ${studentId} claimed reward ${reward.title} for ${reward.costCoins} coins.`);
+    this.logger.log(`Student ${studentId} claimed reward ${title} for ${costCoins} coins.`);
+
+    const message = isCoupon && couponCode
+      ? `Tabriklaymiz! "${title}" kuponi olindi. Promo-kod: ${couponCode}`
+      : `Tabriklaymiz! "${title}" xarid qilindi. Administrator sizga yetkazib beradi.`;
 
     return {
       success: true,
-      reward,
+      reward: returnReward,
+      couponCode: isCoupon ? couponCode : undefined,
       remainingCoins: updated.coins,
-      message: `Tabriklaymiz! "${reward.title}" xarid qilindi. Administrator sizga yetkazib beradi.`,
+      message,
     };
   }
 

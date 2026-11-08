@@ -33,6 +33,7 @@ export const analyticsRu: AnalyticsSlices = {
   'common.offline': 'Нет подключения — изменения могут не сохраниться',
   'a11y.mainNav': 'Основная навигация',
   'a11y.closeMenu': 'Закрыть меню',
+  'a11y.dragToClose': 'Потяните, чтобы закрыть меню',
   'a11y.select': 'Выберите…',
   'a11y.switchToLight': 'Переключить на светлую тему',
   'a11y.switchToDark': 'Переключить на тёмную тему',

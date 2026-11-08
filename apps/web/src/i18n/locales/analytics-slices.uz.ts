@@ -33,6 +33,7 @@ export const analyticsUz: AnalyticsSlices = {
   'common.offline': 'Internet yo\'q — o\'zgarishlar saqlanmasligi mumkin',
   'a11y.mainNav': 'Asosiy navigatsiya',
   'a11y.closeMenu': 'Menyuni yopish',
+  'a11y.dragToClose': 'Menyuni yopish uchun torting',
   'a11y.select': 'Tanlang…',
   'a11y.switchToLight': 'Yorug\' mavzuga o\'tish',
   'a11y.switchToDark': 'Tungi mavzuga o\'tish',

@@ -82,14 +82,15 @@ export class ToolOrchestratorService {
     const validated = this.validateInput(call);
     if (!validated.ok) return this.failure(call, validated.error);
 
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const dataPromise = tool.execute(validated.value, context);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(
           () => reject(new Error(`Tool execution timed out after ${TOOL_TIMEOUT_MS}ms`)),
           TOOL_TIMEOUT_MS,
-        ),
-      );
+        );
+      });
 
       const rawData = await Promise.race([dataPromise, timeoutPromise]);
       const durationMs = Date.now() - start;
@@ -140,6 +141,10 @@ export class ToolOrchestratorService {
           : 'The tool could not complete the request',
         retryable: true,
       });
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
     }
   }
 

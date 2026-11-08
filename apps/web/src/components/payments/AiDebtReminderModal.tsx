@@ -107,7 +107,9 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
 
   const handleCopy = () => {
     if (!draft) return;
-    navigator.clipboard.writeText(draft);
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(draft).catch(() => {});
+    }
     setCopied(true);
     sound.playSuccess();
     haptics.light();

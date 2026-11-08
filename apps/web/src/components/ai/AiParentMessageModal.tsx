@@ -35,7 +35,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
     open = props.isOpen ?? false,
     onClose,
     studentName,
-    studentId: _studentId,
+    studentId,
     initialTopic = 'attendance',
     initialDetails = '',
     balanceDue = 0,
@@ -53,8 +53,10 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
     setLoading(true);
     try {
       const res = await aiApi.draftParentMessage({
+        studentId,
         studentName,
         topic,
+        tone,
         details: details.trim() || undefined,
         balanceDue: balanceDue > 0 ? balanceDue : undefined,
       });

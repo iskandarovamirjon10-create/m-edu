@@ -49,7 +49,8 @@ import {
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { fullName, formatCurrency } from '@/lib/format';
-import type { Paginated, Teacher } from '@/lib/types';
+import type { Paginated } from '@/lib/types';
+import type { Teacher } from '@/types/academics';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePrefersReducedMotion } from '@/layouts/core/singletons';
@@ -644,13 +645,13 @@ export function TeachersPage() {
     else if (statusFilter === 'INACTIVE') list = list.filter((t) => t.user?.isActive === false);
     else if (statusFilter === 'HIGH_WORKLOAD') {
       list = list.filter((t) => {
-        const weeklyHours = (t as any).metrics?.weeklyHours ?? 0;
-        const groupsCount = (t as any).metrics?.groupsCount ?? ((t as any)._count?.groups ?? (t as any).groups?.length ?? 0);
+        const weeklyHours = t.metrics?.weeklyHours ?? 0;
+        const groupsCount = t.metrics?.groupsCount ?? (t._count?.groups ?? t.groups?.length ?? 0);
         return weeklyHours >= 20 || groupsCount >= 3;
       });
     } else if (statusFilter === 'AVAILABLE') {
       list = list.filter((t) => {
-        const groupsCount = (t as any).metrics?.groupsCount ?? ((t as any)._count?.groups ?? (t as any).groups?.length ?? 0);
+        const groupsCount = t.metrics?.groupsCount ?? (t._count?.groups ?? t.groups?.length ?? 0);
         return groupsCount === 0;
       });
     }

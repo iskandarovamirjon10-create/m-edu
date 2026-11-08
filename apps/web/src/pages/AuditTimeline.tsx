@@ -211,7 +211,7 @@ export function AuditTimelinePage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING.smooth}
-      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
+      className="relative min-h-full bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       <AuroraMesh variant="security" opacity={0.65} />
 
@@ -382,7 +382,7 @@ export function AuditTimelinePage() {
                               setDiffModalEvent(item);
                             }}
                             className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm backdrop-blur-md transition-all hover:bg-indigo-500/20"
-                            title="Diff Ko'rish"
+                            title="Diff Ko‘rish"
                           >
                             <span>⚡</span>
                             <span>Diff</span>
@@ -424,7 +424,7 @@ export function AuditTimelinePage() {
         open={Boolean(diffModalEvent)}
         onClose={() => setDiffModalEvent(null)}
         size="xl"
-        title={`O'zgarishlar Tafsiloti (Diff) · ${diffModalEvent?.action || ''} ${diffModalEvent?.entityType || ''}`}
+        title={`O‘zgarishlar Tafsiloti (Diff) · ${diffModalEvent?.action || ''} ${diffModalEvent?.entityType || ''}`}
         description={`${diffModalEvent?.entityLabel || diffModalEvent?.description || ''} · Bajaruvchi: ${diffModalEvent?.actorName || 'Tizim'}`}
       >
         {diffModalEvent && (

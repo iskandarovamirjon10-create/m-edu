@@ -66,8 +66,8 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
         // Check for auto-tags
         const lower = current.toLowerCase();
         detectedTags.forEach(({ word, tag }) => {
-          if (lower.includes(word) && !selectedTags.includes(tag)) {
-            setSelectedTags((prev) => [...prev, tag]);
+          if (lower.includes(word)) {
+            setSelectedTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
           }
         });
       };
@@ -78,6 +78,12 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
 
       recognitionRef.current = recognition;
     }
+
+    return () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch (_) {}
+    };
   }, []);
 
   // Timer while recording

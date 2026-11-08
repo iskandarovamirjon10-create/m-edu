@@ -134,7 +134,8 @@ export const AVATAR_PALETTES = [
 ];
 
 export function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  const palette = AVATAR_PALETTES[Math.abs(nameHash(name || '')) % AVATAR_PALETTES.length] || AVATAR_PALETTES[0];
+  const [a, b] = palette;
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 

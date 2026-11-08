@@ -102,7 +102,9 @@ export const GlassSwitch = forwardRef<HTMLInputElement, GlassSwitchProps>(functi
       {(label || hint || error) && (
         <div className="min-w-0 flex-1">
           {label && (
-            <span className="block text-sm font-medium text-[var(--text-primary)]">{label}</span>
+            <label htmlFor={id} className="block text-sm font-medium text-[var(--text-primary)] cursor-pointer select-none">
+              {label}
+            </label>
           )}
           {hint && !error && (
             <span className="mt-0.5 block text-xs text-[var(--text-tertiary)]">{hint}</span>

@@ -46,10 +46,13 @@ export class AssignmentsController {
   @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Create a new assignment for a group' })
   create(
-    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() user: RequestUser,
     @Body() dto: CreateAssignmentDto,
   ) {
-    return this.assignmentsService.create(orgId, dto);
+    return this.assignmentsService.create(user.organizationId, dto, {
+      id: user.id || user.sub,
+      role: user.role,
+    });
   }
 
   @AllowAnyRole()
@@ -57,24 +60,28 @@ export class AssignmentsController {
   @Roles('STUDENT')
   @ApiOperation({ summary: 'Submit homework/assignment (Student only)' })
   submit(
-    @CurrentUser('organizationId') orgId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SubmitAssignmentDto,
   ) {
-    return this.assignmentsService.submit(orgId, id, userId, dto);
+    return this.assignmentsService.submit(user.organizationId, id, user.id || user.sub, dto);
   }
 
   @Patch('submissions/:submissionId/grade')
   @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Grade student submission and provide feedback' })
   gradeSubmission(
-    @CurrentUser('organizationId') orgId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
     @Param('submissionId', ParseUUIDPipe) submissionId: string,
     @Body() dto: GradeSubmissionDto,
   ) {
-    return this.assignmentsService.gradeSubmission(orgId, submissionId, userId, dto);
+    return this.assignmentsService.gradeSubmission(
+      user.organizationId,
+      submissionId,
+      user.id || user.sub,
+      dto,
+      { id: user.id || user.sub, role: user.role },
+    );
   }
 }
 

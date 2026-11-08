@@ -443,7 +443,7 @@ export function FollowUpAutomationPage() {
 
   if (rulesLoading || followUpsLoading || statsLoading) {
     return (
-      <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+      <div className="min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
         <GlassPageHeader title={t('followUp.title')} subtitle={t('followUp.loadingSubtitle')} />
         <div className="mt-8 rounded-2xl p-16 flex items-center justify-center glass-card">
           <GlassPageLoader label={t('followUp.loading')} />
@@ -454,7 +454,7 @@ export function FollowUpAutomationPage() {
 
   if (rulesError || followUpsError || statsError) {
     return (
-      <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+      <div className="min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
         <GlassPageHeader title={t('followUp.title')} subtitle={t('followUp.connectionError')} />
         <div className="mt-8 rounded-2xl p-12 glass-card">
           <GlassErrorState
@@ -467,7 +467,7 @@ export function FollowUpAutomationPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       {/* AuroraMesh substrate */}
       <AuroraMesh variant="corporate" />
 

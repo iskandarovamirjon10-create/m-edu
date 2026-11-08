@@ -1,6 +1,7 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TelegramService } from './telegram.service';
+import { TelegramPollingService } from './telegram-polling.service';
 import {
   TELEGRAM_COMMANDS,
   TelegramCommandHandler,
@@ -16,7 +17,9 @@ import { TELEGRAM_LANGUAGES, TelegramLanguage, t } from './i18n/telegram-i18n';
  *      language plus an English default list;
  *   2. registers the webhook (`setWebhook`) when `TELEGRAM_WEBHOOK_URL` is
  *      configured, passing the same `TELEGRAM_WEBHOOK_SECRET` the controller
- *      verifies, so a secret rotation is applied by simply restarting.
+ *      verifies;
+ *   3. OR if running in development without a public webhook URL (or TELEGRAM_POLLING=true),
+ *      automatically starts Long-Polling so local developers can test the bot without ngrok.
  *
  * Both calls are idempotent and best-effort: a Telegram outage at boot must
  * never prevent the API from serving M-EDU. No secret, token or payload is
@@ -33,6 +36,7 @@ export class TelegramBootstrapService implements OnModuleInit {
     private readonly config: ConfigService,
     private readonly telegram: TelegramService,
     @Inject(TELEGRAM_COMMANDS) private readonly commands: TelegramCommandHandler[],
+    @Optional() private readonly polling?: TelegramPollingService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -42,10 +46,34 @@ export class TelegramBootstrapService implements OnModuleInit {
     // Each phase is independent: a command-menu failure must not skip webhook
     // registration, and neither may ever fail the API boot.
     await this.runPhase('command_menu_sync', () => this.syncCommandMenu());
-    await this.runPhase('webhook_registration', () => this.registerWebhook());
+
+    const pollingForced = this.config.get<string>('TELEGRAM_POLLING') === 'true';
+    const webhookUrl = this.config.get<string>('TELEGRAM_WEBHOOK_URL')?.trim();
+    const nodeEnv = this.config.get<string>('NODE_ENV') || process.env.NODE_ENV;
+    const isDev = nodeEnv !== 'production' && nodeEnv !== 'test';
+
+    if (pollingForced || (isDev && !webhookUrl)) {
+      if (this.polling) {
+        await this.runPhase('long_polling_auto_start', async () => {
+          this.logger.log(
+            JSON.stringify({
+              event: 'telegram_long_polling_auto_activated',
+              reason: pollingForced ? 'TELEGRAM_POLLING_flag' : 'dev_mode_without_webhook_url',
+              hint: 'Telegram bot will receive updates via Long-Polling (local/dev mode).',
+            }),
+          );
+          await this.polling?.startPolling();
+        });
+        return;
+      }
+    }
+
+    await this.runPhase('webhook_registration', async () => {
+      await this.registerWebhook();
+    });
   }
 
-  private async runPhase(event: string, phase: () => Promise<void>): Promise<void> {
+  private async runPhase(event: string, phase: () => Promise<unknown>): Promise<void> {
     try {
       await phase();
     } catch (error: unknown) {
@@ -104,13 +132,14 @@ export class TelegramBootstrapService implements OnModuleInit {
     );
   }
 
-  private async registerWebhook(): Promise<void> {
+  public async registerWebhook(): Promise<boolean> {
+    // Ensure polling is stopped if active
+    if (this.polling?.isPolling()) {
+      this.polling.stopPolling();
+    }
+
     const url = this.config.get<string>('TELEGRAM_WEBHOOK_URL')?.trim();
     if (!url) {
-      // Without a registered webhook Telegram has nowhere to deliver updates:
-      // every message (including /start) is silently dropped on Telegram's
-      // side. Make that state loud at boot — it is the #1 cause of "bot never
-      // replies" in local/dev environments.
       this.logger.warn(
         JSON.stringify({
           event: 'telegram_webhook_registration_skipped',
@@ -118,20 +147,18 @@ export class TelegramBootstrapService implements OnModuleInit {
           hint: 'Set TELEGRAM_WEBHOOK_URL to the public HTTPS endpoint of /api/webhooks/telegram and restart.',
         }),
       );
-      return;
+      return false;
     }
 
     const secret = this.config.get<string>('TELEGRAM_WEBHOOK_SECRET');
     if (!secret) {
-      // Registering without a secret would make the controller reject every
-      // update (fail closed). Refuse to register instead of half-configuring.
       this.logger.warn(
         JSON.stringify({
           event: 'telegram_webhook_registration_skipped',
           reason: 'secret_not_configured',
         }),
       );
-      return;
+      return false;
     }
 
     const ok = await this.telegram.setWebhook(url, secret);
@@ -142,6 +169,8 @@ export class TelegramBootstrapService implements OnModuleInit {
           reason: 'telegram_rejected_or_unreachable',
         }),
       );
+      return false;
     }
+    return true;
   }
 }

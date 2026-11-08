@@ -854,7 +854,7 @@ export function NotificationsCenterPage() {
      MAIN
   --------------------------------------------------------------- */
   return (
-    <div className="relative min-h-screen pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
 
       <motion.div

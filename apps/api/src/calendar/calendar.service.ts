@@ -14,17 +14,86 @@ export interface CalendarEventQuery {
 export class CalendarService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: CalendarEventQuery) {
+  async findAll(
+    organizationId: string,
+    query: CalendarEventQuery,
+    requester?: { id: string; role: string },
+  ) {
     const where: any = { organizationId };
 
-    if (query.groupId) where.groupId = query.groupId;
     if (query.teacherId) where.teacherId = query.teacherId;
-    if (query.type) where.type = query.type;
 
     if (query.start || query.end) {
-      where.AND = [];
+      where.AND = where.AND || [];
       if (query.start) where.AND.push({ endDate: { gte: new Date(query.start) } });
       if (query.end) where.AND.push({ startDate: { lte: new Date(query.end) } });
+    }
+
+    // Security: confidential staff or admin events must NEVER be returned to parents or students
+    const CONFIDENTIAL_STAFF_EVENT_TYPES = ['TEACHER_MEETING', 'MEETING'];
+
+    if (requester?.role === 'STUDENT') {
+      if (query.type && CONFIDENTIAL_STAFF_EVENT_TYPES.includes(query.type)) {
+        return [];
+      }
+      where.type = query.type ? query.type : { notIn: CONFIDENTIAL_STAFF_EVENT_TYPES };
+
+      const student = await this.prisma.student.findUnique({
+        where: { userId: requester.id },
+      });
+      if (!student || student.organizationId !== organizationId) {
+        return [];
+      }
+      const enrollments = await this.prisma.studentGroup.findMany({
+        where: { studentId: student.id, isActive: true },
+        select: { groupId: true },
+      });
+      const allowedGroupIds = enrollments.map((e) => e.groupId);
+
+      if (query.groupId) {
+        if (!allowedGroupIds.includes(query.groupId)) {
+          return [];
+        }
+        where.groupId = query.groupId;
+      } else {
+        where.AND = where.AND || [];
+        where.AND.push({
+          OR: [{ groupId: null }, { groupId: { in: allowedGroupIds } }],
+        });
+      }
+    } else if (requester?.role === 'PARENT') {
+      if (query.type && CONFIDENTIAL_STAFF_EVENT_TYPES.includes(query.type)) {
+        return [];
+      }
+      where.type = query.type ? query.type : { notIn: CONFIDENTIAL_STAFF_EVENT_TYPES };
+
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      const enrollments = await this.prisma.studentGroup.findMany({
+        where: {
+          studentId: { in: children.map((c) => c.studentId) },
+          isActive: true,
+        },
+        select: { groupId: true },
+      });
+      const allowedGroupIds = enrollments.map((e) => e.groupId);
+
+      if (query.groupId) {
+        if (!allowedGroupIds.includes(query.groupId)) {
+          return [];
+        }
+        where.groupId = query.groupId;
+      } else {
+        where.AND = where.AND || [];
+        where.AND.push({
+          OR: [{ groupId: null }, { groupId: { in: allowedGroupIds } }],
+        });
+      }
+    } else {
+      if (query.groupId) where.groupId = query.groupId;
+      if (query.type) where.type = query.type;
     }
 
     const events = await this.prisma.calendarEvent.findMany({

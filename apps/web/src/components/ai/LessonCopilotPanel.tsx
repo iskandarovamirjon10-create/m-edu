@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { lessonsApi } from '@/lib/api';
@@ -22,6 +22,13 @@ export function LessonCopilotPanel({
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'AT_RISK' | 'CHECKPOINTS' | 'TASKS'>('TASKS');
   const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+    };
+  }, []);
 
   const {
     data: copilot,
@@ -41,7 +48,8 @@ export function LessonCopilotPanel({
     const formatted = `\n[${task.badgeText}]: ${task.taskTitle}\nTopshiriq: ${task.taskPrompt}\nEslatma: ${task.solutionHint}`;
     onApplyDifferentiatedTaskToNotes(formatted);
     setCopiedTaskId(task.tier + '-notes');
-    setTimeout(() => setCopiedTaskId(null), 2000);
+    if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+    copiedTimeoutRef.current = setTimeout(() => setCopiedTaskId(null), 2000);
   };
 
   const handleApplyHomework = (task: DifferentiatedTask) => {
@@ -51,7 +59,8 @@ export function LessonCopilotPanel({
       description: `${task.taskPrompt}\n\nKo'rsatma / Maslahat: ${task.solutionHint}`,
     });
     setCopiedTaskId(task.tier + '-hw');
-    setTimeout(() => setCopiedTaskId(null), 2000);
+    if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+    copiedTimeoutRef.current = setTimeout(() => setCopiedTaskId(null), 2000);
   };
 
   const atRiskCount = copilot?.atRiskStudents?.length || 0;

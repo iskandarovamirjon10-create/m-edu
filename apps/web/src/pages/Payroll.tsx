@@ -413,8 +413,8 @@ function KpiTile({
       {/* tinted orb */}
       <span
         aria-hidden
-        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.14] transition-opacity group-hover:opacity-25"
-        style={{ background: c.fg, filter: 'blur(30px)' }}
+        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.14] transition-opacity group-hover:opacity-25 blur-2xl transform-gpu"
+        style={{ background: c.fg }}
       />
 
       <div className="relative flex items-center gap-2">
@@ -485,8 +485,8 @@ function CurrencyKpiTile({
       />
       <span
         aria-hidden
-        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.14] transition-opacity group-hover:opacity-25"
-        style={{ background: c.fg, filter: 'blur(30px)' }}
+        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.14] transition-opacity group-hover:opacity-25 blur-2xl transform-gpu"
+        style={{ background: c.fg }}
       />
 
       <div className="relative flex items-center gap-2">

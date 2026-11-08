@@ -16,9 +16,11 @@ import {
   useCallback,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { cn, usePrefersReducedMotion, SPRING, EASE_APPLE } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useAuth } from '@/auth/AuthContext';
+import { ADMIN_ROLES, STAFF_ROLES } from '@/lib/roles';
 import { useFocusTrap } from '../core/singletons';
 import { StaticIcon, PremiumIcon, I } from './Icons';
 
@@ -38,22 +40,23 @@ export interface ShortcutRow {
    * If `false` (default for two arrow keys), they are alternatives (↑ / ↓).
    */
   combination?: boolean;
+  roles?: readonly string[];
 }
 
 export const SHORTCUTS: readonly ShortcutRow[] = [
   { keys: ['⌘', 'K'], labelKey: 'shortcuts.commandPalette', fallback: 'Open command palette', category: 'command', combination: true },
   { keys: ['⌘', 'B'], labelKey: 'shortcuts.toggleSidebar', fallback: 'Toggle sidebar', category: 'command', combination: true },
-  { keys: ['⌘', 'E'], labelKey: 'shortcuts.executiveDashboard', fallback: 'Executive Suite', category: 'command', combination: true },
+  { keys: ['⌘', 'E'], labelKey: 'shortcuts.executiveDashboard', fallback: 'Executive Suite', category: 'command', combination: true, roles: ADMIN_ROLES },
   { keys: ['⌘', 'R'], labelKey: 'shortcuts.refreshData', fallback: 'Refresh live data', category: 'command', combination: true },
   { keys: ['⌘', '/'], labelKey: 'shortcuts.showShortcuts', fallback: 'Show keyboard shortcuts', category: 'command', combination: true },
   { keys: ['?'], labelKey: 'shortcuts.quickHelp', fallback: 'Show keyboard shortcuts cheat sheet', category: 'command', combination: false },
-  { keys: ['G', 'S'], labelKey: 'shortcuts.goStudents', fallback: 'Go to Students (O\'quvchilar)', category: 'navigation', combination: false },
-  { keys: ['G', 'F'], labelKey: 'shortcuts.goFinance', fallback: 'Go to Finance & Payments (Moliya)', category: 'navigation', combination: false },
-  { keys: ['G', 'A'], labelKey: 'shortcuts.goAttendance', fallback: 'Go to Attendance (Davomat)', category: 'navigation', combination: false },
-  { keys: ['G', 'D'], labelKey: 'shortcuts.goDashboard', fallback: 'Go to Dashboard (Bosh sahifa)', category: 'navigation', combination: false },
-  { keys: ['G', 'G'], labelKey: 'shortcuts.goGroups', fallback: 'Go to Groups (Guruhlar)', category: 'navigation', combination: false },
-  { keys: ['N', 'P'], labelKey: 'shortcuts.quickPayment', fallback: 'Quick Payment modal (Tezkor to\'lov)', category: 'command', combination: false },
-  { keys: ['N', 'A'], labelKey: 'shortcuts.quickAttendance', fallback: 'Quick Attendance modal (Tezkor davomat)', category: 'command', combination: false },
+  { keys: ['G', 'S'], labelKey: 'shortcuts.goStudents', fallback: 'Go to Students (O\'quvchilar)', category: 'navigation', combination: false, roles: STAFF_ROLES },
+  { keys: ['G', 'F'], labelKey: 'shortcuts.goFinance', fallback: 'Go to Finance & Payments (Moliya)', category: 'navigation', combination: false, roles: ADMIN_ROLES },
+  { keys: ['G', 'A'], labelKey: 'shortcuts.goAttendance', fallback: 'Go to Attendance (Davomat)', category: 'navigation', combination: false, roles: STAFF_ROLES },
+  { keys: ['G', 'D'], labelKey: 'shortcuts.goDashboard', fallback: 'Go to Dashboard (Bosh sahifa)', category: 'navigation', combination: false, roles: ADMIN_ROLES },
+  { keys: ['G', 'G'], labelKey: 'shortcuts.goGroups', fallback: 'Go to Groups (Guruhlar)', category: 'navigation', combination: false, roles: STAFF_ROLES },
+  { keys: ['N', 'P'], labelKey: 'shortcuts.quickPayment', fallback: 'Quick Payment modal (Tezkor to\'lov)', category: 'command', combination: false, roles: ADMIN_ROLES },
+  { keys: ['N', 'A'], labelKey: 'shortcuts.quickAttendance', fallback: 'Quick Attendance modal (Tezkor davomat)', category: 'command', combination: false, roles: STAFF_ROLES },
   { keys: ['Space'], labelKey: 'shortcuts.quickLook', fallback: 'Quick-Look preview (macOS)', category: 'navigation', combination: false },
   { keys: ['/'], labelKey: 'shortcuts.focusSearch', fallback: 'Focus search', category: 'navigation', combination: false },
   { keys: ['↑', '↓'], labelKey: 'shortcuts.navMenu', fallback: 'Navigate sidebar menu', category: 'navigation', combination: false },
@@ -69,7 +72,7 @@ const FOCUS =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--border-focus)]';
 
 const KEYCAP =
-  'inline-flex min-w-[1.85rem] items-center justify-center rounded-md border border-subtle bg-black/[0.03] px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-primary)] dark:bg-white/[0.06]';
+  'inline-flex min-w-[1.85rem] items-center justify-center rounded-lg border border-subtle bg-surface/80 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_1px_2px_rgba(0,0,0,0.06)] backdrop-blur-md dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_1px_2px_rgba(0,0,0,0.4)]';
 
 const KEYCAP_PRESSED =
   'translate-y-px border-brand-500/60 bg-brand-500/10 text-brand-600 dark:bg-brand-500/20 dark:text-brand-400';
@@ -150,7 +153,9 @@ export const ShortcutsModal = memo(function ShortcutsModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
+  const { user } = useAuth();
+  const userRole = user?.role;
   const reduced = usePrefersReducedMotion();
   const isApple = useIsApplePlatform();
   const sound = usePremiumSound();
@@ -250,18 +255,20 @@ export const ShortcutsModal = memo(function ShortcutsModal({
   /* 3 · Group rows + resolve the OS modifier glyph */
   const { commandRows, navRows } = useMemo(() => {
     const adaptKey = (k: string) => (k === '⌘' && !isApple ? 'Ctrl' : k);
-    const mapped = SHORTCUTS.map((row) => ({
-      ...row,
-      resolvedKeys: row.keys.map(adaptKey),
-      isCombination:
-        row.combination ??
-        (row.keys.length === 2 && !row.keys.every((k) => k === '↑' || k === '↓')),
-    }));
+    const mapped = SHORTCUTS
+      .filter((row) => !row.roles || (userRole && (row.roles as readonly string[]).includes(userRole)))
+      .map((row) => ({
+        ...row,
+        resolvedKeys: row.keys.map(adaptKey),
+        isCombination:
+          row.combination ??
+          (row.keys.length === 2 && !row.keys.every((k) => k === '↑' || k === '↓')),
+      }));
     return {
       commandRows: mapped.filter((r) => (r.category ?? 'command') === 'command'),
       navRows: mapped.filter((r) => r.category === 'navigation'),
     };
-  }, [isApple]);
+  }, [isApple, userRole]);
 
   const isPressed = useCallback(
     (glyph: string) => pressedKeys.has(normalizeGlyph(glyph, isApple)),
@@ -276,9 +283,9 @@ export const ShortcutsModal = memo(function ShortcutsModal({
   }) => (
     <div
       key={row.labelKey}
-      className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-black/[0.02] dark:hover:bg-white/[0.04]"
+      className="flex items-center justify-between gap-4 rounded-xl px-3 py-2 transition-colors duration-150 hover:bg-surface/50"
     >
-      <span className="text-sm font-medium text-[var(--text-primary)]">
+      <span className="text-sm font-medium text-primary">
         {t(row.labelKey, row.fallback)}
       </span>
 
@@ -286,7 +293,7 @@ export const ShortcutsModal = memo(function ShortcutsModal({
         {row.resolvedKeys.map((k, i) => (
           <span key={`${k}-${i}`} className="inline-flex items-center gap-1">
             {i > 0 && (
-              <span className="text-[11px] font-medium text-[var(--text-tertiary)]" aria-hidden="true">
+              <span className="text-[11px] font-medium text-tertiary" aria-hidden="true">
                 {row.isCombination ? '+' : '/'}
               </span>
             )}
@@ -326,22 +333,22 @@ export const ShortcutsModal = memo(function ShortcutsModal({
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={reduced ? { opacity: 0 } : { y: 10, opacity: 0, scale: 0.98 }}
             transition={reduced ? { duration: 0.1 } : SPRING.smooth}
-            className="relative z-10 w-full max-w-[520px] overflow-hidden rounded-2xl border border-subtle bg-[var(--bg-card)] shadow-modal"
+            className="glass-modal relative z-10 w-full max-w-[520px] overflow-hidden rounded-3xl p-0 shadow-glass-floating"
           >
             {/* Header */}
             <div className="flex items-center justify-between gap-3 border-b border-subtle px-6 py-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/10 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400">
                   <PremiumIcon paths={I.keyboard} isActive size={18} />
                 </span>
                 <div>
                   <h2
                     id={titleId}
-                    className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]"
+                    className="text-[15px] font-semibold tracking-tight text-primary"
                   >
                     {t('nav.shortcuts', 'Keyboard shortcuts')}
                   </h2>
-                  <p id={descId} className="text-xs text-[var(--text-secondary)]">
+                  <p id={descId} className="text-xs text-secondary">
                     {isApple
                       ? 'macOS Command Suite'
                       : t('shortcuts.subtitle', 'Quick control keys')}
@@ -355,9 +362,9 @@ export const ShortcutsModal = memo(function ShortcutsModal({
                 aria-label={t('common.close', 'Close')}
                 title={`${t('common.close', 'Close')} (Esc)`}
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-lg border border-subtle',
-                  'text-[var(--text-secondary)] transition-colors duration-150',
-                  'hover:bg-black/[0.04] hover:text-[var(--text-primary)] dark:hover:bg-white/[0.06]',
+                  'flex h-8 w-8 min-h-[32px] min-w-[32px] items-center justify-center rounded-full border border-subtle bg-surface/60',
+                  'text-secondary transition-colors duration-150',
+                  'hover:bg-surface hover:text-primary',
                   FOCUS,
                 )}
               >
@@ -368,7 +375,7 @@ export const ShortcutsModal = memo(function ShortcutsModal({
             {/* Body */}
             <div className="max-h-[68vh] overflow-y-auto overscroll-contain px-3 py-3">
               <div>
-                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
                   {t('shortcuts.sectionCommands', 'Quick commands')}
                 </p>
                 <div className="space-y-0.5">{commandRows.map(renderRow)}</div>
@@ -377,7 +384,7 @@ export const ShortcutsModal = memo(function ShortcutsModal({
               <div className="my-3 border-t border-subtle" role="separator" aria-hidden="true" />
 
               <div>
-                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
                   {t('shortcuts.sectionNavigation', 'Navigation & window')}
                 </p>
                 <div className="space-y-0.5">{navRows.map(renderRow)}</div>
@@ -385,11 +392,11 @@ export const ShortcutsModal = memo(function ShortcutsModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between gap-3 border-t border-subtle bg-black/[0.02] px-6 py-3 text-[11px] font-medium text-[var(--text-tertiary)] dark:bg-white/[0.03]">
+            <div className="flex items-center justify-between gap-3 border-t border-subtle bg-surface/40 px-6 py-3 text-[11px] font-medium text-tertiary">
               <span>{t('shortcuts.footerTip', 'Open anywhere:')}</span>
               <span className="inline-flex items-center gap-1">
                 <Keycap glyph={isApple ? '⌘' : 'Ctrl'} pressed={isPressed(isApple ? '⌘' : 'Ctrl')} />
-                <span className="text-[var(--text-tertiary)]" aria-hidden="true">
+                <span className="text-tertiary" aria-hidden="true">
                   +
                 </span>
                 <Keycap glyph="/" pressed={isPressed('/')} />

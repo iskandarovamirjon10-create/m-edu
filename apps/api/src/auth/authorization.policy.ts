@@ -29,10 +29,11 @@
 import { Role } from '@prisma/client';
 
 /** Roles that may touch money, billing, payroll and platform configuration. */
-export const ADMIN_ROLES: readonly Role[] = [Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER];
+export const ADMIN_ROLES: readonly Role[] = [Role.PLATFORM_OWNER, Role.SUPER_ADMIN, Role.ORG_ADMIN, Role.MANAGER];
 
 /** Every internal employee role (no family/self-service accounts). */
 export const STAFF_ROLES: readonly Role[] = [
+  Role.PLATFORM_OWNER,
   Role.SUPER_ADMIN,
   Role.ORG_ADMIN,
   Role.MANAGER,

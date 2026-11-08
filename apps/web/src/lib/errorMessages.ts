@@ -11,7 +11,8 @@ import { ApiError } from './api';
 import { friendlyFaceError, type SupportedLocale } from './faceErrors';
 import { getStoredLocale } from '@/i18n';
 
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const UUID_GLOBAL_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 export function getErrorMessage(err: unknown, requestedLocale?: string): string {
   const locale: SupportedLocale =
@@ -322,7 +323,7 @@ export function humanizeErrorMessage(raw: string, locale: SupportedLocale = 'en'
   // Fallback: If unhandled string contains raw UUIDs, strip them out cleanly
   if (UUID_REGEX.test(trimmed)) {
     const sanitized = trimmed
-      .replace(UUID_REGEX, '')
+      .replace(UUID_GLOBAL_REGEX, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
     return sanitized || (locale === 'uz' ? 'So‘rov bajarilmadi.' : locale === 'ru' ? 'Запрос не выполнен.' : 'Request failed.');

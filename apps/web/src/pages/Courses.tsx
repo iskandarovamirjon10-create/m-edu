@@ -279,7 +279,10 @@ const COURSE_PALETTES = [
 ];
 
 function courseGradient(name?: string): string {
-  const [a, b] = COURSE_PALETTES[nameHash(name) % COURSE_PALETTES.length];
+  const palette =
+    COURSE_PALETTES[Math.abs(nameHash(name || '')) % COURSE_PALETTES.length] ||
+    COURSE_PALETTES[0];
+  const [a, b] = palette;
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
@@ -622,8 +625,8 @@ const CourseCard = forwardRef<HTMLDivElement, {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             transition={SPRING.snappy}
-            aria-label="AI kurs me'mori (AI Course Architect)"
-            title="AI kurs me'mori"
+            aria-label="AI kurs meʼmori (AI Course Architect)"
+            title="AI kurs meʼmori"
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-brand-600 dark:text-brand-400 hover:text-brand-500 hover:border-brand-500/40 transition-colors"
           >
             <Icon paths={I.sparkles} size={15} strokeWidth={2} />
@@ -821,8 +824,8 @@ const CourseTableRow = forwardRef<HTMLDivElement, {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           transition={SPRING.snappy}
-          aria-label="AI kurs me'mori (AI Course Architect)"
-          title="AI kurs me'mori"
+          aria-label="AI kurs meʼmori (AI Course Architect)"
+          title="AI kurs meʼmori"
           className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-brand-600 dark:text-brand-400 hover:text-brand-500 hover:border-brand-500/40 transition-colors"
         >
           <Icon paths={I.sparkles} size={15} strokeWidth={2} />
@@ -1652,7 +1655,7 @@ export function CoursesPage() {
           onClear={clearSelection}
           actions={[
             {
-              label: "Holatni o'zgartirish (Toggle status)",
+              label: "Holatni o‘zgartirish (Toggle status)",
               icon: '🔄',
               onClick: () => setBulkModal('status'),
               variant: 'primary',

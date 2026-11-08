@@ -14,7 +14,8 @@ export type HapticStyle =
   | 'success'
   | 'warning'
   | 'error'
-  | 'selection';
+  | 'selection'
+  | (string & {});
 
 export const TG_SDK_SRC = 'https://telegram.org/js/telegram-web-app.js';
 export const SUPPORT_TG = 'https://t.me/medu_admin';
@@ -295,41 +296,51 @@ export function useTelegram() {
    * Telegram ichida native HapticFeedback, oddiy mobil brauzerda navigator.vibrate ishlaydi.
    */
   const haptic = useCallback((style: HapticStyle = 'light') => {
-    const sdk = currentSnapshot.tg;
-    const hf = sdk?.HapticFeedback;
+    try {
+      const s = String(style);
+      const sdk = currentSnapshot.tg;
+      const hf = sdk?.HapticFeedback;
 
-    if (currentSnapshot.inTelegram && hf) {
-      try {
-        if (style === 'selection') {
+      if (currentSnapshot.inTelegram && hf) {
+        if (s === 'selection') {
           hf.selectionChanged?.();
           return;
         }
-        if (style === 'success' || style === 'warning' || style === 'error') {
-          hf.notificationOccurred?.(style);
+        if (s === 'success' || s === 'celebration') {
+          hf.notificationOccurred?.('success');
           return;
         }
-        hf.impactOccurred?.(style);
+        if (s === 'warning' || s === 'notificationWarning') {
+          hf.notificationOccurred?.('warning');
+          return;
+        }
+        if (s === 'error' || s === 'notificationError') {
+          hf.notificationOccurred?.('error');
+          return;
+        }
+        const impact =
+          s === 'heavy' || s === 'rigid' ? 'heavy'
+          : s === 'medium' || s === 'impactMedium' ? 'medium'
+          : s === 'soft' ? 'soft'
+          : 'light';
+        hf.impactOccurred?.(impact);
         return;
-      } catch {
-        // Fallback to Web Vibration API below if native haptic fails
       }
-    }
 
-    // Web Browser Fallback (Android Chrome / PWA)
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      try {
+      // Web Browser Fallback (Android Chrome / PWA)
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
         const pattern =
-          style === 'selection' ? 5
-          : style === 'light' || style === 'soft' ? 10
-          : style === 'medium' ? 18
-          : style === 'heavy' || style === 'rigid' ? 28
-          : style === 'success' ? [12, 50, 18]
-          : style === 'warning' ? [20, 60, 20]
+          s === 'selection' ? 5
+          : s === 'light' || s === 'soft' || s === 'impactLight' ? 10
+          : s === 'medium' || s === 'impactMedium' ? 18
+          : s === 'heavy' || s === 'rigid' ? 28
+          : s === 'success' || s === 'celebration' ? [12, 50, 18]
+          : s === 'warning' || s === 'notificationWarning' ? [20, 60, 20]
           : [30, 50, 30, 50, 40]; // error
         navigator.vibrate(pattern);
-      } catch {
-        // Ignore blocked vibrate calls
       }
+    } catch {
+      // Safe fallback
     }
   }, []);
 

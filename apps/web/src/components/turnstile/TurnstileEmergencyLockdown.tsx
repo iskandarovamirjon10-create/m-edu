@@ -47,6 +47,12 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
     };
   }, [onModeChange]);
 
+  useEffect(() => {
+    if (currentMode) {
+      setActiveMode(currentMode);
+    }
+  }, [currentMode]);
+
   const initiateModeSwitch = useCallback((mode: TurnstileSecurityMode) => {
     playTick();
     if (mode === activeMode) return;
@@ -284,7 +290,12 @@ export const TurnstileEmergencyLockdown = memo(function TurnstileEmergencyLockdo
                   disabled={isSubmitting}
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handlePinSubmit()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isSubmitting && pinInput.length >= 4) {
+                      e.preventDefault();
+                      void handlePinSubmit();
+                    }
+                  }}
                   placeholder="••••"
                   className="w-36 text-center text-2xl tracking-[0.4em] font-mono py-2 rounded-xl bg-white/10 border border-white/20 focus:border-white focus:outline-none"
                 />

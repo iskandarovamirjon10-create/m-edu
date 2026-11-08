@@ -11,6 +11,7 @@
  *  - Conflict-free merging and retry controls
  * ============================================================================
  */
+import { useState, useEffect } from 'react';
 import { apiUrl, readXsrfCookie, ensureCsrfCookie } from './api';
 
 export interface QueuedAction {
@@ -389,8 +390,6 @@ if (typeof window !== 'undefined') {
 /* ============================================================================
  * React Hook: useOfflineSync
  * ========================================================================== */
-
-import { useState, useEffect } from 'react';
 
 export function useOfflineSync(): OfflineSyncState & {
   syncNow: () => Promise<{ successCount: number; failedCount: number }>;

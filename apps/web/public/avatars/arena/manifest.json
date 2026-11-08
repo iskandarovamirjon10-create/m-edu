@@ -1,0 +1,647 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-11-06T12:23:38.749Z",
+  "standardResolution": "1024x1024",
+  "thumbnailResolution": "256x256",
+  "format": "image/png",
+  "fallbackFormat": "image/svg+xml",
+  "totalAvatars": 12,
+  "avatars": {
+    "cyber-scholar": {
+      "slug": "cyber-scholar",
+      "name": "Cyber Scholar",
+      "title": "Tahlilchi va Kashfiyotchi",
+      "description": "Chuqur mantiq, ilmiy tadqiqot va kiber-intellekt egasi. Har bir savolga matematik aniqlik bilan yondashadi.",
+      "element": "TECH",
+      "rarity": "COMMON",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#00F2FE",
+        "secondary": "#4FACFE",
+        "accent": "#00C9FF",
+        "glow": "#00F2FE"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/cyber-scholar/default.png",
+          "svgPath": "/avatars/arena/cyber-scholar/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 404397,
+          "contentHash": "sha256:0b2e4c5b3b6e6a15c19981925f999828573de13868975b16e72ba51f4189cfd1"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/cyber-scholar/battle.png",
+          "svgPath": "/avatars/arena/cyber-scholar/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 400234,
+          "contentHash": "sha256:e07749a8618360a36a87f1933a5a00052916effac3939ffa6cf72e4036cc8d72"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/cyber-scholar/victory.png",
+          "svgPath": "/avatars/arena/cyber-scholar/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 434629,
+          "contentHash": "sha256:cdfbd276bbf85cd0e7d125be93242eb7071baedb95f236ae368f14ad957357c7"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/cyber-scholar/thumbnail.png",
+          "svgPath": "/avatars/arena/cyber-scholar/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 67138,
+          "contentHash": "sha256:99a060014c5e53e7744c672ad551354bec2b011775975601026a84b5595f8fa7"
+        }
+      }
+    },
+    "quantum-owl": {
+      "slug": "quantum-owl",
+      "name": "Quantum Owl",
+      "title": "Tungi Daho",
+      "description": "Tunning qorong'uligida ham eng yashirin haqiqatlarni ko'ra oladigan, kvant ehtimolliklarini hisoblovchi dono alloma.",
+      "element": "QUANTUM",
+      "rarity": "RARE",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#8A2387",
+        "secondary": "#E94057",
+        "accent": "#F27121",
+        "glow": "#E94057"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/quantum-owl/default.png",
+          "svgPath": "/avatars/arena/quantum-owl/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 385512,
+          "contentHash": "sha256:9cceb77b1c66b93e4bee0d39fae4d6f5b8de12178c56e9a0e84eb3a1cec5e90c"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/quantum-owl/battle.png",
+          "svgPath": "/avatars/arena/quantum-owl/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 385523,
+          "contentHash": "sha256:715f19d4032c702638e015baa10efbfb584297ad263cb8875609c961f03d666a"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/quantum-owl/victory.png",
+          "svgPath": "/avatars/arena/quantum-owl/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 418360,
+          "contentHash": "sha256:d0610bf5f26c157f27ffa3a39a78accbf6b27f8fda31d42e5ca1000edb393d18"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/quantum-owl/thumbnail.png",
+          "svgPath": "/avatars/arena/quantum-owl/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 64311,
+          "contentHash": "sha256:761fbb0e0496b5075a998881a37f0be79ae562b24f338539d4c011077c6d25ff"
+        }
+      }
+    },
+    "neon-samurai": {
+      "slug": "neon-samurai",
+      "name": "Neon Samurai",
+      "title": "Tezkor Qilich",
+      "description": "Yashin tezligidagi reflekslar va sharaf kodeksi. Qat'iyatli va har qanday shiddatli duelda birinchi zarba beruvchi.",
+      "element": "NEON",
+      "rarity": "RARE",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#FF0844",
+        "secondary": "#FF4E50",
+        "accent": "#FFB199",
+        "glow": "#FF0844"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/neon-samurai/default.png",
+          "svgPath": "/avatars/arena/neon-samurai/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 365286,
+          "contentHash": "sha256:acf5c80af80c1afb802201dda310c1382e942935da96e4f413efb803029cccd7"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/neon-samurai/battle.png",
+          "svgPath": "/avatars/arena/neon-samurai/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 365846,
+          "contentHash": "sha256:f9e69a0f22440549e6127791b5e9abe6e24cff99fdf6cc6a3cf944a31689370b"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/neon-samurai/victory.png",
+          "svgPath": "/avatars/arena/neon-samurai/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 398598,
+          "contentHash": "sha256:3ba7339f83e95947844e78ae69695c7f01fc1314098be41567b871f9b24f50f5"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/neon-samurai/thumbnail.png",
+          "svgPath": "/avatars/arena/neon-samurai/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 63425,
+          "contentHash": "sha256:f13d77235a45efc94872f6361550e2113606243939ee8c25e3329e525646fa19"
+        }
+      }
+    },
+    "algorithm-dragon": {
+      "slug": "algorithm-dragon",
+      "name": "Algorithm Dragon",
+      "title": "Mantiq Giganti",
+      "description": "Cheksiz hisoblash quvvati va mag'rur ruhiyat. Murakkab algoritmlarni bir necha soniyada parchalab tashlaydi.",
+      "element": "VOID",
+      "rarity": "EPIC",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#00F5D4",
+        "secondary": "#00BBF9",
+        "accent": "#70E000",
+        "glow": "#00F5D4"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/algorithm-dragon/default.png",
+          "svgPath": "/avatars/arena/algorithm-dragon/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 400936,
+          "contentHash": "sha256:9d5394aa5e883bc7616d051dd9a13bf8bbc145f77786d217c924b2a867d740a7"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/algorithm-dragon/battle.png",
+          "svgPath": "/avatars/arena/algorithm-dragon/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 401319,
+          "contentHash": "sha256:356488144a37b0a69fdbb582e31340733a81fe3a14029cfc7babedf9197be6cb"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/algorithm-dragon/victory.png",
+          "svgPath": "/avatars/arena/algorithm-dragon/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 434859,
+          "contentHash": "sha256:580eac9c544b4b8b65979f441d6720b442eee0d36321a0aadf92de8d2579b66f"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/algorithm-dragon/thumbnail.png",
+          "svgPath": "/avatars/arena/algorithm-dragon/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 65123,
+          "contentHash": "sha256:34bbc545f9283c51a0423dc08ff8076ab9aab9a8e532b79e003a993b0d4d4d9b"
+        }
+      }
+    },
+    "astro-voyager": {
+      "slug": "astro-voyager",
+      "name": "Astro Voyager",
+      "title": "Koinot Sayyohi",
+      "description": "Koinotning cheksiz sirlarini zabt etgan kashfiyotchi. Har bir yangi duel u uchun yangi yulduz tizimini kashf qilishdek.",
+      "element": "COSMIC",
+      "rarity": "COMMON",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#FA709A",
+        "secondary": "#FEE140",
+        "accent": "#38EF7D",
+        "glow": "#FEE140"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/astro-voyager/default.png",
+          "svgPath": "/avatars/arena/astro-voyager/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 418875,
+          "contentHash": "sha256:5508646a5802f2d88f96150cf07b73cec5462a4c5d5002e7d623c15ab0f743f3"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/astro-voyager/battle.png",
+          "svgPath": "/avatars/arena/astro-voyager/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 415652,
+          "contentHash": "sha256:7d7295813cb16972294a6a7a0838294fa9a5e295fb07d860f5f37f2391a2cefd"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/astro-voyager/victory.png",
+          "svgPath": "/avatars/arena/astro-voyager/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 447490,
+          "contentHash": "sha256:746e13bc0fc36585efafa9db2363ff7819bbea00f3bd975fc3a222f092f06242"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/astro-voyager/thumbnail.png",
+          "svgPath": "/avatars/arena/astro-voyager/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 68866,
+          "contentHash": "sha256:fb802e919c83fed001569708eac1359452b52340580f2bf8c1326cb3bcf3a150"
+        }
+      }
+    },
+    "matrix-fox": {
+      "slug": "matrix-fox",
+      "name": "Matrix Fox",
+      "title": "Ayyor Zukko",
+      "description": "Chaqqon va noan'anaviy fikrlash ustasi. Raqib kutmagan yondashuvlar bilan g'alabani ilib ketadi.",
+      "element": "TECH",
+      "rarity": "COMMON",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#F39C12",
+        "secondary": "#E67E22",
+        "accent": "#F1C40F",
+        "glow": "#F39C12"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/matrix-fox/default.png",
+          "svgPath": "/avatars/arena/matrix-fox/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 386076,
+          "contentHash": "sha256:65a08e41d05f0e1db3ff537dc08af3dc589456614413776521cff50ba64901e5"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/matrix-fox/battle.png",
+          "svgPath": "/avatars/arena/matrix-fox/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 386072,
+          "contentHash": "sha256:818557cc52ed98fab0e1a4f4150c908d34433a7e8cdf2ecbd0a0589f329cfc36"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/matrix-fox/victory.png",
+          "svgPath": "/avatars/arena/matrix-fox/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 416115,
+          "contentHash": "sha256:5c48e99f11dd41082770e57be63666111e68e671d9343002b9c11ad1b17aabd3"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/matrix-fox/thumbnail.png",
+          "svgPath": "/avatars/arena/matrix-fox/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 64623,
+          "contentHash": "sha256:c751e42e5b768a3bb5d720a1e196f05240c8262ed69a50786a433a85ad74d0d7"
+        }
+      }
+    },
+    "pixel-panther": {
+      "slug": "pixel-panther",
+      "name": "Pixel Panther",
+      "title": "Kiber Pantera",
+      "description": "Sokin, ammo xatoga o'rin qoldirmaydigan yirtqich tezlik. Sekundning yuzdan bir ulushida to'g'ri qaror qabul qiladi.",
+      "element": "NEON",
+      "rarity": "RARE",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#FF007F",
+        "secondary": "#7928CA",
+        "accent": "#00D2FF",
+        "glow": "#FF007F"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/pixel-panther/default.png",
+          "svgPath": "/avatars/arena/pixel-panther/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 392386,
+          "contentHash": "sha256:57978d8082216709337eefb658e44a0038c988ed61dc5ee3ed5fd324bc79ecaf"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/pixel-panther/battle.png",
+          "svgPath": "/avatars/arena/pixel-panther/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 390402,
+          "contentHash": "sha256:2d4836bdd5982c6038a222218bf154907dba31996c94bcb3f599fd4960294715"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/pixel-panther/victory.png",
+          "svgPath": "/avatars/arena/pixel-panther/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 426424,
+          "contentHash": "sha256:e7a10853e45eaf35c5815909ef513aa04be67697928e0d0cc8ec6be9f94e10b0"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/pixel-panther/thumbnail.png",
+          "svgPath": "/avatars/arena/pixel-panther/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 64876,
+          "contentHash": "sha256:f029603f2736bb2b859afa0d3056b53a40950cb2b5b914a0c028bd68931e6514"
+        }
+      }
+    },
+    "arcane-falcon": {
+      "slug": "arcane-falcon",
+      "name": "Arcane Falcon",
+      "title": "Uzoqni Ko'rar Strateg",
+      "description": "Maydonga balanddan nazar tashlab, butun o'yin strategiyasini bir necha qadam oldindan rejalashtiruvchi lochin.",
+      "element": "QUANTUM",
+      "rarity": "RARE",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#0052D4",
+        "secondary": "#4364F7",
+        "accent": "#6FB1FC",
+        "glow": "#4364F7"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/arcane-falcon/default.png",
+          "svgPath": "/avatars/arena/arcane-falcon/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 383283,
+          "contentHash": "sha256:784a9be6b5659f21bc8f1b849a12aee53b0631b0f02e3524a767e64b73307464"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/arcane-falcon/battle.png",
+          "svgPath": "/avatars/arena/arcane-falcon/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 380467,
+          "contentHash": "sha256:ca676b3a5eb5a1cb489f6f8dff514021aac3a86e5ddd62ba23489c650881906a"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/arcane-falcon/victory.png",
+          "svgPath": "/avatars/arena/arcane-falcon/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 414917,
+          "contentHash": "sha256:d1f5a33e96194baa8c104ac188e1cf8030f3b660a38ad2d6c72c8a8facb0ffa7"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/arcane-falcon/thumbnail.png",
+          "svgPath": "/avatars/arena/arcane-falcon/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 64429,
+          "contentHash": "sha256:3fdf7091686014a3551d5709baa71dd0dacdcdbbadb32b4fec5de7ceab60ca2f"
+        }
+      }
+    },
+    "solar-phoenix": {
+      "slug": "solar-phoenix",
+      "name": "Solar Phoenix",
+      "title": "Quyosh Qaqnusi",
+      "description": "Har qanday mag'lubiyatdan yangi bilim va g'azab bilan qayta tug'iladi. Uning intellektual alangi hech qachon so'nmaydi.",
+      "element": "FIRE",
+      "rarity": "EPIC",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#FF416C",
+        "secondary": "#FF4B2B",
+        "accent": "#F9D423",
+        "glow": "#FF416C"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/solar-phoenix/default.png",
+          "svgPath": "/avatars/arena/solar-phoenix/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 365711,
+          "contentHash": "sha256:ec2716b80632c1d544ac20487c8a8c66e14a4c08e9baa14b5a44c2bc644da132"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/solar-phoenix/battle.png",
+          "svgPath": "/avatars/arena/solar-phoenix/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 361651,
+          "contentHash": "sha256:00bdfa55d2444827cafa9632328e150307a3f305df4b926468c3904f6d2f2d6f"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/solar-phoenix/victory.png",
+          "svgPath": "/avatars/arena/solar-phoenix/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 394557,
+          "contentHash": "sha256:1e30b165e7aeff1cef159c65c6eece789c6ef76a94d1d29fed470423360f176f"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/solar-phoenix/thumbnail.png",
+          "svgPath": "/avatars/arena/solar-phoenix/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 62384,
+          "contentHash": "sha256:566651302507700d3f2c939e7b8fe40f2a858fc3bfca46fb5749bfaa6f2c630d"
+        }
+      }
+    },
+    "binary-titan": {
+      "slug": "binary-titan",
+      "name": "Binary Titan",
+      "title": "Temir Iroda",
+      "description": "Tizimli mustahkamlik va buzilmas konsentratsiya. Bosim ostida ham birorta xatoga yo'l qo'ymaydigan sovuqqon gigant.",
+      "element": "TECH",
+      "rarity": "RARE",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#4B6CB7",
+        "secondary": "#182848",
+        "accent": "#00F2FE",
+        "glow": "#4B6CB7"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/binary-titan/default.png",
+          "svgPath": "/avatars/arena/binary-titan/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 352015,
+          "contentHash": "sha256:9313450fa23d74d092828f2b7049f43a9c3e375f0b8456a8d83acd4f641f8287"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/binary-titan/battle.png",
+          "svgPath": "/avatars/arena/binary-titan/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 348790,
+          "contentHash": "sha256:7b7585fd706f53832be387a8a5ca2eacd0633442fdfe7ce0bfbc39caf03bf6ee"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/binary-titan/victory.png",
+          "svgPath": "/avatars/arena/binary-titan/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 379480,
+          "contentHash": "sha256:8fd48d39a0bdf972622ae7a88d1c33a2def44072ef52b4927f2e3722378c6186"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/binary-titan/thumbnail.png",
+          "svgPath": "/avatars/arena/binary-titan/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 61349,
+          "contentHash": "sha256:4940491599552ffa744836fc59fbc19a4ecb346c1d6455a4f3a239623b9ad499"
+        }
+      }
+    },
+    "vortex-wolf": {
+      "slug": "vortex-wolf",
+      "name": "Vortex Wolf",
+      "title": "Girdob Bo'risi",
+      "description": "Jamoaviy duel (2v2) ustasi. O'z sherigini ilhomlantirib, dushman jamoani aql girdobiga g'arq qiladi.",
+      "element": "VOID",
+      "rarity": "RARE",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#00C9FF",
+        "secondary": "#92FE9D",
+        "accent": "#00E5FF",
+        "glow": "#00C9FF"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/vortex-wolf/default.png",
+          "svgPath": "/avatars/arena/vortex-wolf/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 432090,
+          "contentHash": "sha256:64fa7b70cf59beab9d73ada046f74c5c1acdd35884cbdb9247b8a183dbb38ddc"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/vortex-wolf/battle.png",
+          "svgPath": "/avatars/arena/vortex-wolf/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 431606,
+          "contentHash": "sha256:23b7351f0e466d0637f253a39b38e2f322d1107c5507f5d14787743fe6da9992"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/vortex-wolf/victory.png",
+          "svgPath": "/avatars/arena/vortex-wolf/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 463243,
+          "contentHash": "sha256:8ab13e5b3823016de1f02afc6c8291e3753ca2241744675a6626f496faa45742"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/vortex-wolf/thumbnail.png",
+          "svgPath": "/avatars/arena/vortex-wolf/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 69312,
+          "contentHash": "sha256:2a9ff169717664d8b4002a7b11f82b0a11b0f6d8fd16c7b348310c883b5871ed"
+        }
+      }
+    },
+    "infinite-sage": {
+      "slug": "infinite-sage",
+      "name": "Infinite Sage",
+      "title": "Grandmaster Alloma",
+      "description": "Barcha bilimlarning cho'qqisi. Vaqt va makon to'siqlaridan oshib o'tgan mutlaq intellektual donishmand.",
+      "element": "COSMIC",
+      "rarity": "LEGENDARY",
+      "status": "AVAILABLE",
+      "colorPalette": {
+        "primary": "#F9D423",
+        "secondary": "#FF4E50",
+        "accent": "#00F2FE",
+        "glow": "#F9D423"
+      },
+      "assets": {
+        "default": {
+          "pngPath": "/avatars/arena/infinite-sage/default.png",
+          "svgPath": "/avatars/arena/infinite-sage/default.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 411142,
+          "contentHash": "sha256:1c6abb39bdf9fe0ff7dfbdefd393a9806820768dfef493ae44528f54618a6a61"
+        },
+        "battle": {
+          "pngPath": "/avatars/arena/infinite-sage/battle.png",
+          "svgPath": "/avatars/arena/infinite-sage/battle.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 406549,
+          "contentHash": "sha256:308619fbfbd0a36275851ab22113226cd8a8a0e7d3c5da8ca4c5e7faf4113c3a"
+        },
+        "victory": {
+          "pngPath": "/avatars/arena/infinite-sage/victory.png",
+          "svgPath": "/avatars/arena/infinite-sage/victory.svg",
+          "width": 1024,
+          "height": 1024,
+          "mimeType": "image/png",
+          "byteSize": 438797,
+          "contentHash": "sha256:18f9a1404ec219ff34fb87ac5e21639d77ba3ad82d05e2f4342fb4dae0047d62"
+        },
+        "thumbnail": {
+          "pngPath": "/avatars/arena/infinite-sage/thumbnail.png",
+          "svgPath": "/avatars/arena/infinite-sage/thumbnail.svg",
+          "width": 256,
+          "height": 256,
+          "mimeType": "image/png",
+          "byteSize": 68265,
+          "contentHash": "sha256:f7ec4557a2862e2736ffe37dee044cb734d2dae9e022df4330300a6557ac2b9c"
+        }
+      }
+    }
+  }
+}

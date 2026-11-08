@@ -128,6 +128,15 @@ export function validateConfig(nodeEnv: string = process.env.NODE_ENV || 'develo
         warn(keyVar, 'Placeholder AI API key detected — the AI provider will not authenticate.');
       }
     }
+  } else if (nodeEnv === 'production') {
+    // FEAT-03: an unset AI_PROVIDER is a valid configuration (the Copilot is an
+    // optional module), but it must not fail silently in production: every
+    // /api/ai call answers 503 AI_PROVIDER_UNAVAILABLE at request time. Emit a
+    // boot-time warning so operators can see the module is disabled.
+    warn(
+      'AI_PROVIDER',
+      'Not configured — the AI Copilot is disabled (requests fail with AI_PROVIDER_UNAVAILABLE).',
+    );
   }
 
   // --- CORS ---

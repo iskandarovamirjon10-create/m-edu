@@ -9,6 +9,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AllowAnyRole } from '../auth/roles.decorator';
+import type { RequestUser } from '../auth/types';
 
 @ApiTags('Groups')
 @ApiBearerAuth()
@@ -20,11 +21,28 @@ export class GroupsController {
   @AllowAnyRole()
   @Get()
   @ApiOperation({ summary: 'List groups' })
-  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: GroupQuery) {
-    return this.groupsService.findAll(orgId, query);
+  findAll(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() userOrQuery: RequestUser | GroupQuery,
+    @Query() queryOrUser?: GroupQuery | RequestUser,
+  ) {
+    let user: RequestUser | undefined;
+    let query: GroupQuery = {};
+    if (userOrQuery && typeof userOrQuery === 'object' && ('role' in userOrQuery || 'sub' in userOrQuery)) {
+      user = userOrQuery as RequestUser;
+      query = (queryOrUser as GroupQuery) || {};
+    } else {
+      query = (userOrQuery as GroupQuery) || {};
+      user = queryOrUser && typeof queryOrUser === 'object' && ('role' in queryOrUser || 'sub' in queryOrUser)
+        ? (queryOrUser as RequestUser)
+        : undefined;
+    }
+    return user
+      ? this.groupsService.findAll(orgId, query, user)
+      : this.groupsService.findAll(orgId, query);
   }
 
-  @AllowAnyRole()
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER')
   @Get('stats')
   @ApiOperation({ summary: 'Get aggregated group statistics and occupancy metrics' })
   getStats(@CurrentUser('organizationId') orgId: string) {
@@ -55,8 +73,25 @@ export class GroupsController {
   @AllowAnyRole()
   @Get(':id')
   @ApiOperation({ summary: 'Get group details' })
-  findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
-    return this.groupsService.findOne(orgId, id);
+  findOne(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() userOrId: RequestUser | string,
+    @Param('id') idOrUser?: string | RequestUser,
+  ) {
+    let user: RequestUser | undefined;
+    let id: string = '';
+    if (typeof userOrId === 'string') {
+      id = userOrId;
+      user = idOrUser && typeof idOrUser === 'object' && ('role' in idOrUser || 'sub' in idOrUser)
+        ? (idOrUser as RequestUser)
+        : undefined;
+    } else {
+      user = userOrId;
+      id = typeof idOrUser === 'string' ? idOrUser : '';
+    }
+    return user
+      ? this.groupsService.findOne(orgId, id, user)
+      : this.groupsService.findOne(orgId, id);
   }
 
   @Post()

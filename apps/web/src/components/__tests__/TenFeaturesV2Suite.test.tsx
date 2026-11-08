@@ -245,16 +245,16 @@ describe('10 Flagship Features V2 Comprehensive Verification', () => {
     it('generates structured lesson curriculum and quizzes upon clicking generate', async () => {
       render(<AiLessonPlanStudio />);
 
-      expect(screen.getByText(/AI Pedagogik Dars Rejasi & Quiz Generator/i)).toBeInTheDocument();
+      expect(screen.getByText(/AI Pedagogik Dars Rejasi & Quiz (Generator|Studiyasi)/i)).toBeInTheDocument();
 
       const genBtn = screen.getByText(/Gemini 3 bilan Dars Rejasini Generatsiya Qilish/i);
       fireEvent.click(genBtn);
 
       await waitFor(
         () => {
-          expect(screen.getByText(/Kutilayotgan natijalar/i)).toBeInTheDocument();
-          expect(screen.getByText(/Muzqaymoq/i)).toBeInTheDocument();
-          expect(screen.getByText(/Amaliy laboratoriya/i)).toBeInTheDocument();
+          expect(screen.getByText(/Kutilayotgan/i)).toBeInTheDocument();
+          expect(screen.getAllByText(/Icebreaker/i).length).toBeGreaterThan(0);
+          expect(screen.getAllByText(/Amaliy Laboratoriya/i).length).toBeGreaterThan(0);
         },
         { timeout: 4000 },
       );

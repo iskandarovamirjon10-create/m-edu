@@ -357,7 +357,57 @@ describe('AI Expanded Features Suite', () => {
       const status = service.getOrgUsage(testOrg);
       expect(status.current).toBe(1);
       expect(status.limit).toBe(500);
-      expect(status.dateStr).toBe(new Date().toISOString().slice(0, 10));
+      const expectedTashkentDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tashkent',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+      expect(status.dateStr).toBe(expectedTashkentDate);
+    });
+  });
+
+  describe('Feature 13: Pedagogical Lesson Plan & SMM Social Post Generation', () => {
+    it('generates high-standard 5-stage lesson plan with quiz and lab', async () => {
+      const plan = await service.generateLessonPlan('org-test', {
+        topic: 'Python dasturlash asoslari: Funksiyalar',
+        durationMinutes: 45,
+        level: "Boshlang'ich",
+        bloomsTaxonomyLevel: 'apply',
+      });
+
+      expect(plan).toBeDefined();
+      expect(plan.title).toContain('Funksiyalar');
+      expect(plan.warmup).toBeDefined();
+      expect(plan.theory).toBeDefined();
+      expect(plan.handsOn).toBeDefined();
+      expect(plan.quizQuestions.length).toBeGreaterThanOrEqual(1);
+      expect(plan.quizQuestions[0].options.length).toBe(4);
+      expect(plan.quizQuestions[0].explanation).toBeDefined();
+      expect(plan.homework).toBeDefined();
+      expect(plan.timeBreakdown).toBeDefined();
+      expect(plan.timeBreakdown.warmupMin).toBeGreaterThan(0);
+    });
+
+    it('generates 3 high-converting SMM post variants for educational center', async () => {
+      const smm = await service.generateSocialPost('org-test', {
+        topic: 'Frontend React yangi guruh',
+        platform: 'TELEGRAM',
+        goal: 'NEW_GROUP',
+        tone: 'exciting',
+        contactPhone: '+998 90 123 45 67',
+        centerAddress: 'Toshkent sh., Yunusobod',
+      });
+
+      expect(smm).toBeDefined();
+      expect(smm.variants.length).toBe(3);
+      expect(smm.variants[0].id).toBe('variant_a');
+      expect(smm.variants[0].hook).toBeDefined();
+      expect(smm.variants[0].content).toContain('+998 90 123 45 67');
+      expect(smm.variants[1].id).toBe('variant_b');
+      expect(smm.variants[2].id).toBe('variant_c');
+      expect(smm.suggestedVisuals.length).toBeGreaterThanOrEqual(2);
+      expect(smm.bestPostingTime).toBeDefined();
     });
   });
 });

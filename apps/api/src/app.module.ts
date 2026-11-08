@@ -45,12 +45,14 @@ import { CsrfMiddleware } from './security/csrf.middleware';
 
 // ===================== v2 Modules =====================
 import { LibraryModule } from './library/library.module';
+import { StudyModule } from './study/study.module';
 import { HrModule } from './hr/hr.module';
 import { ExamsModule } from './exams/exams.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
+import { TenantContextInterceptor } from './common/tenant/tenant-scope.interceptor';
 import { SearchModule } from './search/search.module';
 import { DocumentsModule } from './documents/documents.module';
 import { DataQualityModule } from './data-quality/data-quality.module';
@@ -71,10 +73,12 @@ import { BranchesModule } from './branches/branches.module';
 import { ReportsModule } from './reports/reports.module';
 import { ParentPortalModule } from './parent-portal/parent-portal.module';
 import { GamificationModule } from './gamification/gamification.module';
+import { MindArenaModule } from './modules/mind-arena/mind-arena.module';
 import { ChatModule } from './chat/chat.module';
 import { DataGovernanceModule } from './data-governance/data-governance.module';
 import { AutomationModule } from './automation/automation.module';
 import { PlatformModule } from './platform/platform.module';
+import { IAMModule } from './iam/iam.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { BillingModule } from './billing/billing.module';
 import { CronModule } from './cron/cron.module';
@@ -187,6 +191,7 @@ const redisEnabled = isRedisEnabled();
 
     // v2 Premium Modules
     LibraryModule,
+    StudyModule,
     HrModule,
     ExamsModule,
     CertificatesModule,
@@ -213,10 +218,12 @@ const redisEnabled = isRedisEnabled();
     ReportsModule,
     ParentPortalModule,
     GamificationModule,
+    MindArenaModule,
     ChatModule,
     DataGovernanceModule,
     AutomationModule,
     PlatformModule,
+    IAMModule,
     SubscriptionsModule,
     BillingModule,
     CronModule,
@@ -241,6 +248,9 @@ const redisEnabled = isRedisEnabled();
     // auth/public.decorator.ts for the reviewed allow-list). Registering a
     // controller without @UseGuards(...) no longer publishes it.
     { provide: APP_GUARD, useClass: GlobalAuthGuard },
+    // SEC-02: binds req.user.organizationId to the async context BEFORE the
+    // audit interceptor, so every Prisma call in this request is tenant-scoped.
+    { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 

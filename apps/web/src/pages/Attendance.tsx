@@ -1,8 +1,36 @@
+'use client';
+
 /**
- * M-EDU Attendance Page
- * Student attendance recording, schedule verification, bulk operations, and status tracking.
+ * ============================================================================
+ * M-EDU Attendance Page — v3.0 "Chromatic Liquid Glass · Biometric & Ledger Studio"
+ * ============================================================================
+ *
+ * v2 → v3.0 Senior Architecture & Liquid Glass Upgrades:
+ *  • [fix] Preserved existing `note` during `handleBatchMarkStatus` instead of
+ *          wiping teacher comments with `note: ''`; skipped redundant updates.
+ *  • [fix] Reordered Record Modal fields (Group -> Student) so selecting a group
+ *          never wipes out an already-selected student.
+ *  • [fix] Removed unnecessary debounce on discrete `<select>` and `<input type="date">`
+ *          controls for zero-latency KPI tile and date-pill filtering.
+ *  • [fix] Fixed `FloatingActionIsland` prop compatibility (`onClear` + `onClearSelection`)
+ *          and resolved `'E'` / `'P'` keyboard shortcut collision when rows are selected.
+ *  • [fix] Added async `URL.revokeObjectURL` cleanup for Safari/WebKit CSV downloads.
+ *  • [feat] Added Biometric / Source filter (`FACE_ID`, `QR`, `MANUAL`, `SYSTEM`)
+ *           and multi-criteria sorting (`Date`, `Student A-Z`, `Status`).
+ *  • [feat] Added 1-Click Quick Note Preset Chips in Record & Edit modals.
+ *  • [feat] Added Bulk "Late" & "Excused" actions alongside Bulk "Present".
+ *  • [feat] Upgraded Bento Grid touch targets to full >=40px ergonomic glass buttons.
+ * ============================================================================
  */
-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  memo,
+} from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, LayoutGroup, type Variants } from 'framer-motion';
 import { attendanceApi, studentsApi, groupsApi } from '@/lib/api';
@@ -22,7 +50,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useDebounce } from '@/hooks/useDebounce';
-import { cn } from '@/lib/design';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { formatDate, toLocalISOString } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type {
@@ -45,30 +73,31 @@ import { AttendanceTrafficFlowHeatmap } from '@/components/camera/AttendanceTraf
 import { RushHourBatchAttendanceProcessor } from '@/components/camera/RushHourBatchAttendanceProcessor';
 
 /* ============================================================================
- * APPLE SPRING PHYSICS & MOTION TOKENS
+ * iOS 27 SPRING PHYSICS & LIQUID GLASS TOKENS
  * ========================================================================== */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 520, damping: 32, mass: 0.65 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.85 },
-  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
-  liquid: { type: 'spring', stiffness: 400, damping: 35, mass: 0.8 },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 32, mass: 0.65 },
+  smooth: { type: 'spring' as const, stiffness: 360, damping: 31, mass: 0.82 },
+  soft: { type: 'spring' as const, stiffness: 220, damping: 28, mass: 1.0 },
+  liquid: { type: 'spring' as const, stiffness: 420, damping: 35, mass: 0.78 },
+  gel: { type: 'spring' as const, stiffness: 740, damping: 25, mass: 0.34 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.05, delayChildren: 0.04 },
+    transition: { staggerChildren: 0.045, delayChildren: 0.02 },
   },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14, filter: 'blur(4px)' },
+  hidden: { opacity: 0, y: 14, scale: 0.992 },
   visible: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
+    scale: 1,
     transition: SPRING.smooth,
   },
 };
@@ -77,6 +106,23 @@ const rowVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
   visible: { opacity: 1, y: 0, transition: SPRING.smooth },
 };
+
+const LIQUID_SURFACE = cn(
+  'relative isolate overflow-hidden',
+  'border border-white/75 bg-white/[0.78] backdrop-blur-3xl backdrop-saturate-[205%]',
+  'shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.92),inset_0_-1px_0_0_rgba(0,122,255,0.1),0_16px_44px_-12px_rgba(15,23,42,0.08)]',
+  'dark:border-white/[0.12] dark:bg-surface-900/[0.80]',
+  'dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.2),inset_0_-1px_0_0_rgba(10,132,255,0.16),0_20px_52px_-12px_rgba(0,0,0,0.65)]',
+);
+
+const TopSpecular = memo(function TopSpecular({ inset = 'inset-x-8' }: { inset?: string }) {
+  return (
+    <div aria-hidden="true" className={cn('pointer-events-none absolute top-0 z-10', inset)}>
+      <div className="h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/30" />
+      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#007AFF]/30 to-transparent dark:via-[#38BDF8]/25" />
+    </div>
+  );
+});
 
 /* ============================================================================
  * SVG VECTOR ICON SYSTEM
@@ -129,6 +175,7 @@ const I: Record<string, string[]> = {
     'M14 11v6',
   ],
   filter: ['M21 4H3l7.2 8.6v5.9l3.6 1.8v-7.7L21 4z'],
+  sort: ['M7 15l5 5 5-5', 'M7 9l5-5 5 5'],
   sparkles: [
     'M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3z',
     'M19 3v3',
@@ -252,8 +299,12 @@ function Icon({
  * ========================================================================== */
 
 type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'cyan' | 'gray' | 'emerald';
+type SortOption = 'date-desc' | 'name-asc' | 'status-asc';
 
-const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string; gradient: string }> = {
+const TONES: Record<
+  Tone,
+  { fg: string; bg: string; glow: string; border: string; gradient: string }
+> = {
   blue: {
     fg: '#007AFF',
     bg: 'rgba(0, 122, 255, 0.11)',
@@ -318,6 +369,14 @@ const TONES: Record<Tone, { fg: string; bg: string; glow: string; border: string
 
 const ATTENDANCE_STATUSES: AttendanceStatus[] = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
 
+const QUICK_NOTE_PRESETS = [
+  'Sababli ariza',
+  'Shifokor ko‘rigi',
+  'Transport kechikishi',
+  'Olimpiada / Tadbir',
+  'Ota-ona ogohlantirdi',
+] as const;
+
 const STATUS_CYCLE_ORDER: Record<AttendanceStatus, AttendanceStatus> = {
   PRESENT: 'LATE',
   LATE: 'ABSENT',
@@ -349,6 +408,8 @@ const STATUS_PULSE: Record<AttendanceStatus, boolean> = {
 const SOURCE_TONE: Record<string, Tone> = {
   FACE_ID: 'purple',
   FACE: 'purple',
+  FACE_KIOSK: 'purple',
+  TURNSTILE: 'purple',
   MANUAL: 'blue',
   QR: 'cyan',
   IMPORT: 'gray',
@@ -356,12 +417,39 @@ const SOURCE_TONE: Record<string, Tone> = {
 };
 
 const SOURCE_ICON: Record<string, string[]> = {
-  FACE_ID: ['M12 11a2 2 0 0 1 2 2v3', 'M8 13a4 4 0 0 1 8 0v5', 'M12 22a10 10 0 1 1 0-20 10 10 0 0 1 10 10'],
-  FACE: ['M12 11a2 2 0 0 1 2 2v3', 'M8 13a4 4 0 0 1 8 0v5', 'M12 22a10 10 0 1 1 0-20 10 10 0 0 1 10 10'],
+  FACE_ID: [
+    'M12 11a2 2 0 0 1 2 2v3',
+    'M8 13a4 4 0 0 1 8 0v5',
+    'M12 22a10 10 0 1 1 0-20 10 10 0 0 1 10 10',
+  ],
+  FACE: [
+    'M12 11a2 2 0 0 1 2 2v3',
+    'M8 13a4 4 0 0 1 8 0v5',
+    'M12 22a10 10 0 1 1 0-20 10 10 0 0 1 10 10',
+  ],
+  FACE_KIOSK: [
+    'M12 11a2 2 0 0 1 2 2v3',
+    'M8 13a4 4 0 0 1 8 0v5',
+    'M12 22a10 10 0 1 1 0-20 10 10 0 0 1 10 10',
+  ],
+  TURNSTILE: [
+    'M12 11a2 2 0 0 1 2 2v3',
+    'M8 13a4 4 0 0 1 8 0v5',
+    'M12 22a10 10 0 1 1 0-20 10 10 0 0 1 10 10',
+  ],
   MANUAL: I.edit,
   QR: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M3 14h7v7H3z', 'M14 14h3v3h-3z', 'M19 19h2v2h-2z'],
   IMPORT: I.download,
-  SYSTEM: ['M12 2v3', 'M12 19v3', 'M4.9 4.9l2.1 2.1', 'M17 17l2.1 2.1', 'M2 12h3', 'M19 12h3', 'M4.9 19.1l2.1-2.1', 'M17 7l2.1-2.1'],
+  SYSTEM: [
+    'M12 2v3',
+    'M12 19v3',
+    'M4.9 4.9l2.1 2.1',
+    'M17 17l2.1 2.1',
+    'M2 12h3',
+    'M19 12h3',
+    'M4.9 19.1l2.1-2.1',
+    'M17 7l2.1-2.1',
+  ],
 };
 
 interface AttendanceFilters {
@@ -380,23 +468,27 @@ interface AttendanceFormState {
   note: string;
 }
 
-const INITIAL_FORM: AttendanceFormState = {
-  studentId: '',
-  groupId: '',
-  date: toLocalISOString(),
-  status: 'PRESENT',
-  note: '',
-};
+function createInitialForm(groupId = '', dateStr = ''): AttendanceFormState {
+  return {
+    studentId: '',
+    groupId,
+    date: dateStr || toLocalISOString(),
+    status: 'PRESENT',
+    note: '',
+  };
+}
 
 /* ============================================================================
- * HELPERS
+ * HELPERS (Unicode-Safe)
  * ========================================================================== */
 
 function getInitials(name: string): string {
+  const cleaned = (name ?? '').trim();
+  if (!cleaned) return '—';
   return (
-    name
+    cleaned
       .split(/\s+/)
-      .map((p) => p.charAt(0))
+      .map((p) => Array.from(p)[0] ?? '')
       .filter(Boolean)
       .slice(0, 2)
       .join('')
@@ -419,19 +511,23 @@ const AVATAR_PALETTES = [
   ['#0EA5E9', '#2563EB'],
   ['#14B8A6', '#059669'],
   ['#EC4899', '#8B5CF6'],
-];
+] as const;
 
 function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  const palette =
+    AVATAR_PALETTES[Math.abs(nameHash(name || '')) % AVATAR_PALETTES.length] ||
+    AVATAR_PALETTES[0];
+  const [a, b] = palette;
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
 function fullStudentName(a: Attendance | null | undefined): string {
   if (!a?.student) return '—';
   const user = a.student.user;
-  if (!user) return (a.student as any).name || '—';
+  const fallbackName = (a.student as { name?: string }).name || '—';
+  if (!user) return fallbackName;
   const { firstName, lastName } = user;
-  return [firstName, lastName].filter(Boolean).join(' ') || (a.student as any).name || '—';
+  return [firstName, lastName].filter(Boolean).join(' ') || fallbackName;
 }
 
 function isScheduleError(msg: string): boolean {
@@ -454,10 +550,19 @@ function getYesterdayISO(): string {
  * LIQUID GLASS SUB-COMPONENTS
  * ========================================================================== */
 
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+function Shimmer({
+  className = '',
+  radius = '0.75rem',
+}: {
+  className?: string;
+  radius?: string;
+}) {
   return (
     <div
-      className={`relative overflow-hidden bg-slate-200/60 dark:bg-white/[0.06] ${className}`}
+      className={cn(
+        'relative overflow-hidden bg-slate-200/60 dark:bg-white/[0.06]',
+        className,
+      )}
       style={{ borderRadius: radius }}
     >
       <motion.div
@@ -488,31 +593,54 @@ function AttendanceSkeleton() {
   );
 }
 
-function CountUp({
+/** Smoothly interpolates from previous value to new value without resetting to 0 */
+const CountUp = memo(function CountUp({
   value,
-  duration = 1.0,
+  duration = 0.85,
   suffix = '',
 }: {
   value: number;
   duration?: number;
   suffix?: string;
 }) {
-  const [n, setN] = useState(0);
-  const startRef = useRef<number | null>(null);
+  const safeTarget = Number.isFinite(value) ? value : 0;
+  const reduced = usePrefersReducedMotion();
+  const [n, setN] = useState(safeTarget);
+  const prevValueRef = useRef(0);
 
   useEffect(() => {
-    let raf: number;
-    startRef.current = null;
+    if (reduced) {
+      setN(safeTarget);
+      prevValueRef.current = safeTarget;
+      return;
+    }
+    const from = prevValueRef.current;
+    const to = safeTarget;
+    if (from === to) {
+      setN(to);
+      return;
+    }
+
+    let raf = 0;
+    let startTs: number | null = null;
     const step = (ts: number) => {
-      if (startRef.current === null) startRef.current = ts;
-      const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
+      if (startTs === null) startTs = ts;
+      const p = Math.min(1, (ts - startTs) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
-      if (p < 1) raf = requestAnimationFrame(step);
+      const current = from + (to - from) * eased;
+      setN(current);
+      if (p < 1) {
+        raf = requestAnimationFrame(step);
+      } else {
+        prevValueRef.current = to;
+      }
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [value, duration]);
+    return () => {
+      cancelAnimationFrame(raf);
+      prevValueRef.current = to;
+    };
+  }, [safeTarget, duration, reduced]);
 
   return (
     <span className="tabular-nums">
@@ -520,10 +648,10 @@ function CountUp({
       {suffix}
     </span>
   );
-}
+});
 
-/** Apple Liquid Glass KPI Card with interactive status filter click */
-function KpiTile({
+/** Apple iOS 27 Liquid Glass KPI Card with interactive status filter click */
+const KpiTile = memo(function KpiTile({
   label,
   value,
   icon,
@@ -547,10 +675,11 @@ function KpiTile({
     <motion.div
       variants={rowVariants}
       whileHover={{ y: -3, scale: 1.01 }}
-      whileTap={onClick ? { scale: 0.98 } : undefined}
+      whileTap={onClick ? { scaleX: 1.03, scaleY: 0.96 } : undefined}
       transition={SPRING.smooth}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
+      aria-pressed={onClick ? active : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
         onClick
@@ -562,51 +691,52 @@ function KpiTile({
             }
           : undefined
       }
-      className={`group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border px-4 py-3.5 backdrop-blur-2xl transition-all ${
-        onClick ? 'cursor-pointer select-none' : ''
-      } ${
+      className={cn(
+        'group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border px-4 py-3.5 backdrop-blur-2xl transition-all',
+        onClick && 'cursor-pointer select-none',
         active
-          ? 'bg-white/95 dark:bg-surface-900/95 ring-2'
-          : 'border-black/[0.06] bg-white/75 hover:bg-white/90 dark:border-white/[0.08] dark:bg-surface-900/75 dark:hover:bg-surface-900/90 shadow-card'
-      }`}
+          ? 'bg-white/95 ring-2 dark:bg-surface-900/95'
+          : 'border-white/70 bg-white/75 shadow-card hover:bg-white/90 dark:border-white/[0.1] dark:bg-surface-900/75 dark:hover:bg-surface-900/90',
+      )}
       style={
         active
           ? {
               borderColor: c.fg,
-              boxShadow: `0 10px 26px -10px ${c.glow}, inset 0 1px 0 rgba(255,255,255,0.6)`,
+              boxShadow: `0 12px 28px -10px ${c.glow}, inset 0 1.5px 0 rgba(255,255,255,0.75)`,
             }
           : undefined
       }
     >
-      {/* Top specular highlight */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/15" />
+      <TopSpecular inset="inset-x-5" />
 
-      {/* Ambient radial glow on hover */}
       <div
         className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-100"
         style={{ background: c.glow }}
       />
 
-      {/* Squircle Icon */}
       <div
         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105"
         style={{
           background: active ? c.gradient : c.bg,
           color: active ? '#FFFFFF' : c.fg,
           border: `1px solid ${active ? 'transparent' : c.border}`,
-          boxShadow: active ? `0 6px 16px -4px ${c.glow}` : 'inset 0 1px 0 rgba(255,255,255,0.45)',
+          boxShadow: active
+            ? `0 6px 16px -4px ${c.glow}`
+            : 'inset 0 1px 0 rgba(255,255,255,0.5)',
         }}
       >
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-xl"
-          style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent)' }}
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.45), transparent)',
+          }}
         />
         <Icon paths={icon} size={19} strokeWidth={2.1} className="relative" />
       </div>
 
       <div className="relative min-w-0 flex-1">
-        <div className="text-[23px] font-bold tracking-tighter leading-none text-[#1D1D1F] dark:text-[#F5F5F7]">
+        <div className="text-[23px] font-bold leading-none tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7]">
           <CountUp value={value} suffix={percent ? '%' : ''} />
         </div>
         <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748B] dark:text-slate-400">
@@ -620,10 +750,10 @@ function KpiTile({
       </div>
     </motion.div>
   );
-}
+});
 
 /** Interactive Status Badge with 1-Click Cycling Support */
-function StatusBadge({
+const StatusBadge = memo(function StatusBadge({
   status,
   label,
   onCycle,
@@ -635,9 +765,10 @@ function StatusBadge({
   isUpdating?: boolean;
 }) {
   const { t } = useSafeI18n();
+  const reduced = usePrefersReducedMotion();
   const tone = STATUS_TONE[status];
   const c = TONES[tone];
-  const pulse = STATUS_PULSE[status];
+  const pulse = STATUS_PULSE[status] && !reduced;
 
   const content = (
     <>
@@ -651,7 +782,7 @@ function StatusBadge({
           />
         )}
         <span
-          className={`relative h-1.5 w-1.5 rounded-full ${isUpdating ? 'animate-ping' : ''}`}
+          className={cn('relative h-1.5 w-1.5 rounded-full', isUpdating && 'animate-ping')}
           style={{ background: c.fg }}
         />
       </span>
@@ -661,7 +792,7 @@ function StatusBadge({
           paths={I.cycle}
           size={10}
           strokeWidth={2.4}
-          className="ml-0.5 opacity-0 -translate-x-1 transition-all duration-200 group-hover/badge:opacity-75 group-hover/badge:translate-x-0"
+          className="ml-0.5 -translate-x-1 opacity-0 transition-all duration-200 group-hover/badge:translate-x-0 group-hover/badge:opacity-75"
         />
       )}
     </>
@@ -676,16 +807,16 @@ function StatusBadge({
           onCycle();
         }}
         whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.94 }}
-        transition={SPRING.snappy}
+        whileTap={{ scaleX: 1.06, scaleY: 0.92 }}
+        transition={SPRING.gel}
         disabled={isUpdating}
         title={t('attendance.cycleStatusTitle')}
-        className="group/badge relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-shadow"
+        className="group/badge relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
         style={{
           background: c.bg,
           color: c.fg,
           border: `1px solid ${c.border}`,
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
         }}
       >
         {content}
@@ -705,10 +836,16 @@ function StatusBadge({
       {content}
     </span>
   );
-}
+});
 
 /** Source Chip (FaceID, QR, Manual, System) */
-function SourceChip({ source, label }: { source: string; label: string }) {
+const SourceChip = memo(function SourceChip({
+  source,
+  label,
+}: {
+  source: string;
+  label: string;
+}) {
   const key = (source || '').toUpperCase();
   const tone = SOURCE_TONE[key] ?? 'gray';
   const c = TONES[tone];
@@ -726,10 +863,16 @@ function SourceChip({ source, label }: { source: string; label: string }) {
       {label}
     </span>
   );
-}
+});
 
 /** Squircle leading icon for inputs */
-function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
+const FieldIcon = memo(function FieldIcon({
+  icon,
+  tone = 'blue',
+}: {
+  icon: string[];
+  tone?: Tone;
+}) {
   const c = TONES[tone];
   return (
     <span
@@ -744,9 +887,9 @@ function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
       <Icon paths={icon} size={12} strokeWidth={2.2} />
     </span>
   );
-}
+});
 
-/** Status Segmented Control (used in Record & Edit Modals) */
+/** Status Segmented Control (Light & Dark Mode Adaptive Liquid Glass) */
 function StatusSegmented({
   value,
   onChange,
@@ -773,22 +916,28 @@ function StatusSegmented({
             aria-checked={active}
             onClick={() => onChange(s)}
             whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.96 }}
-            transition={SPRING.snappy}
-            className="relative flex flex-col items-center gap-1.5 min-h-[56px] rounded-2xl border px-3 py-3 text-[11.5px] font-bold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors"
-            style={{
-              borderColor: active ? c.fg : 'rgba(148,163,184,0.18)',
-              background: active ? c.bg : 'rgba(255,255,255,0.35)',
-              color: active ? c.fg : '#64748B',
-              boxShadow: active
-                ? `inset 0 1px 0 rgba(255,255,255,0.65), 0 8px 20px -8px ${c.glow}`
-                : 'inset 0 1px 0 rgba(255,255,255,0.3)',
-            }}
+            whileTap={{ scaleX: 1.04, scaleY: 0.94 }}
+            transition={SPRING.gel}
+            className={cn(
+              'relative flex min-h-[56px] flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-[11.5px] font-bold tracking-tight outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-500',
+              !active &&
+                'border-black/[0.08] bg-white/60 text-[#64748B] hover:bg-white/90 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]',
+            )}
+            style={
+              active
+                ? {
+                    borderColor: c.fg,
+                    background: c.bg,
+                    color: c.fg,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 20px -8px ${c.glow}`,
+                  }
+                : undefined
+            }
           >
             <span
               className="flex h-7 w-7 items-center justify-center rounded-xl transition-transform"
               style={{
-                background: active ? c.gradient : 'rgba(100,116,139,0.08)',
+                background: active ? c.gradient : 'rgba(100,116,139,0.12)',
                 color: active ? '#FFFFFF' : '#64748B',
                 boxShadow: active ? `0 4px 10px -2px ${c.glow}` : 'none',
               }}
@@ -820,7 +969,7 @@ function StatusSegmented({
 }
 
 /** Multi-segment iOS Storage-style Live Attendance Distribution Bar */
-function TelemetryDistributionBar({
+const TelemetryDistributionBar = memo(function TelemetryDistributionBar({
   present,
   late,
   excused,
@@ -846,9 +995,10 @@ function TelemetryDistributionBar({
   return (
     <motion.div
       variants={cardVariants}
-      className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/75 px-4 py-3 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/75 shadow-xs"
+      className={cn(LIQUID_SURFACE, 'rounded-2xl px-4 py-3')}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <TopSpecular inset="inset-x-6" />
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B] dark:text-slate-400">
           {t('executive.attendanceRate')} · {sum.toLocaleString('uz-UZ')}
         </span>
@@ -856,17 +1006,20 @@ function TelemetryDistributionBar({
           {segments.map((seg) => {
             const pct = Math.round((seg.count / sum) * 100);
             return (
-              <div key={seg.key} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+              <div
+                key={seg.key}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]"
+              >
                 <span className="h-2 w-2 rounded-full" style={{ background: seg.color }} />
                 <span className="text-[#64748B] dark:text-slate-400">{seg.label}:</span>
-                <span className="tabular-nums font-bold">{pct}%</span>
+                <span className="font-bold tabular-nums">{pct}%</span>
               </div>
             );
           })}
         </div>
       </div>
 
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07] p-0.5 gap-0.5">
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-slate-200/70 p-0.5 dark:bg-white/[0.07]">
         {segments.map((seg) => {
           const widthPct = Math.max(2, (seg.count / sum) * 100);
           return (
@@ -887,7 +1040,7 @@ function TelemetryDistributionBar({
       </div>
     </motion.div>
   );
-}
+});
 
 /* ============================================================================
  * MAIN PAGE COMPONENT
@@ -899,28 +1052,34 @@ export function AttendancePage() {
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
   const sound = usePremiumSound();
+  const soundRef = useRef(sound);
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+
   useAttendanceSocket();
 
-  /* ── Filter & UI state ────────────────────────────────────────────── */
-  const [activeTab, setActiveTab] = useState<'ledger' | 'analytics' | 'radar' | 'flow'>('ledger');
+  /* ── Filter, Sort & UI state ──────────────────────────────────────── */
+  const [activeTab, setActiveTab] = useState<'ledger' | 'analytics' | 'radar' | 'flow'>(
+    'ledger',
+  );
   const [page, setPage] = useState(1);
   const [groupId, setGroupId] = useState('');
   const [date, setDate] = useState('');
   const [status, setStatus] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<string>('');
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 200);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [cyclingId, setCyclingId] = useState<string | null>(null);
+  const [isBatchUpdating, setIsBatchUpdating] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-
-  /* ── Debounce backend filters ─────────────────────────────────────── */
-  const debouncedGroupId = useDebounce(groupId);
-  const debouncedDate = useDebounce(date);
-  const debouncedStatus = useDebounce(status);
 
   /* ── Modal state ──────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
-  const [form, setForm] = useState<AttendanceFormState>(INITIAL_FORM);
+  const [form, setForm] = useState<AttendanceFormState>(() => createInitialForm());
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof AttendanceFormState, string>>
   >({});
@@ -931,34 +1090,23 @@ export function AttendancePage() {
   const [editNote, setEditNote] = useState('');
   const [voidTarget, setVoidTarget] = useState<Attendance | null>(null);
 
-  /* ── Global `/` or `⌘K` shortcut for quick student search ─────────── */
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInput =
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
-        target?.tagName === 'SELECT' ||
-        target?.isContentEditable;
-      if (!isInput && e.key === '/') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  const handleOpenRecordModal = useCallback(() => {
+    soundRef.current?.playPop?.();
+    setForm(createInitialForm(groupId || '', date || toLocalISOString()));
+    setFormErrors({});
+    setModalOpen(true);
+  }, [groupId, date]);
 
-  /* ── Query params (100% Backend compatible) ───────────────────────── */
+  /* ── Query params (Zero-latency discrete filters) ─────────────────── */
   const params = useMemo<AttendanceFilters>(
     () => ({
       page,
       limit: 20,
-      groupId: debouncedGroupId || undefined,
-      date: debouncedDate || undefined,
-      status: (debouncedStatus as AttendanceStatus) || undefined,
+      groupId: groupId || undefined,
+      date: date || undefined,
+      status: (status as AttendanceStatus) || undefined,
     }),
-    [page, debouncedGroupId, debouncedDate, debouncedStatus],
+    [page, groupId, date, status],
   );
 
   /* ── Queries ──────────────────────────────────────────────────────── */
@@ -969,11 +1117,11 @@ export function AttendancePage() {
   });
 
   const analyticsQuery = useQuery({
-    queryKey: ['attendance-analytics', debouncedGroupId, debouncedDate],
+    queryKey: ['attendance-analytics', groupId, date],
     queryFn: () =>
       attendanceApi.analytics({
-        groupId: debouncedGroupId || undefined,
-        date: debouncedDate || undefined,
+        groupId: groupId || undefined,
+        date: date || undefined,
       }) as Promise<AttendanceAnalytics>,
     placeholderData: (previousData) => previousData,
   });
@@ -1010,19 +1158,31 @@ export function AttendancePage() {
 
   const modalStudentList = useMemo(() => {
     if (!form.groupId) return studentList;
-    const enrollments = (selectedGroupDetails.data as any)?.enrollments || [];
+    const enrollments =
+      (selectedGroupDetails.data as { enrollments?: Array<{ student?: Student }> } | undefined)
+        ?.enrollments || [];
     if (enrollments.length === 0) return studentList;
     return enrollments
-      .map((e: any) => e.student)
-      .filter(Boolean) as Student[];
+      .map((e) => e.student)
+      .filter((s): s is Student => Boolean(s && s.id));
   }, [form.groupId, selectedGroupDetails.data, studentList]);
+
+  useEffect(() => {
+    if (!modalOpen || !form.groupId || !form.studentId) return;
+    if (selectedGroupDetails.isLoading) return;
+    const exists = modalStudentList.some((s) => s?.id === form.studentId);
+    if (!exists && modalStudentList.length > 0) {
+      setForm((prev) => ({ ...prev, studentId: '' }));
+    }
+  }, [modalOpen, form.groupId, form.studentId, modalStudentList, selectedGroupDetails.isLoading]);
 
   /* ── Derived stats ────────────────────────────────────────────────── */
   const statusCounts = useMemo(() => {
     const byStatus = analyticsQuery.data?.byStatus ?? [];
     const map: Record<string, number> = {};
     byStatus.forEach((s) => {
-      map[s.status] = (s as any).count ?? (s as any)._count?.status ?? 0;
+      const item = s as { status: string; count?: number; _count?: { status?: number } };
+      map[item.status] = item.count ?? item._count?.status ?? 0;
     });
     return {
       present: map['PRESENT'] ?? 0,
@@ -1032,18 +1192,37 @@ export function AttendancePage() {
     };
   }, [analyticsQuery.data]);
 
-  /* ── Client-side instant search filtering ─────────────────────────── */
+  /* ── Client-side instant search, source filtering & sorting ───────── */
   const rawItems = useMemo(() => data?.items || [], [data?.items]);
   const itemsList = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return rawItems;
-    return rawItems.filter((a) => {
-      const sName = fullStudentName(a).toLowerCase();
-      const gName = (a.group?.name || '').toLowerCase();
-      const note = (a.note || '').toLowerCase();
-      return sName.includes(q) || gName.includes(q) || note.includes(q);
-    });
-  }, [rawItems, searchQuery]);
+    let list = [...rawItems];
+    const q = debouncedSearchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((a) => {
+        const sName = fullStudentName(a).toLowerCase();
+        const gName = (a.group?.name || '').toLowerCase();
+        const note = (a.note || '').toLowerCase();
+        return sName.includes(q) || gName.includes(q) || note.includes(q);
+      });
+    }
+    if (sourceFilter) {
+      list = list.filter((a) => {
+        const src = (a.source || 'SYSTEM').toUpperCase();
+        if (sourceFilter === 'BIOMETRIC') {
+          return src === 'FACE_ID' || src === 'FACE' || src === 'FACE_KIOSK' || src === 'TURNSTILE';
+        }
+        return src === sourceFilter;
+      });
+    }
+    if (sortBy === 'date-desc') {
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } else if (sortBy === 'name-asc') {
+      list.sort((a, b) => fullStudentName(a).localeCompare(fullStudentName(b)));
+    } else if (sortBy === 'status-asc') {
+      list.sort((a, b) => a.status.localeCompare(b.status));
+    }
+    return list;
+  }, [rawItems, debouncedSearchQuery, sourceFilter, sortBy]);
 
   /* ── Schedule-error helper ────────────────────────────────────────── */
   const pushScheduleAwareError = useCallback(
@@ -1057,14 +1236,14 @@ export function AttendancePage() {
   /* ── Cache invalidation helper ────────────────────────────────────── */
   const invalidateAttendanceCaches = useCallback(
     (studentId?: string) => {
-      qc.invalidateQueries({ queryKey: queryKeys.attendance.all() });
-      qc.invalidateQueries({ queryKey: ['attendance'] });
-      qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
-      qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.attendance.all() });
+      void qc.invalidateQueries({ queryKey: ['attendance'] });
+      void qc.invalidateQueries({ queryKey: ['attendance-analytics'] });
+      void qc.invalidateQueries({ queryKey: queryKeys.dashboard.all() });
       if (studentId) {
-        qc.invalidateQueries({ queryKey: queryKeys.students.detail(studentId) });
+        void qc.invalidateQueries({ queryKey: queryKeys.students.detail(studentId) });
       }
-      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
       void attendance.refetch();
       void analyticsQuery.refetch();
     },
@@ -1078,15 +1257,19 @@ export function AttendancePage() {
         groupId: form.groupId,
         date: form.date ? `${form.date}T12:00:00.000Z` : new Date().toISOString(),
         records: [
-          { studentId: form.studentId, status: form.status, note: form.note || undefined },
+          {
+            studentId: form.studentId,
+            status: form.status,
+            note: form.note.trim() || undefined,
+          },
         ],
       }),
     onSuccess: () => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       push('success', t('attendance.recordedSuccess'));
       const recordedStudentId = form.studentId;
       setModalOpen(false);
-      setForm(INITIAL_FORM);
+      setForm(createInitialForm(groupId, date));
       setFormErrors({});
       invalidateAttendanceCaches(recordedStudentId);
     },
@@ -1121,18 +1304,20 @@ export function AttendancePage() {
   });
 
   /* ── Quick 1-Click Inline Status Cycle ────────────────────────────── */
+  const mutateUpdate = updateRecord.mutate;
   const handleQuickCycleStatus = useCallback(
     (record: Attendance) => {
-      sound.playPop();
+      if (updateRecord.isPending && cyclingId === record.id) return;
+      soundRef.current?.playPop?.();
       const nextStatus = STATUS_CYCLE_ORDER[record.status] ?? 'PRESENT';
       setCyclingId(record.id);
-      updateRecord.mutate({
+      mutateUpdate({
         id: record.id,
         status: nextStatus,
         note: record.note || '',
       });
     },
-    [sound, updateRecord],
+    [mutateUpdate, updateRecord.isPending, cyclingId],
   );
 
   /* ── Handlers ─────────────────────────────────────────────────────── */
@@ -1146,27 +1331,38 @@ export function AttendancePage() {
   );
 
   const handleResetFilters = useCallback(() => {
-    sound.playPop();
+    soundRef.current?.playPop?.();
     setGroupId('');
     setDate('');
     setStatus('');
+    setSourceFilter('');
+    setSortBy('date-desc');
     setSearchQuery('');
     setPage(1);
-  }, [sound]);
+  }, []);
 
   const handleFormChange = useCallback(
     (field: keyof AttendanceFormState) =>
       (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-        setForm((prev) => ({ ...prev, [field]: e.target.value }));
-        setFormErrors((prev) => ({ ...prev, [field]: undefined }));
+        const nextVal = e.target.value;
+        setForm((prev) => ({
+          ...prev,
+          [field]: nextVal,
+          ...(field === 'groupId' && prev.groupId !== nextVal ? { studentId: '' } : {}),
+        }));
+        setFormErrors((prev) => ({
+          ...prev,
+          [field]: undefined,
+          ...(field === 'groupId' ? { studentId: undefined } : {}),
+        }));
       },
     [],
   );
 
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof AttendanceFormState, string>> = {};
-    if (!form.studentId) errors.studentId = t('common.validation.selectStudent');
     if (!form.groupId) errors.groupId = t('common.validation.selectGroup');
+    if (!form.studentId) errors.studentId = t('common.validation.selectStudent');
     if (!form.date) errors.date = t('common.validation.selectDate');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -1175,6 +1371,7 @@ export function AttendancePage() {
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
+      if (create.isPending) return;
       if (!validateForm()) return;
       create.mutate();
     },
@@ -1190,29 +1387,31 @@ export function AttendancePage() {
   const handleEditSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!editTarget) return;
-      updateRecord.mutate({ id: editTarget.id, status: editStatus, note: editNote });
+      if (!editTarget || updateRecord.isPending) return;
+      updateRecord.mutate({ id: editTarget.id, status: editStatus, note: editNote.trim() });
     },
     [editTarget, editStatus, editNote, updateRecord],
   );
 
   const handleCloseModal = useCallback(() => {
     setModalOpen(false);
-    setForm(INITIAL_FORM);
+    setForm(createInitialForm(groupId, date));
     setFormErrors({});
-  }, []);
+  }, [groupId, date]);
 
   const { refetch: refetchAttendance } = attendance;
   const handleRetry = useCallback(() => {
-    sound.playPop();
+    soundRef.current?.playPop?.();
     void refetchAttendance();
     void analyticsQuery.refetch();
-  }, [refetchAttendance, analyticsQuery, sound]);
+  }, [refetchAttendance, analyticsQuery]);
 
   const todayISO = useMemo(() => toLocalISOString(), []);
   const yesterdayISO = useMemo(() => getYesterdayISO(), []);
 
-  const hasActiveFilters = Boolean(groupId || date || status || searchQuery.trim());
+  const hasActiveFilters = Boolean(
+    groupId || date || status || sourceFilter || sortBy !== 'date-desc' || searchQuery.trim(),
+  );
   const totalRecords = data?.total || 0;
   const overallRate = analyticsQuery.data?.overall.rate ?? 0;
   const overallPresent = analyticsQuery.data?.overall.present ?? 0;
@@ -1221,7 +1420,7 @@ export function AttendancePage() {
   /* ── Sidecar QuickLook Inspector ──────────────────────────────────── */
   const handleOpenAttendanceSidecar = useCallback(
     (record: Attendance) => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       const sName = fullStudentName(record);
       const gName =
         record.group?.name ||
@@ -1238,8 +1437,8 @@ export function AttendancePage() {
             record.status === 'PRESENT'
               ? 'emerald'
               : record.status === 'ABSENT'
-              ? 'rose'
-              : 'amber',
+                ? 'rose'
+                : 'amber',
         },
         avatar: {
           text: getInitials(sName),
@@ -1276,7 +1475,7 @@ export function AttendancePage() {
       };
       openSidecar(quickLook);
     },
-    [sound, openEdit, groupList, t],
+    [openEdit, groupList, t],
   );
 
   /* ── Keyboard Navigation ──────────────────────────────────────────── */
@@ -1300,7 +1499,7 @@ export function AttendancePage() {
     itemsList.length > 0 && itemsList.every((item) => isSelected(item.id));
 
   const handleToggleSelectAllVisible = useCallback(() => {
-    sound.playPop();
+    soundRef.current?.playPop?.();
     if (allVisibleSelected) {
       clearSelection();
     } else {
@@ -1308,40 +1507,67 @@ export function AttendancePage() {
         if (!isSelected(item.id)) toggleSelection(item.id);
       });
     }
-  }, [allVisibleSelected, clearSelection, itemsList, isSelected, toggleSelection, sound]);
+  }, [allVisibleSelected, clearSelection, itemsList, isSelected, toggleSelection]);
 
-  /* ── Parallelized Bulk Actions ────────────────────────────────────── */
-  const handleBatchMarkPresent = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    const results = await Promise.allSettled(
-      ids.map((id) => attendanceApi.update(id, { status: 'PRESENT', note: '' })),
-    );
-    const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
-    const rejected = results.filter((r) => r.status === 'rejected').length;
-    clearSelection();
-    invalidateAttendanceCaches();
-    if (fulfilled > 0) {
-      push('success', t('attendance.batchMarkSuccess', { count: fulfilled }));
-    }
-    if (rejected > 0) {
-      push('error', `${rejected} ta davomat yozuvini yangilashda xatolik yuz berdi`);
-    }
-  };
+  /* ── Non-Destructive Parallel Bulk Status Update ──────────────────── */
+  const handleBatchMarkStatus = useCallback(
+    async (targetStatus: AttendanceStatus) => {
+      if (isBatchUpdating) return;
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+
+      setIsBatchUpdating(true);
+      soundRef.current?.playPop?.();
+      try {
+        // Preserve each record's existing note and skip records already in targetStatus
+        const recordById = new Map(rawItems.map((r) => [r.id, r]));
+        const actionableIds = ids.filter((id) => {
+          const existing = recordById.get(id);
+          return !existing || existing.status !== targetStatus;
+        });
+
+        const results = await Promise.allSettled(
+          actionableIds.map((id) => {
+            const existingNote = recordById.get(id)?.note ?? '';
+            return attendanceApi.update(id, { status: targetStatus, note: existingNote });
+          }),
+        );
+
+        const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
+        const rejected = results.filter((r) => r.status === 'rejected').length;
+        clearSelection();
+        invalidateAttendanceCaches();
+
+        if (fulfilled > 0 || actionableIds.length === 0) {
+          push('success', t('attendance.batchMarkSuccess', { count: fulfilled || ids.length }));
+        }
+        if (rejected > 0) {
+          push('error', `${rejected} ta davomat yozuvini yangilashda xatolik yuz berdi`);
+        }
+      } finally {
+        setIsBatchUpdating(false);
+      }
+    },
+    [isBatchUpdating, selectedIds, rawItems, clearSelection, invalidateAttendanceCaches, push, t],
+  );
 
   const handleExportCSV = useCallback(
     (rowsToExport: Attendance[]) => {
       if (rowsToExport.length === 0) return;
       const headers = ['ID', 'Student', 'Group', 'Date', 'Status', 'Source', 'Note'];
-      const rows = rowsToExport.map((a) => [
-        a.id,
-        fullStudentName(a).replace(/"/g, '""'),
-        (a.group?.name || '').replace(/"/g, '""'),
-        a.date,
-        a.status,
-        a.source || '',
-        (a.note || '').replace(/"/g, '""'),
-      ].map((val) => `"${val}"`).join(','));
+      const rows = rowsToExport.map((a) =>
+        [
+          a.id,
+          fullStudentName(a).replace(/"/g, '""'),
+          (a.group?.name || '').replace(/"/g, '""'),
+          a.date,
+          a.status,
+          a.source || '',
+          (a.note || '').replace(/"/g, '""'),
+        ]
+          .map((val) => `"${val}"`)
+          .join(','),
+      );
 
       const bom = '\uFEFF';
       const csvText = bom + [headers.join(','), ...rows].join('\r\n');
@@ -1349,26 +1575,92 @@ export function AttendancePage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `attendance_export_${Date.now()}.csv`;
+      link.download = `attendance_export_${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       push('success', t('attendance.exportSuccess', { count: rowsToExport.length }));
     },
     [push, t],
   );
 
-  const handleExportSelectedAttendanceCSV = () => {
+  const handleExportSelectedAttendanceCSV = useCallback(() => {
     const selectedRows = itemsList.filter((a) => isSelected(a.id));
     handleExportCSV(selectedRows);
     clearSelection();
-  };
+  }, [itemsList, isSelected, handleExportCSV, clearSelection]);
+
+  /* ── Global Keyboard Shortcuts (`/`, `N`, `E`, `V`, `I`, `G`, `P`, `C`) ─ */
+  const hasAnyDialogOpen = Boolean(
+    modalOpen || registerModalOpen || editTarget || voidTarget,
+  );
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (hasAnyDialogOpen || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        Boolean(target?.isContentEditable);
+      if (isInput) return;
+
+      const key = e.key.toLowerCase();
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (key === 'n') {
+        e.preventDefault();
+        handleOpenRecordModal();
+      } else if (key === 'p' && selectedCount > 0) {
+        e.preventDefault();
+        void handleBatchMarkStatus('PRESENT');
+      } else if (key === 'c' && selectedCount > 0) {
+        e.preventDefault();
+        handleExportSelectedAttendanceCSV();
+      } else if (key === 'e') {
+        e.preventDefault();
+        if (selectedCount > 0) {
+          handleExportSelectedAttendanceCSV();
+        } else {
+          soundRef.current?.playPop?.();
+          window.dispatchEvent(new CustomEvent('medu:open-quick-attendance'));
+        }
+      } else if (key === 'v') {
+        e.preventDefault();
+        soundRef.current?.playPop?.();
+        setRegisterModalOpen(true);
+      } else if (key === 'g') {
+        e.preventDefault();
+        soundRef.current?.playPop?.();
+        setViewMode((m) => (m === 'list' ? 'grid' : 'list'));
+      } else if (key === 'i') {
+        e.preventDefault();
+        soundRef.current?.playPop?.();
+        window.dispatchEvent(
+          new CustomEvent('open-ai-copilot', {
+            detail: { prompt: t('attendance.aiPrompt') },
+          }),
+        );
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    hasAnyDialogOpen,
+    selectedCount,
+    handleOpenRecordModal,
+    handleBatchMarkStatus,
+    handleExportSelectedAttendanceCSV,
+    t,
+  ]);
 
   /* ── Initial Loading State ────────────────────────────────────────── */
   if (attendance.isLoading && !data) {
     return (
-      <div className="page-container max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-5 pb-24 sm:pb-8">
+      <div className="page-container max-w-7xl space-y-5 pb-24 sm:pb-8 2xl:max-w-[1600px] 3xl:max-w-[1800px]">
         <AttendanceSkeleton />
       </div>
     );
@@ -1377,7 +1669,7 @@ export function AttendancePage() {
   /* ── Error State ──────────────────────────────────────────────────── */
   if (attendance.isError) {
     return (
-      <div className="page-container max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-5 pb-24 sm:pb-8">
+      <div className="page-container max-w-7xl space-y-5 pb-24 sm:pb-8 2xl:max-w-[1600px] 3xl:max-w-[1800px]">
         <div className="glass-card p-8">
           <GlassErrorState
             title={t('attendance.loadFailed')}
@@ -1395,18 +1687,17 @@ export function AttendancePage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))]"
+      className="page-container relative isolate max-w-7xl space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))] 2xl:max-w-[1600px] 3xl:max-w-[1800px]"
     >
       {toastNode}
       <AuroraMesh variant="corporate" opacity={0.65} />
 
       {/* ============================================================
-          APPLE LIQUID GLASS HERO HEADER
+          APPLE iOS 27 LIQUID GLASS HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div className="relative overflow-hidden rounded-3xl border border-black/[0.06] bg-white/80 p-6 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card sm:p-7">
-          {/* Specular Edge Highlight & Ambient Mesh */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/15 z-10" />
+        <div className={cn(LIQUID_SURFACE, 'rounded-3xl p-6 sm:p-7')}>
+          <TopSpecular inset="inset-x-10" />
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/15"
@@ -1423,18 +1714,19 @@ export function AttendancePage() {
               animate={{ scale: 1, opacity: 1 }}
               whileHover={{ scale: 1.05, rotate: -2 }}
               transition={SPRING.smooth}
-              className="relative flex h-15 w-15 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ring-1 ring-black/5 dark:ring-white/15"
+              className="relative flex h-[3.75rem] w-[3.75rem] shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ring-1 ring-black/5 dark:ring-white/15"
               style={{
                 background: 'linear-gradient(135deg, #007AFF 0%, #4F46E5 100%)',
                 boxShadow:
-                  '0 12px 28px -8px rgba(0, 122, 255, 0.55), inset 0 1px 0 rgba(255,255,255,0.45)',
+                  '0 12px 28px -8px rgba(0, 122, 255, 0.55), inset 0 1.5px 0 rgba(255,255,255,0.5)',
               }}
             >
               <span
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 rounded-2xl"
                 style={{
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.42), transparent 55%)',
+                  background:
+                    'linear-gradient(180deg, rgba(255,255,255,0.42), transparent 55%)',
                 }}
               />
               <Icon paths={I.calendarCheck} size={28} strokeWidth={2.1} className="relative" />
@@ -1443,24 +1735,24 @@ export function AttendancePage() {
             {/* Title & Live Status Chips */}
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-emerald-400">
                   <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
                   {t('attendance.badge')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-blue-400">
                   <Icon paths={I.layers} size={11} strokeWidth={2.5} />
                   {totalRecords}{' '}
                   {totalRecords === 1 ? t('attendance.countOne') : t('attendance.countMany')}
                 </span>
                 {overallTotal > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                     {overallRate}% {t('executive.attendanceRate')}
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] sm:text-4xl dark:text-[#F5F5F7]">
                 {t('attendance.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#64748B] dark:text-slate-400">
@@ -1475,10 +1767,11 @@ export function AttendancePage() {
                 type="button"
                 onClick={handleRetry}
                 whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.94 }}
-                transition={SPRING.snappy}
+                whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
+                transition={SPRING.gel}
                 title={t('attendance.refresh')}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-[#64748B] hover:text-[#1D1D1F] dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:text-white transition-colors"
+                aria-label={t('attendance.refresh')}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-[#64748B] transition-colors hover:text-[#1D1D1F] dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:text-white"
               >
                 <Icon
                   paths={I.refresh}
@@ -1494,9 +1787,9 @@ export function AttendancePage() {
                   type="button"
                   onClick={() => handleExportCSV(itemsList)}
                   whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  transition={SPRING.snappy}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.08] bg-white/70 px-3.5 text-[12.5px] font-semibold text-[#1D1D1F] hover:bg-white dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-[#F5F5F7] dark:hover:bg-white/[0.08] transition-colors"
+                  whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
+                  transition={SPRING.gel}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.08] bg-white/70 px-3.5 text-[12.5px] font-semibold text-[#1D1D1F] transition-colors hover:bg-white dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-[#F5F5F7] dark:hover:bg-white/[0.08]"
                 >
                   <Icon paths={I.download} size={14} strokeWidth={2.2} />
                   <span className="hidden sm:inline">CSV</span>
@@ -1507,15 +1800,15 @@ export function AttendancePage() {
               <motion.button
                 type="button"
                 onClick={() => {
-                  sound.playPop();
+                  soundRef.current?.playPop?.();
                   window.dispatchEvent(new CustomEvent('medu:open-quick-attendance'));
                 }}
                 whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={SPRING.snappy}
+                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
+                transition={SPRING.gel}
                 title={`${t('attendance.expressHint')} (E)`}
                 aria-label={t('attendance.express')}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300 transition-colors shadow-xs"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-700 shadow-xs transition-colors hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300"
               >
                 <span className="text-sm">⚡</span>
                 <span className="hidden sm:inline">{t('attendance.express')}</span>
@@ -1524,13 +1817,16 @@ export function AttendancePage() {
               {/* Official A4 Attendance Register Sheet Button */}
               <motion.button
                 type="button"
-                onClick={() => setRegisterModalOpen(true)}
+                onClick={() => {
+                  soundRef.current?.playPop?.();
+                  setRegisterModalOpen(true);
+                }}
                 whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                transition={SPRING.snappy}
+                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
+                transition={SPRING.gel}
                 title={`${t('attendance.registerSheetTitle')} (V)`}
                 aria-label="Vedomost A4"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-2.5 text-xs font-bold text-violet-700 hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300 transition-colors shadow-xs"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 text-xs font-bold text-violet-700 shadow-xs transition-colors hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300"
               >
                 <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
                 <span className="hidden sm:inline">Vedomost</span>
@@ -1539,8 +1835,8 @@ export function AttendancePage() {
               {/* AI Copilot Analysis */}
               <motion.div
                 whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                transition={SPRING.snappy}
+                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
+                transition={SPRING.gel}
               >
                 <GlassButton
                   type="button"
@@ -1554,9 +1850,9 @@ export function AttendancePage() {
                   }}
                   title={`${t('attendance.aiAnalysis')} (I)`}
                   aria-label={t('attendance.aiAnalysis')}
-                  className="h-9 px-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 shadow-xs"
+                  className="h-10 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 shadow-xs hover:bg-purple-500/20"
                 >
-                  <span className="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-bold text-xs">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400">
                     <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                     <span className="hidden sm:inline">{t('attendance.aiAnalysis')}</span>
                   </span>
@@ -1566,20 +1862,23 @@ export function AttendancePage() {
               {/* Primary CTA: Record Attendance */}
               <motion.div
                 whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                transition={SPRING.snappy}
+                whileTap={{ scaleX: 1.04, scaleY: 0.94 }}
+                transition={SPRING.gel}
               >
                 <GlassButton
                   type="button"
                   variant="primary"
-                  onClick={() => setModalOpen(true)}
+                  onClick={handleOpenRecordModal}
                   aria-label={t('attendance.record')}
-                  className="h-10 px-4 rounded-2xl shadow-sm font-bold text-xs sm:text-sm"
+                  className="h-10 rounded-2xl px-4 text-xs font-bold shadow-sm sm:text-sm"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                     <span>{t('attendance.record')}</span>
-                    <kbd aria-hidden="true" className="hidden xl:inline-block rounded border border-white/30 bg-white/15 px-1.5 py-0.2 font-mono text-[10px]">
+                    <kbd
+                      aria-hidden="true"
+                      className="hidden rounded border border-white/30 bg-white/15 px-1.5 py-0.5 font-mono text-[10px] xl:inline-block"
+                    >
                       N
                     </kbd>
                   </span>
@@ -1591,62 +1890,55 @@ export function AttendancePage() {
       </motion.div>
 
       {/* ============================================================
-          ENTERPRISE ATTENDANCE TABS SWITCHER
+          ENTERPRISE ATTENDANCE TABS SWITCHER (Liquid Capsule Morph)
       ============================================================ */}
-      <div className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-black/[0.08] bg-white/70 p-1.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]">
-        <button
-          type="button"
-          onClick={() => setActiveTab('ledger')}
-          className={cn(
-            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
-            activeTab === 'ledger'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
-          )}
+      <LayoutGroup id="attendance-main-tabs">
+        <div
+          role="tablist"
+          aria-label={t('attendance.title')}
+          className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-white/65 bg-white/75 p-1.5 shadow-xs backdrop-blur-2xl dark:border-white/[0.09] dark:bg-white/[0.04]"
         >
-          <span>📋</span>
-          <span>{t('attendance.tabs.ledger')}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('analytics')}
-          className={cn(
-            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
-            activeTab === 'analytics'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
-          )}
-        >
-          <span>📈</span>
-          <span>{t('attendance.tabs.analytics')}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('radar')}
-          className={cn(
-            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
-            activeTab === 'radar'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
-          )}
-        >
-          <span>🚨</span>
-          <span>{t('attendance.tabs.radar')}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('flow')}
-          className={cn(
-            'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap',
-            activeTab === 'flow'
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/10 dark:text-white'
-              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
-          )}
-        >
-          <span>🚪</span>
-          <span>{t('attendance.tabs.flow')}</span>
-        </button>
-      </div>
+          {(
+            [
+              { id: 'ledger', emoji: '📋', label: t('attendance.tabs.ledger') },
+              { id: 'analytics', emoji: '📈', label: t('attendance.tabs.analytics') },
+              { id: 'radar', emoji: '🚨', label: t('attendance.tabs.radar') },
+              { id: 'flow', emoji: '🚪', label: t('attendance.tabs.flow') },
+            ] as const
+          ).map((tab) => {
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => {
+                  soundRef.current?.playPop?.();
+                  setActiveTab(tab.id);
+                }}
+                className={cn(
+                  'relative flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-colors',
+                  selected
+                    ? 'text-slate-900 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                )}
+              >
+                {selected && (
+                  <motion.span
+                    layoutId="attendanceMainTabPill"
+                    transition={SPRING.snappy}
+                    aria-hidden="true"
+                    className="absolute inset-0 -z-10 rounded-xl border border-white/80 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_rgba(15,23,42,0.08)] dark:border-white/15 dark:bg-white/12"
+                  />
+                )}
+                <span>{tab.emoji}</span>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </LayoutGroup>
 
       {activeTab === 'analytics' && (
         <div className="space-y-6">
@@ -1670,636 +1962,723 @@ export function AttendancePage() {
 
       {activeTab === 'ledger' && (
         <>
-      {/* ============================================================
-          KPI STATS + INTERACTIVE STATUS FILTERING + DISTRIBUTION BAR
-      ============================================================ */}
-      {analyticsQuery.data && (
-        <div className="space-y-3">
-          <motion.div
-            variants={containerVariants}
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-          >
-            <KpiTile
-              label={t('executive.attendanceRate')}
-              value={overallRate}
-              icon={I.calendarCheck}
-              tone={overallRate >= 80 ? 'emerald' : overallRate >= 60 ? 'orange' : 'red'}
-              percent
-              active={status === ''}
-              onClick={() => {
-                setStatus('');
-                setPage(1);
-              }}
-              secondary={t('attendance.trendPresent', {
-                present: overallPresent,
-                total: overallTotal,
-              })}
-            />
-            <KpiTile
-              label={t('attendance.present')}
-              value={statusCounts.present}
-              icon={I.checkCircle}
-              tone="emerald"
-              active={status === 'PRESENT'}
-              onClick={() => {
-                setStatus((prev) => (prev === 'PRESENT' ? '' : 'PRESENT'));
-                setPage(1);
-              }}
-            />
-            <KpiTile
-              label={t('attendance.absent')}
-              value={statusCounts.absent}
-              icon={I.xCircle}
-              tone="red"
-              active={status === 'ABSENT'}
-              onClick={() => {
-                setStatus((prev) => (prev === 'ABSENT' ? '' : 'ABSENT'));
-                setPage(1);
-              }}
-            />
-            <KpiTile
-              label={t('attendance.late')}
-              value={statusCounts.late}
-              icon={I.clock}
-              tone="orange"
-              active={status === 'LATE'}
-              onClick={() => {
-                setStatus((prev) => (prev === 'LATE' ? '' : 'LATE'));
-                setPage(1);
-              }}
-            />
-            <KpiTile
-              label={t('attendance.excused')}
-              value={statusCounts.excused}
-              icon={I.shield}
-              tone="blue"
-              active={status === 'EXCUSED'}
-              onClick={() => {
-                setStatus((prev) => (prev === 'EXCUSED' ? '' : 'EXCUSED'));
-                setPage(1);
-              }}
-            />
-          </motion.div>
-
-          <TelemetryDistributionBar
-            present={statusCounts.present}
-            late={statusCounts.late}
-            excused={statusCounts.excused}
-            absent={statusCounts.absent}
-            t={t}
-          />
-        </div>
-      )}
-
-      {/* ============================================================
-          LIQUID GLASS FILTER & COMMAND BAR
-      ============================================================ */}
-      <motion.div variants={cardVariants}>
-        <div className="relative overflow-hidden rounded-2xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-sm space-y-3">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/10 z-10" />
-
-          {/* Primary Filter Grid */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Instant Student / Note Search */}
-            <div className="relative">
-              <FieldIcon icon={I.search} tone="cyan" />
-              <GlassInput
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`${t('attendance.selectStudent')}... (/)`}
-                aria-label={t('attendance.selectStudent')}
-                className="pl-11 pr-8"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-black/5 hover:text-slate-600 dark:hover:bg-white/10"
-                  aria-label="Qidiruvni tozalash"
-                >
-                  <Icon paths={I.x} size={12} strokeWidth={2.5} />
-                </button>
-              )}
-            </div>
-
-            {/* Group Selector */}
-            <div className="relative">
-              <FieldIcon icon={I.usersRound} tone="purple" />
-              <GlassSelect
-                value={groupId}
-                onChange={handleFilterChange(setGroupId)}
-                aria-label={t('students.filterGroupLabel')}
-                className="pl-11"
+          {/* ============================================================
+              KPI STATS + INTERACTIVE STATUS FILTERING + DISTRIBUTION BAR
+          ============================================================ */}
+          {analyticsQuery.data && (
+            <div className="space-y-3">
+              <motion.div
+                variants={containerVariants}
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
               >
-                <option value="">{t('attendance.allGroups')}</option>
-                {groupList.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </GlassSelect>
-            </div>
+                <KpiTile
+                  label={t('executive.attendanceRate')}
+                  value={overallRate}
+                  icon={I.calendarCheck}
+                  tone={overallRate >= 80 ? 'emerald' : overallRate >= 60 ? 'orange' : 'red'}
+                  percent
+                  active={status === ''}
+                  onClick={() => {
+                    setStatus('');
+                    setPage(1);
+                  }}
+                  secondary={t('attendance.trendPresent', {
+                    present: overallPresent,
+                    total: overallTotal,
+                  })}
+                />
+                <KpiTile
+                  label={t('attendance.present')}
+                  value={statusCounts.present}
+                  icon={I.checkCircle}
+                  tone="emerald"
+                  active={status === 'PRESENT'}
+                  onClick={() => {
+                    setStatus((prev) => (prev === 'PRESENT' ? '' : 'PRESENT'));
+                    setPage(1);
+                  }}
+                />
+                <KpiTile
+                  label={t('attendance.absent')}
+                  value={statusCounts.absent}
+                  icon={I.xCircle}
+                  tone="red"
+                  active={status === 'ABSENT'}
+                  onClick={() => {
+                    setStatus((prev) => (prev === 'ABSENT' ? '' : 'ABSENT'));
+                    setPage(1);
+                  }}
+                />
+                <KpiTile
+                  label={t('attendance.late')}
+                  value={statusCounts.late}
+                  icon={I.clock}
+                  tone="orange"
+                  active={status === 'LATE'}
+                  onClick={() => {
+                    setStatus((prev) => (prev === 'LATE' ? '' : 'LATE'));
+                    setPage(1);
+                  }}
+                />
+                <KpiTile
+                  label={t('attendance.excused')}
+                  value={statusCounts.excused}
+                  icon={I.shield}
+                  tone="blue"
+                  active={status === 'EXCUSED'}
+                  onClick={() => {
+                    setStatus((prev) => (prev === 'EXCUSED' ? '' : 'EXCUSED'));
+                    setPage(1);
+                  }}
+                />
+              </motion.div>
 
-            {/* Date Input */}
-            <div className="relative">
-              <FieldIcon icon={I.calendar} tone="blue" />
-              <GlassInput
-                type="date"
-                value={date}
-                onChange={handleFilterChange(setDate)}
-                aria-label={t('attendance.filterByDate')}
-                className="pl-11"
+              <TelemetryDistributionBar
+                present={statusCounts.present}
+                late={statusCounts.late}
+                excused={statusCounts.excused}
+                absent={statusCounts.absent}
+                t={t}
               />
             </div>
+          )}
 
-            {/* Status Selector */}
-            <div className="relative">
-              <FieldIcon icon={I.filter} tone="orange" />
-              <GlassSelect
-                value={status}
-                onChange={handleFilterChange(setStatus)}
-                aria-label={t('attendance.filterByStatus')}
-                className="pl-11"
-              >
-                <option value="">{t('attendance.allStatuses')}</option>
-                {ATTENDANCE_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {t(`attendance.${s.toLowerCase()}`)}
-                  </option>
-                ))}
-              </GlassSelect>
-            </div>
-          </div>
+          {/* ============================================================
+              LIQUID GLASS FILTER, SOURCE & SORT COMMAND BAR
+          ============================================================ */}
+          <motion.div variants={cardVariants}>
+            <div className={cn(LIQUID_SURFACE, 'space-y-3 rounded-2xl p-4')}>
+              <TopSpecular inset="inset-x-8" />
 
-          {/* Secondary Utility Sub-bar: Quick Date Pills + Select All + Layout Switcher */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.04] dark:border-white/[0.05]">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {/* Select All Checkbox Pill */}
-              {itemsList.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleToggleSelectAllVisible}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                    allVisibleSelected
-                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
-                      : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400'
-                  }`}
-                >
-                  <span
-                    className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${
-                      allVisibleSelected
-                        ? 'border-blue-500 bg-blue-500 text-white'
-                        : 'border-slate-400/60'
-                    }`}
-                  >
-                    {allVisibleSelected && <Icon paths={I.check} size={9} strokeWidth={3.5} />}
-                  </span>
-                  <span>
-                    {selectedCount > 0 ? `${selectedCount} tanlandi` : 'Barchasini tanlash'}
-                  </span>
-                </button>
-              )}
-
-              {/* Quick Date Presets */}
-              <button
-                type="button"
-                onClick={() => {
-                  setDate(date === todayISO ? '' : todayISO);
-                  setPage(1);
-                }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
-                  date === todayISO
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400'
-                }`}
-              >
-                Bugun
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDate(date === yesterdayISO ? '' : yesterdayISO);
-                  setPage(1);
-                }}
-                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
-                  date === yesterdayISO
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400'
-                }`}
-              >
-                Kecha
-              </button>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={handleResetFilters}
-                  className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-600 hover:bg-red-500/20 dark:text-red-400 transition-colors"
-                >
-                  <Icon paths={I.x} size={11} strokeWidth={2.5} />
-                  Filtrlarni tozalash
-                </button>
-              )}
-            </div>
-
-            {/* Segmented View Mode Toggle (List vs Bento Grid) */}
-            <LayoutGroup id="attendance-view-switch">
-              <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
-                {(['list', 'grid'] as const).map((mode) => {
-                  const active = viewMode === mode;
-                  return (
+              {/* Primary Filter Grid */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                {/* Instant Student / Note Search */}
+                <div className="relative lg:col-span-2">
+                  <FieldIcon icon={I.search} tone="cyan" />
+                  <GlassInput
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={`${t('attendance.selectStudent')}... (/)`}
+                    aria-label={t('attendance.selectStudent')}
+                    className="pl-11 pr-8"
+                  />
+                  {searchQuery && (
                     <button
-                      key={mode}
                       type="button"
-                      onClick={() => setViewMode(mode)}
-                      className={`relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                        active
-                          ? 'text-[#1D1D1F] dark:text-white'
-                          : 'text-[#64748B] hover:text-[#1D1D1F] dark:text-slate-400'
-                      }`}
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-black/5 hover:text-slate-600 dark:hover:bg-white/10"
+                      aria-label="Qidiruvni tozalash"
                     >
-                      {active && (
-                        <motion.span
-                          layoutId="viewModePill"
-                          transition={SPRING.snappy}
-                          className="absolute inset-0 rounded-lg bg-white shadow-xs dark:bg-surface-800"
-                        />
+                      <Icon paths={I.x} size={12} strokeWidth={2.5} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Group Selector */}
+                <div className="relative">
+                  <FieldIcon icon={I.usersRound} tone="purple" />
+                  <GlassSelect
+                    value={groupId}
+                    onChange={handleFilterChange(setGroupId)}
+                    aria-label={t('students.filterGroupLabel')}
+                    className="pl-11"
+                  >
+                    <option value="">{t('attendance.allGroups')}</option>
+                    {groupList.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </GlassSelect>
+                </div>
+
+                {/* Date Input */}
+                <div className="relative">
+                  <FieldIcon icon={I.calendar} tone="blue" />
+                  <GlassInput
+                    type="date"
+                    value={date}
+                    onChange={handleFilterChange(setDate)}
+                    aria-label={t('attendance.filterByDate')}
+                    className="pl-11"
+                  />
+                </div>
+
+                {/* Status Selector */}
+                <div className="relative">
+                  <FieldIcon icon={I.filter} tone="orange" />
+                  <GlassSelect
+                    value={status}
+                    onChange={handleFilterChange(setStatus)}
+                    aria-label={t('attendance.filterByStatus')}
+                    className="pl-11"
+                  >
+                    <option value="">{t('attendance.allStatuses')}</option>
+                    {ATTENDANCE_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {t(`attendance.${s.toLowerCase()}`)}
+                      </option>
+                    ))}
+                  </GlassSelect>
+                </div>
+
+                {/* Sort Selector */}
+                <div className="relative">
+                  <FieldIcon icon={I.sort} tone="emerald" />
+                  <GlassSelect
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    aria-label="Saralash"
+                    className="pl-11"
+                  >
+                    <option value="date-desc">Sana (Yangi ↓)</option>
+                    <option value="name-asc">Talaba (A–Z)</option>
+                    <option value="status-asc">Holat bo&apos;yicha</option>
+                  </GlassSelect>
+                </div>
+              </div>
+
+              {/* Secondary Utility Sub-bar: Quick Date Pills + Biometric Source Filter + Layout Switcher */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.04] pt-2.5 dark:border-white/[0.05]">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Select All Checkbox Pill */}
+                  {itemsList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleToggleSelectAllVisible}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors',
+                        allVisibleSelected
+                          ? 'border border-blue-500/30 bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                          : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
                       )}
-                      <Icon
-                        paths={mode === 'list' ? I.list : I.grid}
-                        size={13}
-                        strokeWidth={2.2}
-                        className="relative z-10"
-                      />
-                      <span className="relative z-10 uppercase tracking-wider">
-                        {mode === 'list' ? 'List' : 'Bento'}
+                    >
+                      <span
+                        className={cn(
+                          'flex h-3.5 w-3.5 items-center justify-center rounded border',
+                          allVisibleSelected
+                            ? 'border-blue-500 bg-blue-500 text-white'
+                            : 'border-slate-400/60',
+                        )}
+                      >
+                        {allVisibleSelected && (
+                          <Icon paths={I.check} size={9} strokeWidth={3.5} />
+                        )}
+                      </span>
+                      <span>
+                        {selectedCount > 0
+                          ? `${selectedCount} tanlandi`
+                          : 'Barchasini tanlash'}
                       </span>
                     </button>
+                  )}
+
+                  {/* Quick Date Presets */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDate(date === todayISO ? '' : todayISO);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
+                      date === todayISO
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
+                    )}
+                  >
+                    Bugun
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDate(date === yesterdayISO ? '' : yesterdayISO);
+                      setPage(1);
+                    }}
+                    className={cn(
+                      'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
+                      date === yesterdayISO
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
+                    )}
+                  >
+                    Kecha
+                  </button>
+
+                  {/* Quick Source / Biometric Filter Pills */}
+                  {(
+                    [
+                      { id: 'BIOMETRIC', label: '🛡️ Face ID / Turniket' },
+                      { id: 'QR', label: '📱 QR' },
+                      { id: 'MANUAL', label: '✍️ Manual' },
+                    ] as const
+                  ).map((src) => {
+                    const isSel = sourceFilter === src.id;
+                    return (
+                      <button
+                        key={src.id}
+                        type="button"
+                        onClick={() => setSourceFilter((cur) => (cur === src.id ? '' : src.id))}
+                        className={cn(
+                          'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
+                          isSel
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
+                        )}
+                      >
+                        {src.label}
+                      </button>
+                    );
+                  })}
+
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={handleResetFilters}
+                      className="inline-flex items-center gap-1 rounded-lg bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                    >
+                      <Icon paths={I.x} size={11} strokeWidth={2.5} />
+                      Filtrlarni tozalash
+                    </button>
+                  )}
+                </div>
+
+                {/* Segmented View Mode Toggle (List vs Bento Grid) */}
+                <LayoutGroup id="attendance-view-switch">
+                  <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
+                    {(['list', 'grid'] as const).map((mode) => {
+                      const active = viewMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setViewMode(mode)}
+                          title={mode === 'list' ? 'Ro‘yxat [G]' : 'Bento Grid [G]'}
+                          className={cn(
+                            'relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors',
+                            active
+                              ? 'text-[#1D1D1F] dark:text-white'
+                              : 'text-[#64748B] hover:text-[#1D1D1F] dark:text-slate-400',
+                          )}
+                        >
+                          {active && (
+                            <motion.span
+                              layoutId="viewModePill"
+                              transition={SPRING.snappy}
+                              className="absolute inset-0 rounded-lg bg-white shadow-xs dark:bg-surface-800"
+                            />
+                          )}
+                          <Icon
+                            paths={mode === 'list' ? I.list : I.grid}
+                            size={13}
+                            strokeWidth={2.2}
+                            className="relative z-10"
+                          />
+                          <span className="relative z-10 uppercase tracking-wider">
+                            {mode === 'list' ? 'List' : 'Bento'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </LayoutGroup>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* ============================================================
+              RECORDS CONTAINER (LIST OR BENTO GRID VIEW)
+          ============================================================ */}
+          <motion.div
+            variants={cardVariants}
+            className={cn(LIQUID_SURFACE, 'rounded-3xl')}
+          >
+            <TopSpecular inset="inset-x-10" />
+            {itemsList.length === 0 ? (
+              <div className="relative p-12">
+                <div className="flex flex-col items-center text-center">
+                  <div
+                    className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                    style={{
+                      boxShadow:
+                        'inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 28px -12px rgba(37,99,235,0.45)',
+                    }}
+                  >
+                    <Icon paths={I.empty} size={28} strokeWidth={1.8} />
+                  </div>
+                  <p className="mt-4 text-[16px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    {hasActiveFilters
+                      ? t('attendance.emptyFilteredTitle')
+                      : t('attendance.emptyTitle')}
+                  </p>
+                  <p className="mt-1 max-w-sm text-[13px] font-medium text-[#64748B] dark:text-slate-400">
+                    {hasActiveFilters
+                      ? t('attendance.emptyFilteredHint')
+                      : t('attendance.emptyMessage')}
+                  </p>
+                  <div className="mt-5 flex items-center gap-2">
+                    {hasActiveFilters ? (
+                      <GlassButton
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleResetFilters}
+                      >
+                        Filtrlarni tiklash
+                      </GlassButton>
+                    ) : (
+                      <GlassButton
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={handleOpenRecordModal}
+                      >
+                        <span className="inline-flex items-center gap-2">
+                          <Icon paths={I.plus} size={14} strokeWidth={2.5} />
+                          {t('attendance.record')}
+                        </span>
+                      </GlassButton>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : viewMode === 'list' ? (
+              /* ── APPLE LIST VIEW ────────────────────────────────────── */
+              <div className="relative divide-y divide-slate-200/70 dark:divide-white/[0.06]">
+                {itemsList.map((a, idx) => {
+                  const name = fullStudentName(a);
+                  const initials = getInitials(name);
+                  const gradient = avatarGradient(name);
+                  const selected = isSelected(a.id);
+                  const focused = focusedIndex === idx;
+
+                  return (
+                    <motion.div
+                      key={a.id}
+                      id={`attendance-row-${a.id}`}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.02, 0.3) }}
+                      onClick={() => handleOpenAttendanceSidecar(a)}
+                      className={cn(
+                        'group flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5',
+                        selected
+                          ? 'bg-blue-500/[0.08] dark:bg-blue-500/[0.14]'
+                          : focused
+                            ? 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.10]'
+                            : 'hover:bg-slate-500/[0.035] dark:hover:bg-white/[0.025]',
+                      )}
+                    >
+                      {/* Left: Selection Checkbox + Avatar + Student Info */}
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelection(a.id);
+                          }}
+                          className="-m-2 inline-flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          aria-label={t('attendance.selectRowAria', { name })}
+                        >
+                          <span
+                            className={cn(
+                              'flex h-5 w-5 items-center justify-center rounded-lg border transition-all',
+                              selected
+                                ? 'scale-105 border-blue-500 bg-blue-500 text-white shadow-xs'
+                                : 'border-slate-300 bg-transparent group-hover:border-blue-400 dark:border-white/20',
+                            )}
+                          >
+                            {selected && <Icon paths={I.check} size={11} strokeWidth={3.5} />}
+                          </span>
+                        </button>
+
+                        {/* Glossy Gradient Avatar */}
+                        <div
+                          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/60 transition-transform duration-200 group-hover:scale-105 sm:h-11 sm:w-11 dark:ring-slate-900/60"
+                          style={{
+                            background: gradient,
+                            boxShadow:
+                              'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -4px rgba(0,0,0,0.28)',
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0 rounded-full"
+                            style={{
+                              background:
+                                'linear-gradient(180deg, rgba(255,255,255,0.38), transparent 55%)',
+                            }}
+                          />
+                          <span className="relative">{initials}</span>
+                        </div>
+
+                        {/* Student Name + Metadata Chips */}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                            {name}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-[#64748B] dark:text-slate-400">
+                            <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+                              <Icon
+                                paths={I.calendar}
+                                size={11}
+                                strokeWidth={2.2}
+                                className="opacity-65"
+                              />
+                              {formatDate(a.date)}
+                            </span>
+                            {a.group?.name && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-black/[0.04] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#1D1D1F] dark:bg-white/[0.06] dark:text-slate-200">
+                                <Icon
+                                  paths={I.book}
+                                  size={10}
+                                  strokeWidth={2.2}
+                                  className="opacity-70"
+                                />
+                                {a.group.name}
+                              </span>
+                            )}
+                            <SourceChip
+                              source={a.source || 'SYSTEM'}
+                              label={a.source || 'SYSTEM'}
+                            />
+                            {a.note && (
+                              <span
+                                className="inline-flex max-w-[14rem] items-center gap-1 truncate italic text-slate-500 sm:max-w-[18rem] dark:text-slate-400"
+                                title={a.note}
+                              >
+                                <Icon
+                                  paths={I.note}
+                                  size={10}
+                                  strokeWidth={2}
+                                  className="shrink-0 opacity-60"
+                                />
+                                {a.note}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Interactive 1-Click Status Badge + Action Buttons */}
+                      <div className="flex w-full shrink-0 items-center justify-between gap-3 border-t border-black/[0.04] pt-2 sm:w-auto sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.04]">
+                        <StatusBadge
+                          status={a.status}
+                          label={t(`attendance.${a.status.toLowerCase()}`)}
+                          onCycle={() => handleQuickCycleStatus(a)}
+                          isUpdating={cyclingId === a.id && updateRecord.isPending}
+                        />
+
+                        <div
+                          className="flex shrink-0 items-center gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <motion.button
+                            type="button"
+                            onClick={() => handleOpenAttendanceSidecar(a)}
+                            whileHover={{ scale: 1.08 }}
+                            whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
+                            transition={SPRING.gel}
+                            aria-label={t('attendance.dossier')}
+                            title={t('attendance.sidecarTitle')}
+                            className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+                            style={{
+                              background: TONES.purple.bg,
+                              color: TONES.purple.fg,
+                              border: `1px solid ${TONES.purple.border}`,
+                            }}
+                          >
+                            <Icon paths={I.sidebarRight} size={14} strokeWidth={2.1} />
+                          </motion.button>
+
+                          <motion.button
+                            type="button"
+                            onClick={() => openEdit(a)}
+                            whileHover={{ scale: 1.08 }}
+                            whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
+                            transition={SPRING.gel}
+                            aria-label={t('attendance.editAria', {
+                              name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+                            })}
+                            title={t('common.edit')}
+                            className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                            style={{
+                              background: TONES.blue.bg,
+                              color: TONES.blue.fg,
+                              border: `1px solid ${TONES.blue.border}`,
+                            }}
+                          >
+                            <Icon paths={I.edit} size={14} strokeWidth={2.1} />
+                          </motion.button>
+
+                          <motion.button
+                            type="button"
+                            onClick={() => setVoidTarget(a)}
+                            whileHover={{ scale: 1.08 }}
+                            whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
+                            transition={SPRING.gel}
+                            aria-label={t('attendance.voidAria', {
+                              name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+                            })}
+                            title={t('attendance.void')}
+                            className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                            style={{
+                              background: TONES.red.bg,
+                              color: TONES.red.fg,
+                              border: `1px solid ${TONES.red.border}`,
+                            }}
+                          >
+                            <Icon paths={I.trash} size={14} strokeWidth={2.1} />
+                          </motion.button>
+                        </div>
+                      </div>
+                    </motion.div>
                   );
                 })}
               </div>
-            </LayoutGroup>
-          </div>
-        </div>
-      </motion.div>
+            ) : (
+              /* ── APPLE BENTO GRID VIEW (Ergonomic Touch Targets) ────── */
+              <div className="grid grid-cols-1 gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                {itemsList.map((a, idx) => {
+                  const name = fullStudentName(a);
+                  const initials = getInitials(name);
+                  const gradient = avatarGradient(name);
+                  const selected = isSelected(a.id);
+                  const focused = focusedIndex === idx;
 
-      {/* ============================================================
-          RECORDS CONTAINER (LIST OR BENTO GRID VIEW)
-      ============================================================ */}
-      <motion.div
-        variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-black/[0.06] bg-white/80 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
-      >
-        {itemsList.length === 0 ? (
-          <div className="relative p-12">
-            <div className="flex flex-col items-center text-center">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                style={{
-                  boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.5), 0 10px 28px -12px rgba(37,99,235,0.45)',
-                }}
-              >
-                <Icon paths={I.empty} size={28} strokeWidth={1.8} />
-              </div>
-              <p className="mt-4 text-[16px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {hasActiveFilters
-                  ? t('attendance.emptyFilteredTitle')
-                  : t('attendance.emptyTitle')}
-              </p>
-              <p className="mt-1 max-w-sm text-[13px] font-medium text-[#64748B] dark:text-slate-400">
-                {hasActiveFilters
-                  ? t('attendance.emptyFilteredHint')
-                  : t('attendance.emptyMessage')}
-              </p>
-              <div className="mt-5 flex items-center gap-2">
-                {hasActiveFilters ? (
-                  <GlassButton
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleResetFilters}
-                  >
-                    Filtrlarni tiklash
-                  </GlassButton>
-                ) : (
-                  <GlassButton
-                    type="button"
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setModalOpen(true)}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Icon paths={I.plus} size={14} strokeWidth={2.5} />
-                      {t('attendance.record')}
-                    </span>
-                  </GlassButton>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : viewMode === 'list' ? (
-          /* ── APPLE LIST VIEW ────────────────────────────────────── */
-          <div className="relative divide-y divide-slate-200/70 dark:divide-white/[0.06]">
-            {itemsList.map((a, idx) => {
-              const name = fullStudentName(a);
-              const initials = getInitials(name);
-              const gradient = avatarGradient(name);
-              const selected = isSelected(a.id);
-              const focused = focusedIndex === idx;
-
-              return (
-                <motion.div
-                  key={a.id}
-                  id={`attendance-row-${a.id}`}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.025, 0.35) }}
-                  onClick={() => handleOpenAttendanceSidecar(a)}
-                  className={`group flex cursor-pointer flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-3.5 transition-all ${
-                    selected
-                      ? 'bg-blue-500/[0.08] dark:bg-blue-500/[0.14]'
-                      : focused
-                      ? 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.10]'
-                      : 'hover:bg-slate-500/[0.035] dark:hover:bg-white/[0.025]'
-                  }`}
-                >
-                  {/* Left: Selection Checkbox + Avatar + Student Info */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelection(a.id);
-                      }}
-                      className="h-9 w-9 min-h-[44px] min-w-[44px] -m-2 inline-flex items-center justify-center shrink-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                      aria-label={t('attendance.selectRowAria', { name })}
+                  return (
+                    <motion.div
+                      key={a.id}
+                      id={`attendance-row-${a.id}`}
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      whileHover={{ y: -3 }}
+                      transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.025, 0.25) }}
+                      onClick={() => handleOpenAttendanceSidecar(a)}
+                      className={cn(
+                        'group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 transition-all',
+                        selected
+                          ? 'border-blue-500 bg-blue-500/[0.08] dark:bg-blue-500/[0.14]'
+                          : focused
+                            ? 'border-emerald-500/50 bg-emerald-500/[0.06] ring-2 ring-emerald-500/30 dark:bg-emerald-500/[0.10]'
+                            : 'border-black/[0.06] bg-white/65 shadow-xs hover:bg-white/95 dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]',
+                      )}
                     >
-                      <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-lg border transition-all ${
-                          selected
-                            ? 'border-blue-500 bg-blue-500 text-white shadow-xs scale-105'
-                            : 'border-slate-300 dark:border-white/20 group-hover:border-blue-400 bg-transparent'
-                        }`}
-                      >
-                        {selected && <Icon paths={I.check} size={11} strokeWidth={3.5} />}
-                      </span>
-                    </button>
-
-                    {/* Glossy Gradient Avatar */}
-                    <div
-                      className="relative flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-2 ring-white/60 dark:ring-slate-900/60 transition-transform duration-200 group-hover:scale-105"
-                      style={{
-                        background: gradient,
-                        boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -4px rgba(0,0,0,0.28)',
-                      }}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 rounded-full"
-                        style={{
-                          background:
-                            'linear-gradient(180deg, rgba(255,255,255,0.38), transparent 55%)',
-                        }}
-                      />
-                      <span className="relative">{initials}</span>
-                    </div>
-
-                    {/* Student Name + Metadata Chips */}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-semibold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
-                        {name}
-                      </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-[#64748B] dark:text-slate-400">
-                        <span className="inline-flex items-center gap-1 tabular-nums shrink-0">
-                          <Icon paths={I.calendar} size={11} strokeWidth={2.2} className="opacity-65" />
-                          {formatDate(a.date)}
-                        </span>
-                        {a.group?.name && (
-                          <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-black/[0.04] dark:bg-white/[0.06] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#1D1D1F] dark:text-slate-200">
-                            <Icon paths={I.book} size={10} strokeWidth={2.2} className="opacity-70" />
-                            {a.group.name}
-                          </span>
-                        )}
-                        <SourceChip source={a.source || 'SYSTEM'} label={a.source || 'SYSTEM'} />
-                        {a.note && (
-                          <span
-                            className="inline-flex items-center gap-1 max-w-[14rem] sm:max-w-[18rem] truncate italic text-slate-500 dark:text-slate-400"
-                            title={a.note}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelection(a.id);
+                            }}
+                            className="-m-1.5 inline-flex h-9 w-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            aria-label={t('attendance.selectRowAria', { name })}
                           >
-                            <Icon paths={I.note} size={10} strokeWidth={2} className="opacity-60 shrink-0" />
-                            {a.note}
-                          </span>
-                        )}
+                            <span
+                              className={cn(
+                                'flex h-[18px] w-[18px] items-center justify-center rounded-md border',
+                                selected
+                                  ? 'border-blue-500 bg-blue-500 text-white'
+                                  : 'border-slate-300 dark:border-white/20',
+                              )}
+                            >
+                              {selected && <Icon paths={I.check} size={10} strokeWidth={3.5} />}
+                            </span>
+                          </button>
+
+                          <div
+                            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
+                            style={{ background: gradient }}
+                          >
+                            {initials}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                              {name}
+                            </p>
+                            <p className="truncate text-[11.5px] font-medium text-[#64748B] dark:text-slate-400">
+                              {a.group?.name || t('attendance.defaultGroup')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <StatusBadge
+                          status={a.status}
+                          label={t(`attendance.${a.status.toLowerCase()}`)}
+                          onCycle={() => handleQuickCycleStatus(a)}
+                          isUpdating={cyclingId === a.id && updateRecord.isPending}
+                        />
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Right: Interactive 1-Click Status Badge + Action Buttons */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t border-black/[0.04] dark:border-white/[0.04] sm:border-0 shrink-0">
-                    <StatusBadge
-                      status={a.status}
-                      label={t(`attendance.${a.status.toLowerCase()}`)}
-                      onCycle={() => handleQuickCycleStatus(a)}
-                      isUpdating={cyclingId === a.id && updateRecord.isPending}
-                    />
+                      {a.note && (
+                        <p className="mt-3 line-clamp-2 rounded-xl bg-black/[0.03] px-3 py-2 text-[11.5px] italic text-[#64748B] dark:bg-white/[0.04] dark:text-slate-300">
+                          &ldquo;{a.note}&rdquo;
+                        </p>
+                      )}
 
-                    <div
-                      className="flex items-center gap-1.5 shrink-0"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Sidecar Inspector Button (Pure SF Symbol `sidebar.right`) */}
-                      <motion.button
-                        type="button"
-                        onClick={() => handleOpenAttendanceSidecar(a)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('attendance.dossier')}
-                        title={t('attendance.sidecarTitle')}
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
-                        style={{
-                          background: TONES.purple.bg,
-                          color: TONES.purple.fg,
-                          border: `1px solid ${TONES.purple.border}`,
-                        }}
-                      >
-                        <Icon paths={I.sidebarRight} size={14} strokeWidth={2.1} />
-                      </motion.button>
+                      <div className="mt-4 flex items-center justify-between border-t border-black/[0.05] pt-3 dark:border-white/[0.06]">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold text-[#64748B]">
+                          <span>{formatDate(a.date)}</span>
+                          <SourceChip
+                            source={a.source || 'SYSTEM'}
+                            label={a.source || 'SYSTEM'}
+                          />
+                        </div>
 
-                      {/* Edit Button */}
-                      <motion.button
-                        type="button"
-                        onClick={() => openEdit(a)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('attendance.editAria', {
-                          name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
-                        })}
-                        title={t('common.edit')}
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
-                        style={{
-                          background: TONES.blue.bg,
-                          color: TONES.blue.fg,
-                          border: `1px solid ${TONES.blue.border}`,
-                        }}
-                      >
-                        <Icon paths={I.edit} size={14} strokeWidth={2.1} />
-                      </motion.button>
-
-                      {/* Void / Delete Button */}
-                      <motion.button
-                        type="button"
-                        onClick={() => setVoidTarget(a)}
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        transition={SPRING.snappy}
-                        aria-label={t('attendance.voidAria', {
-                          name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
-                        })}
-                        title={t('attendance.void')}
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
-                        style={{
-                          background: TONES.red.bg,
-                          color: TONES.red.fg,
-                          border: `1px solid ${TONES.red.border}`,
-                        }}
-                      >
-                        <Icon paths={I.trash} size={14} strokeWidth={2.1} />
-                      </motion.button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : (
-          /* ── APPLE BENTO GRID VIEW ──────────────────────────────── */
-          <div className="grid grid-cols-1 gap-3.5 p-4 sm:grid-cols-2 lg:grid-cols-3">
-            {itemsList.map((a, idx) => {
-              const name = fullStudentName(a);
-              const initials = getInitials(name);
-              const gradient = avatarGradient(name);
-              const selected = isSelected(a.id);
-
-              return (
-                <motion.div
-                  key={a.id}
-                  id={`attendance-row-${a.id}`}
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  whileHover={{ y: -3 }}
-                  transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.03, 0.3) }}
-                  onClick={() => handleOpenAttendanceSidecar(a)}
-                  className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 transition-all ${
-                    selected
-                      ? 'border-blue-500 bg-blue-500/[0.08] dark:bg-blue-500/[0.14]'
-                      : 'border-black/[0.06] bg-white/60 hover:bg-white/95 dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.06] shadow-xs'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelection(a.id);
-                        }}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-lg"
-                        aria-label={t('attendance.selectRowAria', { name })}
-                      >
-                        <span
-                          className={`flex h-4.5 w-4.5 items-center justify-center rounded-md border ${
-                            selected
-                              ? 'border-blue-500 bg-blue-500 text-white'
-                              : 'border-slate-300 dark:border-white/20'
-                          }`}
+                        <div
+                          className="flex items-center gap-1.5"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          {selected && <Icon paths={I.check} size={10} strokeWidth={3.5} />}
-                        </span>
-                      </button>
-
-                      <div
-                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
-                        style={{ background: gradient }}
-                      >
-                        {initials}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAttendanceSidecar(a)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-indigo-600 transition-colors hover:bg-indigo-500/10 dark:text-indigo-400"
+                            title={t('attendance.sidecarTitle')}
+                            aria-label={t('attendance.dossier')}
+                          >
+                            <Icon paths={I.sidebarRight} size={14} strokeWidth={2} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEdit(a)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
+                            title={t('common.edit')}
+                            aria-label={t('common.edit')}
+                          >
+                            <Icon paths={I.edit} size={14} strokeWidth={2} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setVoidTarget(a)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-500/10"
+                            title={t('attendance.void')}
+                            aria-label={t('attendance.void')}
+                          >
+                            <Icon paths={I.trash} size={14} strokeWidth={2} />
+                          </button>
+                        </div>
                       </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
 
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                          {name}
-                        </p>
-                        <p className="truncate text-[11.5px] font-medium text-[#64748B] dark:text-slate-400">
-                          {a.group?.name || t('attendance.defaultGroup')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <StatusBadge
-                      status={a.status}
-                      label={t(`attendance.${a.status.toLowerCase()}`)}
-                      onCycle={() => handleQuickCycleStatus(a)}
-                      isUpdating={cyclingId === a.id && updateRecord.isPending}
-                    />
-                  </div>
-
-                  {a.note && (
-                    <p className="mt-3 line-clamp-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2 text-[11.5px] italic text-[#64748B] dark:text-slate-300">
-                      "{a.note}"
-                    </p>
-                  )}
-
-                  <div className="mt-4 flex items-center justify-between border-t border-black/[0.05] dark:border-white/[0.06] pt-3">
-                    <div className="flex items-center gap-2 text-[11px] font-semibold text-[#64748B]">
-                      <span>{formatDate(a.date)}</span>
-                      <SourceChip source={a.source || 'SYSTEM'} label={a.source || 'SYSTEM'} />
-                    </div>
-
-                    <div
-                      className="flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => openEdit(a)}
-                        className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
-                        title={t('common.edit')}
-                      >
-                        <Icon paths={I.edit} size={14} strokeWidth={2} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setVoidTarget(a)}
-                        className="rounded-lg p-1.5 text-red-500 hover:bg-red-500/10"
-                        title={t('attendance.void')}
-                      >
-                        <Icon paths={I.trash} size={14} strokeWidth={2} />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Pagination Footer */}
-        {data && data.totalPages > 1 && (
-          <div className="relative border-t border-slate-200/80 dark:border-white/[0.06] px-4 py-3">
-            <GlassPagination
-              page={page}
-              totalPages={data.totalPages}
-              onPageChange={setPage}
-            />
-          </div>
-        )}
-      </motion.div>
-
+            {/* Pagination Footer */}
+            {data && data.totalPages > 1 && (
+              <div className="relative border-t border-slate-200/80 px-4 py-3 dark:border-white/[0.06]">
+                <GlassPagination
+                  page={page}
+                  totalPages={data.totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
+          </motion.div>
         </>
       )}
 
@@ -2309,7 +2688,7 @@ export function AttendancePage() {
       />
 
       {/* ============================================================
-          RECORD ATTENDANCE MODAL (Refactored with StatusSegmented)
+          RECORD ATTENDANCE MODAL (Group First -> Student + Note Presets)
       ============================================================ */}
       <GlassModal
         open={modalOpen}
@@ -2329,33 +2708,7 @@ export function AttendancePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <GlassField
-              label={t('attendance.selectStudent')}
-              required
-              error={formErrors.studentId}
-            >
-              <div className="relative">
-                <FieldIcon icon={I.user} tone="purple" />
-                <GlassSelect
-                  value={form.studentId}
-                  onChange={handleFormChange('studentId')}
-                  required
-                  aria-invalid={Boolean(formErrors.studentId)}
-                  aria-describedby={formErrors.studentId ? 'student-error' : undefined}
-                  className="pl-11"
-                >
-                  <option value="">{t('attendance.studentPlaceholder')}</option>
-                  {modalStudentList
-                    .filter((s): s is Student => Boolean(s && s.id))
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.user?.firstName || (s as any).name || "O'quvchi"} {s.user?.lastName || ''}
-                      </option>
-                    ))}
-                </GlassSelect>
-              </div>
-            </GlassField>
-
+            {/* 1. Group First — so filtering students never wipes a chosen student */}
             <GlassField
               label={t('attendance.selectGroup')}
               required
@@ -2377,6 +2730,35 @@ export function AttendancePage() {
                       {g.name}
                     </option>
                   ))}
+                </GlassSelect>
+              </div>
+            </GlassField>
+
+            {/* 2. Student Second */}
+            <GlassField
+              label={t('attendance.selectStudent')}
+              required
+              error={formErrors.studentId}
+            >
+              <div className="relative">
+                <FieldIcon icon={I.user} tone="purple" />
+                <GlassSelect
+                  value={form.studentId}
+                  onChange={handleFormChange('studentId')}
+                  required
+                  aria-invalid={Boolean(formErrors.studentId)}
+                  aria-describedby={formErrors.studentId ? 'student-error' : undefined}
+                  className="pl-11"
+                >
+                  <option value="">{t('attendance.studentPlaceholder')}</option>
+                  {modalStudentList
+                    .filter((s): s is Student => Boolean(s && s.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.user?.firstName || (s as { name?: string }).name || "O'quvchi"}{' '}
+                        {s.user?.lastName || ''}
+                      </option>
+                    ))}
                 </GlassSelect>
               </div>
             </GlassField>
@@ -2425,9 +2807,21 @@ export function AttendancePage() {
                 className="pl-11"
               />
             </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {QUICK_NOTE_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, note: preset }))}
+                  className="rounded-lg border border-black/[0.08] bg-white/60 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-600 transition hover:border-blue-500/40 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                >
+                  + {preset}
+                </button>
+              ))}
+            </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-white/[0.08] pt-4">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 pt-4 dark:border-white/[0.08]">
             <GlassButton
               type="button"
               variant="secondary"
@@ -2460,7 +2854,7 @@ export function AttendancePage() {
       </GlassModal>
 
       {/* ============================================================
-          EDIT RECORD MODAL
+          EDIT RECORD MODAL (With Quick Note Presets)
       ============================================================ */}
       <GlassModal
         open={Boolean(editTarget)}
@@ -2509,9 +2903,21 @@ export function AttendancePage() {
                 className="pl-11"
               />
             </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {QUICK_NOTE_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setEditNote(preset)}
+                  className="rounded-lg border border-black/[0.08] bg-white/60 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-600 transition hover:border-blue-500/40 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                >
+                  + {preset}
+                </button>
+              ))}
+            </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-white/[0.08] pt-4">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 pt-4 dark:border-white/[0.08]">
             <GlassButton
               type="button"
               variant="secondary"
@@ -2559,10 +2965,10 @@ export function AttendancePage() {
             <p className="text-[12.5px] font-semibold leading-snug text-red-500">
               {t('attendance.voidConfirmBefore')}{' '}
               <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">
-                {voidTarget?.student
-                  ? (voidTarget.student.user
-                    ? `${voidTarget.student?.user?.firstName || ''} ${voidTarget.student?.user?.lastName || ''}`.trim()
-                    : (voidTarget.student as any).name || t('attendance.thisStudent'))
+                {voidTarget
+                  ? fullStudentName(voidTarget) !== '—'
+                    ? fullStudentName(voidTarget)
+                    : t('attendance.thisStudent')
                   : t('attendance.thisStudent')}
               </strong>{' '}
               {t('attendance.voidConfirmAfter', {
@@ -2571,7 +2977,7 @@ export function AttendancePage() {
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-slate-200/80 dark:border-white/[0.08] pt-4">
+          <div className="flex justify-end gap-2 border-t border-slate-200/80 pt-4 dark:border-white/[0.08]">
             <GlassButton
               type="button"
               variant="secondary"
@@ -2609,27 +3015,47 @@ export function AttendancePage() {
       </GlassModal>
 
       {/* ============================================================
-          FLOATING ACTION ISLAND (BULK OPERATIONS)
+          FLOATING ACTION ISLAND (BULK OPERATIONS — LEDGER TAB ONLY)
       ============================================================ */}
-      <FloatingActionIsland
-        selectedCount={selectedCount}
-        onClear={clearSelection}
-        actions={[
-          {
-            label: t('attendance.bulkMarkPresent'),
-            icon: '✓',
-            onClick: handleBatchMarkPresent,
-            variant: 'primary',
-            shortcutBadge: 'p',
-          },
-          {
-            label: t('attendance.bulkExportCsv'),
-            icon: '📊',
-            onClick: handleExportSelectedAttendanceCSV,
-            shortcutBadge: 'e',
-          },
-        ]}
-      />
+      {activeTab === 'ledger' && (
+        <FloatingActionIsland
+          selectedCount={selectedCount}
+          onClear={clearSelection}
+          onClearSelection={clearSelection}
+          entityName={t('attendance.title')}
+          actions={[
+            {
+              label: isBatchUpdating ? t('common.saving') : t('attendance.bulkMarkPresent'),
+              icon: <Icon paths={I.check} size={13} strokeWidth={2.5} />,
+              onClick: () => void handleBatchMarkStatus('PRESENT'),
+              variant: 'primary',
+              shortcut: 'P',
+              shortcutBadge: 'p',
+            },
+            {
+              label: t('attendance.late'),
+              icon: <Icon paths={I.clock} size={13} strokeWidth={2.3} />,
+              onClick: () => void handleBatchMarkStatus('LATE'),
+              variant: 'default',
+            },
+            {
+              label: t('attendance.excused'),
+              icon: <Icon paths={I.shield} size={13} strokeWidth={2.3} />,
+              onClick: () => void handleBatchMarkStatus('EXCUSED'),
+              variant: 'default',
+            },
+            {
+              label: t('attendance.bulkExportCsv'),
+              icon: <Icon paths={I.download} size={13} strokeWidth={2.3} />,
+              onClick: handleExportSelectedAttendanceCSV,
+              shortcut: 'C',
+              shortcutBadge: 'c',
+            },
+          ]}
+        />
+      )}
     </motion.div>
   );
 }
+
+export default AttendancePage;

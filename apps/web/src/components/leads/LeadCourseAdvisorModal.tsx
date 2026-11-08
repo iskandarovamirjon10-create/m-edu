@@ -36,10 +36,18 @@ export const LeadCourseAdvisorModal: React.FC<LeadCourseAdvisorModalProps> = ({
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
-  const [leadName, setLeadName] = useState<string>(defaultLeadName || 'Yangi Talaba');
-  const [leadPhone, setLeadPhone] = useState<string>(defaultPhone || '+998 90 123 45 67');
+  const [leadName, setLeadName] = useState<string>(defaultLeadName || '');
+  const [leadPhone, setLeadPhone] = useState<string>(defaultPhone || '');
   const [paymentPlan, setPaymentPlan] = useState<'MONTHLY' | 'UPFRONT_DISCOUNT'>('MONTHLY');
   const [copied, setCopied] = useState<boolean>(false);
+
+  // Sync props when modal opens with new lead
+  useEffect(() => {
+    if (isOpen) {
+      if (defaultLeadName) setLeadName(defaultLeadName);
+      if (defaultPhone) setLeadPhone(defaultPhone);
+    }
+  }, [isOpen, defaultLeadName, defaultPhone]);
 
   // Fetch real courses from database
   useEffect(() => {
@@ -50,73 +58,59 @@ export const LeadCourseAdvisorModal: React.FC<LeadCourseAdvisorModalProps> = ({
         if (!active) return;
         const list: Course[] = res?.data || res?.items || (Array.isArray(res) ? res : []);
         setCourses(list);
-        if (list.length > 0 && !selectedCourseId) {
-          setSelectedCourseId(list[0].id);
-        }
+        setSelectedCourseId((prev) => prev || (list[0]?.id ?? ''));
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [isOpen, selectedCourseId]);
+  }, [isOpen]);
 
   const selectedCourse = useMemo(() => {
     return courses.find((c) => c.id === selectedCourseId) || courses[0] || null;
   }, [courses, selectedCourseId]);
 
-  const coursePrice = useMemo(() => {
-    return Number(selectedCourse?.price ?? 400_000);
-  }, [selectedCourse]);
+  /** Narx va davomiylik faqat kurs kartasidagi haqiqiy ma'lumotdan olinadi. */
+  const coursePrice = useMemo(() => Number(selectedCourse?.price ?? 0), [selectedCourse]);
 
-  const durationMonths = useMemo(() => {
-    // Default estimated 4 to 6 months if not set
-    return (selectedCourse as any)?.durationMonths || 4;
-  }, [selectedCourse]);
+  const durationMonths = useMemo(
+    () => Number((selectedCourse as { durationMonths?: number } | null)?.durationMonths ?? 0),
+    [selectedCourse],
+  );
 
   const totalTuition = useMemo(() => {
     const base = coursePrice * durationMonths;
     if (paymentPlan === 'UPFRONT_DISCOUNT') {
-      return Math.round(base * 0.9); // 10% discount for upfront payment
+      return Math.round(base * 0.9); // 10% chegirma — markaz siyosati
     }
     return base;
   }, [coursePrice, durationMonths, paymentPlan]);
 
-  const expectedSalaryForecast = useMemo(() => {
-    const cName = (selectedCourse?.name || '').toLowerCase();
-    if (cName.includes('pc') || cName.includes('savod')) {
-      return { entry: 3_500_000, mid: 6_000_000, title: 'Ofis Menejeri / IT Operator' };
-    }
-    if (cName.includes('front') || cName.includes('full') || cName.includes('dastur')) {
-      return { entry: 6_500_000, mid: 14_000_000, title: 'Junior Software Engineer' };
-    }
-    if (cName.includes('ielts') || cName.includes('ingliz')) {
-      return { entry: 5_000_000, mid: 12_000_000, title: 'Xalqaro Kompaniya Mutaxassisi' };
-    }
-    return { entry: 4_500_000, mid: 9_000_000, title: 'Kvalifikatsiyali Mutaxassis' };
-  }, [selectedCourse]);
-
-  // Payback days calculation
-  const paybackDays = useMemo(() => {
-    const dailyIncome = expectedSalaryForecast.entry / 22;
-    return Math.max(7, Math.round(totalTuition / dailyIncome));
-  }, [totalTuition, expectedSalaryForecast]);
-
   const proposalText = useMemo(() => {
-    const discountNote = paymentPlan === 'UPFRONT_DISCOUNT' ? " (To'liq to'lov uchun 10% chegirma bilan)" : "";
-    return `Assalomu alaykum, hurmatli ${leadName}!\n\n` +
-      `M-EDU Ta'lim Markazining "${selectedCourse?.name || 'Dasturlash'}" kursi bo'yicha rasmiy Tijorat Taklifi va Karyera Hisobi:\n\n` +
-      `📚 Kurs davomiyligi: ${durationMonths} oy\n` +
-      `💳 Oylik to'lov: ${coursePrice.toLocaleString('uz-UZ')} UZS\n` +
-      `💰 Jami investitsiya: ${totalTuition.toLocaleString('uz-UZ')} UZS${discountNote}\n\n` +
-      `🎯 Kutilayotgan natija:\n` +
-      `• Karyera sohasi: ${expectedSalaryForecast.title}\n` +
-      `• Boshlang'ich kutilayotgan oylik: ${expectedSalaryForecast.entry.toLocaleString('uz-UZ')} UZS\n` +
-      `• O'zini qoplash muddati: Atigi ${paybackDays} kunlik maosh bilan to'liq qoplanadi!\n\n` +
-      `Guruhda joylar soni cheklangan (maksimal 12 nafar). Sinov darsiga yozilish uchun ushbu xabarga javob bering yoki markazimizga tashrif buyuring.\n` +
-      `📍 Manzil: M-EDU Bosh Ofisi\n📞 Telefon: +998 71 200 00 00`;
-  }, [leadName, selectedCourse, durationMonths, coursePrice, totalTuition, paymentPlan, expectedSalaryForecast, paybackDays]);
+    const discountNote =
+      paymentPlan === 'UPFRONT_DISCOUNT' ? " (To'liq to'lov uchun 10% chegirma bilan)" : '';
+    const courseName = selectedCourse?.name || 'tanlangan kurs';
+    const durationLine = durationMonths > 0 ? `📚 Kurs davomiyligi: ${durationMonths} oy\n` : '';
+    const monthlyLine =
+      coursePrice > 0 ? `💳 Oylik to'lov: ${coursePrice.toLocaleString('uz-UZ')} UZS\n` : '';
+    const totalLine =
+      totalTuition > 0
+        ? `💰 Jami investitsiya: ${totalTuition.toLocaleString('uz-UZ')} UZS${discountNote}\n`
+        : '';
+
+    return (
+      `Assalomu alaykum, hurmatli ${leadName.trim() || 'mijoz'}!\n\n` +
+      `M-EDU Ta'lim Markazining "${courseName}" kursi bo'yicha rasmiy tijorat taklifi:\n\n` +
+      durationLine +
+      monthlyLine +
+      totalLine +
+      `\nGuruhda joylar soni cheklangan. Sinov darsiga yozilish uchun ushbu xabarga javob bering yoki markazimizga tashrif buyuring.`
+    );
+  }, [leadName, selectedCourse, durationMonths, coursePrice, totalTuition, paymentPlan]);
 
   const handleCopyProposal = async () => {
     try {
-      await navigator.clipboard.writeText(proposalText);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(proposalText);
+      }
       setCopied(true);
       playSuccess();
       haptics.success();
@@ -157,9 +151,6 @@ export const LeadCourseAdvisorModal: React.FC<LeadCourseAdvisorModalProps> = ({
                 <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
                   Lead Course Advisor & Ta'lim ROI Hisoblagichi
                 </h3>
-                <GlassBadge variant="info" size="sm" className="font-bold">
-                  Savdo Konversiyasi +40%
-                </GlassBadge>
               </div>
               <p className="text-xs text-slate-400">
                 Lidlar va ota-onalarga kursning moliyaviy va professional qiymatini bir zumda isbotlab beruvchi tijorat taklifi
@@ -220,29 +211,25 @@ export const LeadCourseAdvisorModal: React.FC<LeadCourseAdvisorModalProps> = ({
           </div>
 
           {/* ROI & Payback Impact Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-center">
               <div className="text-xs text-slate-400">Jami Investitsiya</div>
               <div className="text-xl font-bold text-white mt-1">
-                {totalTuition.toLocaleString('uz-UZ')} UZS
+                {totalTuition > 0 ? `${totalTuition.toLocaleString('uz-UZ')} UZS` : 'Belgilanmagan'}
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">{durationMonths} oylik to'liq dastur</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {durationMonths > 0 ? `${durationMonths} oylik to'liq dastur` : "Kurs davomiyligi ko'rsatilmagan"}
+              </div>
             </div>
 
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
-              <div className="text-xs font-semibold text-emerald-300">Boshlang'ich Maosh</div>
+              <div className="text-xs font-semibold text-emerald-300">Oylik To'lov</div>
               <div className="text-xl font-bold text-emerald-400 mt-1">
-                {expectedSalaryForecast.entry.toLocaleString('uz-UZ')} UZS/oy
+                {coursePrice > 0 ? `${coursePrice.toLocaleString('uz-UZ')} UZS` : 'Belgilanmagan'}
               </div>
-              <div className="text-[10px] text-emerald-300/70 mt-0.5">{expectedSalaryForecast.title}</div>
-            </div>
-
-            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-center">
-              <div className="text-xs font-semibold text-cyan-300">O'zini Qoplash Davri</div>
-              <div className="text-xl font-bold text-cyan-400 mt-1">
-                {paybackDays} kun
+              <div className="text-[10px] text-emerald-300/70 mt-0.5">
+                {selectedCourse?.name || 'Kurs tanlanmagan'}
               </div>
-              <div className="text-[10px] text-cyan-300/70 mt-0.5">Ilk oylik maoshdayoq qoplanadi</div>
             </div>
 
             <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-center">

@@ -65,10 +65,12 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
   const [lessonData, setLessonData] = useState<any | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
     setLoading(true);
+    setGenerationError(null);
 
     try {
       if (mode === 'quiz') {
@@ -92,105 +94,9 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
         setLessonData(res);
       }
     } catch {
-      // Local graceful fallback if API is unreachable
-      if (mode === 'quiz') {
-        setQuizData({
-          topic,
-          subject: subject || 'Umumiy fan',
-          level,
-          bloomsTaxonomyLevel: bloomsLevel,
-          questions: [
-            {
-              question: `"${topic}" mavzusi bo'yicha asosiy tushuncha qaysi javobda to'g'ri ko'rsatilgan?`,
-              options: [
-                'A) Nazariy asoslangan standart taʼrif',
-                'B) Noto‘g‘ri yoki noaniq fikr',
-                'C) Cheklangan amaliy holat',
-                'D) Barcha variantlar to‘g‘ri',
-              ],
-              correctAnswer: 'A',
-              explanation: 'Mavzuning asosiy formulasiga ko‘ra birinchi variant eng to‘liq va ilmiy asoslangan.',
-              bloomLevel: bloomsLevel,
-            },
-            {
-              question: `Qaysi holatda ushbu qoidani amalda qo‘llash eng samarali hisoblanadi?`,
-              options: [
-                'A) Amaliy mashg‘ulotlar va mustaqil loyihalarda',
-                'B) Faqat yakuniy imtihonda',
-                'C) Hech qachon qo‘llanilmaydi',
-                'D) Faqat uy sharoitida',
-              ],
-              correctAnswer: 'A',
-              explanation: 'Interaktiv metodika doimiy amaliy mashg‘ulotlarni talab qiladi.',
-              bloomLevel: bloomsLevel,
-            },
-          ],
-          rubricCriteria: [
-            "Nazariy tushunchalarni to'g'ri ifodalash",
-            "Mantiqiy xulosalarni asoslash",
-            "Amaliy masalalarni mustaqil yechish",
-          ],
-        });
-      } else {
-        const p1 = Math.max(5, Math.round(durationMinutes * 0.15));
-        const p2 = Math.round(durationMinutes * 0.35);
-        const p3 = Math.round(durationMinutes * 0.35);
-
-        setLessonData({
-          title: `"${topic}" mavzusida ${durationMinutes} daqiqalik dars ishlanmasi`,
-          topic,
-          subject: subject || 'Fan',
-          level,
-          durationMinutes,
-          bloomsTaxonomyLevel: bloomsLevel,
-          learningObjectives: [
-            `${topic} mavzusining asosiy tushunchalari va tamoyillarini o'rganish`,
-            "Nazariy bilimlarni amaliy topshiriqlarda qo'llay olish",
-            "Guruhda ishlash va natijalarni tahlil qilish",
-          ],
-          materialsNeeded: [
-            'Interaktiv doska yoki markerli doska',
-            'Tarqatma amaliy topshiriqlar to‘plami',
-            'Mavzuga oid ko‘rgazmali misollar',
-          ],
-          steps: [
-            {
-              minuteRange: `0-${p1}`,
-              phase: 'Kirish & Motivatsiya',
-              teacherAction: 'Salomlashish, davomatni nazorat qilish va o‘tgan dars yuzasidan 3 ta savol berish.',
-              studentAction: 'Darsga diqqatni jamlash, o‘tgan mavzuni yodga olish.',
-              checkpoint: 'Barcha o‘quvchilar dars muhitiga kirishganini tekshirish.',
-            },
-            {
-              minuteRange: `${p1}-${p1 + p2}`,
-              phase: 'Yangi mavzu bayoni',
-              teacherAction: 'Asosiy tushunchalarni taqdim etish, hayotiy misollar va vizual ko‘rgazmalar bilan tushuntirish.',
-              studentAction: 'Konspekt qilish, tushunarsiz joylar bo‘yicha savol berish.',
-              checkpoint: '2 ta tezkor nazorat savoli orqali mavzuni tushunganlik darajasi.',
-            },
-            {
-              minuteRange: `${p1 + p2}-${p1 + p2 + p3}`,
-              phase: 'Amaliy mustahkamlash',
-              teacherAction: 'Juftlikda yoki kichik guruhlarda ishlash uchun topshiriqlar tarqatish va yo‘naltirish.',
-              studentAction: 'Amaliy masalalarni yechish, natijalarni juftlikda muhokama qilish.',
-              checkpoint: 'Guruhlar bajargan 1-topshiriq to‘g‘riligini tekshirish.',
-            },
-            {
-              minuteRange: `${p1 + p2 + p3}-${durationMinutes}`,
-              phase: 'Xulosa & Baholash',
-              teacherAction: 'Faol qatnashgan o‘quvchilarni rag‘batlantirish, uyga vazifa va ko‘rsatmalar berish.',
-              studentAction: 'Refleksiya bildirish, uyga vazifani qayd etish.',
-              checkpoint: 'Refleksiya kartochkalari orqali dars samaradorligini baholash.',
-            },
-          ],
-          differentiatedTasks: {
-            support: "Mavzuga oid asosiy qoidalar va sodda misollarni yechish.",
-            core: "Standart amaliy topshiriqlar va formulani mustaqil qo'llash.",
-            extension: "Mantiqiy murakkabroq vaziyatli masalalarni tahlil qilish.",
-          },
-          homework: `Darslikdagi "${topic}" mavzusini o‘qish va mustahkamlash mashqlarini bajarish.`,
-        });
-      }
+      setGenerationError(
+        "AI xizmati javob bermadi. Soxta test yoki dars rejasi ko'rsatilmaydi — iltimos, qayta urinib ko'ring.",
+      );
     } finally {
       setLoading(false);
     }
@@ -480,7 +386,18 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
 
           {/* Results Scrollable Area */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            {((mode === 'quiz' && !quizData) || (mode === 'lesson' && !lessonData)) && !loading && (
+            {generationError && !loading && (
+              <div
+                role="alert"
+                className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs font-medium text-amber-800 dark:text-amber-300"
+              >
+                {generationError}
+              </div>
+            )}
+
+            {((mode === 'quiz' && !quizData) || (mode === 'lesson' && !lessonData)) &&
+              !loading &&
+              !generationError && (
               <div className="py-16 text-center text-zinc-400">
                 <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30 text-indigo-500" />
                 <h4 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">

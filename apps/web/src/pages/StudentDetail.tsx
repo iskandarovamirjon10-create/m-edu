@@ -57,12 +57,11 @@ const containerVariants: Variants = {
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14, scale: 0.985, filter: 'blur(5px)' },
+  hidden: { opacity: 0, y: 14, scale: 0.985 },
   visible: {
     opacity: 1,
     y: 0,
     scale: 1,
-    filter: 'blur(0px)',
     transition: SPRING.smooth,
   },
 };
@@ -330,7 +329,10 @@ export const AVATAR_PALETTES = [
 ];
 
 export function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  const palette =
+    AVATAR_PALETTES[Math.abs(nameHash(name || '')) % AVATAR_PALETTES.length] ||
+    AVATAR_PALETTES[0];
+  const [a, b] = palette;
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
@@ -675,7 +677,7 @@ const AttendanceHeatmapStrip = memo(function AttendanceHeatmapStrip({
     <div className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-slate-900/[0.015] px-5 py-2.5 dark:bg-white/[0.015]">
       <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
         {locale === 'uz'
-          ? `So'nggi ${recent.length} dars dinamikasi`
+          ? `So‘nggi ${recent.length} dars dinamikasi`
           : locale === 'ru'
             ? `Динамика (${recent.length} зан.)`
             : `Last ${recent.length} sessions`}
@@ -1069,7 +1071,7 @@ export function StudentDetailPage() {
   // Set of already-assigned active group IDs so the modal selector can mark them
   const enrolledGroupIds = useMemo(() => {
     const s = new Set<string>();
-    for (const ge of studentGroups as any[]) {
+    for (const ge of studentGroups) {
       if (ge?.isActive === false) continue;
       const gId = ge?.group?.id || ge?.groupId || ge?.id;
       if (gId) s.add(String(gId));
@@ -1209,7 +1211,7 @@ export function StudentDetailPage() {
           value: String(stats.activeGroupsCount),
         },
         {
-          label: t('payments.title') || "To'lovlar",
+          label: t('payments.title') || "To‘lovlar",
           value: formatCurrency(stats.totalPaid),
         },
         {
@@ -1218,7 +1220,7 @@ export function StudentDetailPage() {
             stats.faceEnrolled > 0
               ? t('common.active') || 'Faol'
               : locale === 'uz'
-                ? "Yo'q"
+                ? "Yo‘q"
                 : locale === 'ru'
                   ? 'Нет'
                   : 'None',
@@ -1238,7 +1240,7 @@ export function StudentDetailPage() {
           copyable: Boolean(studentData.user?.phone),
         },
         {
-          label: t('studentForm.dateOfBirth') || "Tug'ilgan sana",
+          label: t('studentForm.dateOfBirth') || "Tug‘ilgan sana",
           value: formatDate(studentData.dateOfBirth),
         },
         {
@@ -1254,7 +1256,7 @@ export function StudentDetailPage() {
           value: String(stats.activeGroupsCount),
         },
         {
-          label: t('payments.title') || "Jami to'langan",
+          label: t('payments.title') || "Jami to‘langan",
           value: formatCurrency(stats.totalPaid),
         },
         {
@@ -1270,7 +1272,7 @@ export function StudentDetailPage() {
                 : locale === 'ru'
                   ? 'Биометрия активна'
                   : 'Biometric active'
-              : t('studentDetail.notEnrolled') || "Ro'yxatdan o'tmagan",
+              : t('studentDetail.notEnrolled') || "Ro‘yxatdan o‘tmagan",
         },
         {
           label: t('studentForm.parentSection') || 'Ota-onalar',
@@ -1286,7 +1288,7 @@ export function StudentDetailPage() {
     window.dispatchEvent(
       new CustomEvent('open-ai-copilot', {
         detail: {
-          prompt: `${studentName}ning davomati (${stats.attendanceRate}%), to'lovlari (${stats.totalPaid.toLocaleString()} so'm) va guruhlar bo'yicha to'liq tahlilini ber.`,
+          prompt: `${studentName}ning davomati (${stats.attendanceRate}%), to‘lovlari (${stats.totalPaid.toLocaleString()} so‘m) va guruhlar bo‘yicha to‘liq tahlilini ber.`,
         },
       }),
     );
@@ -1393,7 +1395,7 @@ export function StudentDetailPage() {
       id: 'all',
       label:
         locale === 'uz'
-          ? "To'liq ko'rinish"
+          ? "To‘liq ko‘rinish"
           : locale === 'ru'
             ? 'Обзор 360°'
             : 'Full Overview',
@@ -1412,7 +1414,7 @@ export function StudentDetailPage() {
       id: 'finance',
       label:
         locale === 'uz'
-          ? "To'lovlar va Face ID"
+          ? "To‘lovlar va Face ID"
           : locale === 'ru'
             ? 'Оплаты и Face ID'
             : 'Payments & Face ID',
@@ -1679,7 +1681,7 @@ export function StudentDetailPage() {
                 : locale === 'ru'
                   ? 'Активен'
                   : 'Active'
-              : t('studentDetail.notEnrolled') || "Yo'q"
+              : t('studentDetail.notEnrolled') || "Yo‘q"
           }
           icon={I.face}
           tone={stats.faceEnrolled > 0 ? 'purple' : 'orange'}
@@ -2174,7 +2176,7 @@ export function StudentDetailPage() {
                       />
                       <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                         {locale === 'uz'
-                          ? "Favqulodda aloqa ma'lumoti"
+                          ? "Favqulodda aloqa maʼlumoti"
                           : locale === 'ru'
                             ? 'Экстренный контакт в анкете'
                             : 'Emergency Contact on File'}
@@ -3092,8 +3094,8 @@ export function StudentDetailPage() {
                     ? stats.attendanceRate
                     : undefined,
                 groupName:
-                  (studentGroups[0] as any)?.group?.name ||
-                  (studentGroups[0] as any)?.name ||
+                  studentGroups[0]?.group?.name ||
+                  studentGroups[0]?.name ||
                   activeGroups[0]?.name ||
                   undefined,
                 coursesCount: studentGroups.length,
@@ -3118,8 +3120,8 @@ export function StudentDetailPage() {
         initialTopic={aiMessageTopic}
         initialDetails={aiMessageDetails}
         balanceDue={
-          (studentData as any)?.balance
-            ? Math.abs((studentData as any).balance)
+          studentData?.balance
+            ? Math.abs(studentData.balance)
             : undefined
         }
       />

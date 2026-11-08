@@ -47,154 +47,57 @@ export interface TeacherAuditRecord {
   certId: string;
 }
 
-const PRESET_AUDITS: TeacherAuditRecord[] = [
-  {
-    id: 'audit-01',
-    teacherName: 'Jasur Alimov',
-    subject: 'IELTS Academic Writing & Speaking',
-    topic: 'Task 2: Agree/Disagree Essay Strategy & Socratic Brainstorming',
-    gradeLevel: 'Advanced (IELTS 7.5 - 8.5)',
-    overallScore: 95,
+function createTeacherAuditRecord(id: string, name: string, subject: string, index: number): TeacherAuditRecord {
+  return {
+    id,
+    teacherName: name,
+    subject,
+    topic: `${subject} bo'yicha pedagogik dars monitoringi`,
+    gradeLevel: 'Akademik Guruh',
+    overallScore: 90 + (index % 8),
     gradeBadge: 'A+',
-    tttPercentage: 28,
-    sttPercentage: 72,
+    tttPercentage: 30 + (index % 10),
+    sttPercentage: 70 - (index % 10),
     bloomsInquiry: {
-      remembering: 12,
-      understanding: 18,
-      application: 38,
-      analysis: 32,
+      remembering: 15,
+      understanding: 25,
+      application: 35,
+      analysis: 25,
     },
-    praiseFrequencyPer10Min: 5.4,
-    engagementPacingScore: 97,
-    pacingWave: [65, 82, 88, 95, 92, 89, 96, 94, 98, 91],
+    praiseFrequencyPer10Min: 5.2,
+    engagementPacingScore: 92,
+    pacingWave: [68, 82, 88, 95, 92, 89, 96, 94, 98, 91],
     transcriptMoments: [
       {
         timestamp: '04:15',
         type: 'checkpoint',
         title: 'Kognitiv Faollashtirish (Hook)',
-        description: 'O‘qituvchi an‘anaviy ma‘ruza o‘rniga real sun‘iy intellekt keysi bilan darsni boshladi.',
-        aiRecommendation: 'Ajoyib boshlanish. Talabalar e‘tibori birinchi 3 daqiqadayoq 95% ga yetdi.',
+        description: 'Mavzuni amaliy keys va savol-javob bilan boshladi.',
+        aiRecommendation: 'Ajoyib boshlanish. Talabalar e‘tibori dars boshidayoq jalb qilindi.',
       },
       {
-        timestamp: '16:40',
+        timestamp: '18:30',
         type: 'socratic',
         title: 'Sokratik So‘roq va Chuqur Tahlil',
-        description: '"Nega bu dalil paragraf zaif?" degan ochiq savol berildi va talabaga 6 soniya o‘ylash vaqti berildi.',
-        aiRecommendation: 'Wait-time qoidasi mukammal bajarildi. O‘quvchi o‘zi xatosini anglab tuzatdi.',
+        description: 'Ochiq savollar berilib, talabalarga mustaqil fikrlash imkoniyati berildi.',
+        aiRecommendation: 'Wait-time qoidasi bajarildi. Talabalar tushunish darajasi yuqori.',
       },
       {
-        timestamp: '27:10',
+        timestamp: '35:10',
         type: 'positive',
-        title: 'Kollektiv Peer-Review Baholash',
-        description: 'Partadoshlar bir-birining insholarini rubrika bo‘yicha baholashdi.',
-        aiRecommendation: 'Talabalar nutq vaqti (STT) darsning 72% ini tashkil qildi. Faol ta‘lim namunasi.',
-      },
-      {
-        timestamp: '41:20',
-        type: 'checkpoint',
-        title: 'Formatik Yakun (Exit Ticket)',
-        description: 'Har bir o‘quvchi ketishdan oldin 1 ta asosiy tezisni taxtaga yozib qoldirdi.',
-        aiRecommendation: 'Tushunish darajasi 100% tekshirildi va keyingi dars uchun zamin yaratildi.',
+        title: 'Amaliy Mashg‘ulot & Fikr Almashish',
+        description: 'O‘quvchilar guruhlarda vazifalarni faol bajardi.',
+        aiRecommendation: 'Talabalar nutq vaqti (STT) yuqori darajada ta‘minlandi.',
       },
     ],
     growthPlan: [
-      'Guruhdagi sustroq 2 nafar o‘quvchiga savol yo‘llashda individual scaffold berish.',
-      'Lug‘at boyligini mustahkamlash uchun C1/C2 kollokatsiyalar mini-shablonini tarqatish.',
-      'Keyingi darsda vaqt reglamentini yanada qat‘iy ushlab turish.',
+      'Guruhdagi sustroq o‘quvchilarga individual yondashuvni kuchaytirish.',
+      'Analitik fikrlashga undovchi savollar ulushini yanada oshirish.',
     ],
-    certId: 'MEDU-CERT-PED-2026-9041',
-  },
-  {
-    id: 'audit-02',
-    teacherName: 'Dilnoza Karimova',
-    subject: 'Oliy Matematika & Mantiq',
-    topic: 'Aniq Integrallarning Geometrik Tadbiqlari va Hajm Hisoblash',
-    gradeLevel: 'DTM & Universitetga Tayyorlov',
-    overallScore: 89,
-    gradeBadge: 'A',
-    tttPercentage: 42,
-    sttPercentage: 58,
-    bloomsInquiry: {
-      remembering: 20,
-      understanding: 30,
-      application: 35,
-      analysis: 15,
-    },
-    praiseFrequencyPer10Min: 4.1,
-    engagementPacingScore: 88,
-    pacingWave: [70, 75, 84, 86, 80, 89, 91, 85, 88, 83],
-    transcriptMoments: [
-      {
-        timestamp: '07:30',
-        type: 'checkpoint',
-        title: 'Grafik Vizualizatsiya',
-        description: 'Aylanma jismlar hajmini 3D fazoviy animatsiya orqali tushuntirdi.',
-        aiRecommendation: 'Fazoviy tasavvur qilish qiyin bo‘lgan mavzuda vizual quroldan to‘g‘ri foydalanildi.',
-      },
-      {
-        timestamp: '22:15',
-        type: 'warning',
-        title: 'Monolog Vaqti Uzaydi (TTT 65%)',
-        description: 'Teorema isbotida o‘qituvchi 8 daqiqa to‘xtovsiz gapirdi, o‘quvchilar passiv qoldi.',
-        aiRecommendation: 'Tavsiya: Har 3 daqiqada o‘quvchilarga hisoblashning keyingi qadamini taxmin qilishni topshiring.',
-      },
-      {
-        timestamp: '34:50',
-        type: 'socratic',
-        title: 'Mustaqil Misol Yechish Musobaqasi',
-        description: 'Sinf 3 ta jamoaga bo‘linib, murakkab DTM testini tezlikka yechdi.',
-        aiRecommendation: 'Auditoriya energiyasi va qiziqishi 91% ga ko‘tarildi.',
-      },
-    ],
-    growthPlan: [
-      'Nazariy isbotlarni mini-vazifalar bilan parchalash (Chunking texnikasi).',
-      'Analitik fikrlashga undovchi savollar ulushini 15% dan 25% ga yetkazish.',
-      'Sinfning orqa qatoridagi o‘quvchilar bilan ko‘proq ko‘z kontaktini saqlash.',
-    ],
-    certId: 'MEDU-CERT-PED-2026-8812',
-  },
-  {
-    id: 'audit-03',
-    teacherName: 'Sherzodbek Oripov',
-    subject: 'Zamonaviy Veb Dasturlash',
-    topic: 'Next.js 15, Server Actions va PostgreSQL Prisma Bog‘lanishi',
-    gradeLevel: 'Junior / Middle Muhandislik',
-    overallScore: 92,
-    gradeBadge: 'A+',
-    tttPercentage: 33,
-    sttPercentage: 67,
-    bloomsInquiry: {
-      remembering: 10,
-      understanding: 22,
-      application: 45,
-      analysis: 23,
-    },
-    praiseFrequencyPer10Min: 6.0,
-    engagementPacingScore: 94,
-    pacingWave: [68, 85, 94, 96, 90, 95, 98, 92, 94, 89],
-    transcriptMoments: [
-      {
-        timestamp: '05:00',
-        type: 'checkpoint',
-        title: 'Jonli Xatolik Tahlili (Live Debugging)',
-        description: 'O‘qituvchi qasddan kodda sintaktik xatolik qoldirdi va o‘quvchilardan topishni so‘radi.',
-        aiRecommendation: 'O‘quvchilar diqqatini oshirish uchun kuchli metodik yechim.',
-      },
-      {
-        timestamp: '25:30',
-        type: 'positive',
-        title: 'Hands-on Amaliyot (Live Coding)',
-        description: 'Barcha talabalar o‘z terminallarida API marshrutlarini yaratib test qildi.',
-        aiRecommendation: 'Nazariyadan ko‘ra amaliy ko‘nikma hosil qilish sur‘ati yuqori bo‘ldi.',
-      },
-    ],
-    growthPlan: [
-      'Tushunchalarni tushuntirishda arxitektura diagrammalaridan ko‘proq foydalanish.',
-      'Shaxsiy kod yozish tezligi past bo‘lgan o‘quvchilarga yordamchi shablonlar tayyorlash.',
-    ],
-    certId: 'MEDU-CERT-PED-2026-9533',
-  },
-];
+    certId: `MEDU-CERT-PED-2026-${1000 + index}`,
+  };
+}
+
 
 interface Props {
   isOpen: boolean;
@@ -206,9 +109,19 @@ interface Props {
 export const TeacherClassroomAuditStudio: React.FC<Props> = ({
   isOpen,
   onClose,
+  defaultTeacherName,
   teachers,
 }) => {
   const [dbTeachers, setDbTeachers] = useState<Teacher[]>([]);
+  const auditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (auditTimerRef.current) {
+        clearTimeout(auditTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -236,28 +149,35 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
     return (teachers && teachers.length > 0) ? teachers : dbTeachers;
   }, [teachers, dbTeachers]);
 
-  const auditRecords = useMemo(() => {
-    if (effectiveTeachers.length === 0) return PRESET_AUDITS;
+  const auditRecords = useMemo<TeacherAuditRecord[]>(() => {
+    if (effectiveTeachers.length === 0) return [];
     return effectiveTeachers.slice(0, 8).map((t: Teacher, index: number) => {
       const name = [t.user?.firstName, t.user?.lastName].filter(Boolean).join(' ') || `O'qituvchi ${index + 1}`;
       const subject = t.specializations?.[0] || 'Akademik Dars';
-      const template = PRESET_AUDITS[index % PRESET_AUDITS.length];
-      return {
-        ...template,
-        id: t.id,
-        teacherName: name,
-        subject,
-      };
+      return createTeacherAuditRecord(t.id, name, subject, index);
     });
   }, [effectiveTeachers]);
 
-  const [selectedAuditId, setSelectedAuditId] = useState<string>(() => auditRecords[0]?.id || PRESET_AUDITS[0].id);
+  const [selectedAuditId, setSelectedAuditId] = useState<string>(() => {
+    if (defaultTeacherName) {
+      const found = auditRecords.find(a => a.teacherName.toLowerCase().includes(defaultTeacherName.toLowerCase()));
+      if (found) return found.id;
+    }
+    return auditRecords[0]?.id || '';
+  });
 
   useEffect(() => {
+    if (defaultTeacherName) {
+      const found = auditRecords.find(a => a.teacherName.toLowerCase().includes(defaultTeacherName.toLowerCase()));
+      if (found) {
+        setSelectedAuditId(found.id);
+        return;
+      }
+    }
     if (auditRecords[0] && !auditRecords.some((a: TeacherAuditRecord) => a.id === selectedAuditId)) {
       setSelectedAuditId(auditRecords[0].id);
     }
-  }, [auditRecords, selectedAuditId]);
+  }, [auditRecords, selectedAuditId, defaultTeacherName]);
 
   const [activeTab, setActiveTab] = useState<'analytics' | 'transcript' | 'growth' | 'certificate'>('analytics');
   const [isAuditing, setIsAuditing] = useState(false);
@@ -266,15 +186,18 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
   const { playSuccess, playPop } = usePremiumSound();
   const haptics = useHaptics();
 
-  const currentRecord = useMemo(() => {
-    return auditRecords.find((a: TeacherAuditRecord) => a.id === selectedAuditId) || auditRecords[0] || PRESET_AUDITS[0];
-  }, [selectedAuditId]);
+  const currentRecord = useMemo<TeacherAuditRecord | undefined>(() => {
+    return (
+      auditRecords.find((a: TeacherAuditRecord) => a.id === selectedAuditId) || auditRecords[0]
+    );
+  }, [selectedAuditId, auditRecords]);
 
   const handleRunAiAudit = () => {
     haptics.medium();
     playPop();
     setIsAuditing(true);
-    setTimeout(() => {
+    if (auditTimerRef.current) clearTimeout(auditTimerRef.current);
+    auditTimerRef.current = setTimeout(() => {
       setIsAuditing(false);
       playSuccess();
       haptics.success();
@@ -287,7 +210,7 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
     window.print();
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentRecord) return null;
 
   return (
     <GlassModal
@@ -319,7 +242,7 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto justify-between lg:justify-end">
             <div className="flex flex-wrap items-center rounded-xl border border-white/10 bg-slate-950/60 p-1">
-              {PRESET_AUDITS.map((record) => (
+              {auditRecords.slice(0, 6).map((record) => (
                 <button
                   key={record.id}
                   onClick={() => {
@@ -371,7 +294,7 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            🎙️ Dars Xronologiyasi ({currentRecord.transcriptMoments.length})
+            🎙️ Dars Xronologiyasi ({currentRecord ? currentRecord.transcriptMoments.length : 0})
           </button>
           <button
             onClick={() => { setActiveTab('growth'); playPop(); }}
@@ -398,7 +321,15 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
         {/* ═══ 3 · MAIN STUDIO CONTENT ═══ */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-6">
           <AnimatePresence>
-            {activeTab === 'analytics' && (
+            {!currentRecord ? (
+              <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed border-white/10 rounded-2xl">
+                <span className="text-3xl mb-2">📋</span>
+                <div className="text-sm font-semibold text-white">O'qituvchi auditi mavjud emas</div>
+                <div className="text-xs text-slate-400 mt-1">Audit tahlilini ko'rish uchun o'qituvchini tanlang.</div>
+              </div>
+            ) : (
+            <>
+              {activeTab === 'analytics' && (
               <motion.div
                 key="analytics"
                 initial={{ opacity: 0, y: 10 }}
@@ -760,6 +691,8 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
                 </div>
               </motion.div>
             )}
+            </>
+          )}
           </AnimatePresence>
         </div>
       </div>

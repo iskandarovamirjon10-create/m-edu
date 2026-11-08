@@ -144,6 +144,12 @@ export class PaymentQuery extends SearchQuery {
 
   @ApiPropertyOptional() @IsOptional() @IsString()
   method?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  receivedById?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  shiftId?: string;
 }
 
 export class ExpenseQuery extends SearchQuery {

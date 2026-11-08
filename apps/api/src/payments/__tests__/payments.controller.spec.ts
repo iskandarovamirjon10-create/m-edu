@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Test, TestingModule } from '@nestjs/testing';
 import { PaymentsController } from '../payments.controller';
 import { PaymentsService } from '../payments.service';
-import { RedisPubSubService } from '../../common/redis/redis-pubsub.service';
 
 describe('PaymentsController', () => {
   let controller: PaymentsController;
-let service: {
+  let service: {
     findAll: ReturnType<typeof vi.fn>;
     findOne: ReturnType<typeof vi.fn>;
-    create?: ReturnType<typeof vi.fn>;
-    update?: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    getZReportSummary: ReturnType<typeof vi.fn>;
+    getRecentZReports: ReturnType<typeof vi.fn>;
+    closeCashierShift: ReturnType<typeof vi.fn>;
+    openCashShift: ReturnType<typeof vi.fn>;
+    getCurrentShift: ReturnType<typeof vi.fn>;
+    getCashierShifts: ReturnType<typeof vi.fn>;
   };
 
   const orgId = 'org-1';
@@ -24,6 +28,9 @@ let service: {
       getZReportSummary: vi.fn(),
       getRecentZReports: vi.fn(),
       closeCashierShift: vi.fn(),
+      openCashShift: vi.fn(),
+      getCurrentShift: vi.fn(),
+      getCashierShifts: vi.fn(),
     };
 
     controller = new PaymentsController(service as unknown as PaymentsService);
@@ -42,7 +49,7 @@ let service: {
     });
   });
 
-describe('findOne', () => {
+  describe('findOne', () => {
     it('delegates to service.findOne', async () => {
       const mockPay = { id: 'p-1', amount: 100 };
       service.findOne.mockResolvedValue(mockPay);
@@ -56,7 +63,7 @@ describe('findOne', () => {
     it('delegates to service.create', async () => {
       const dto = { studentId: 's-1', amount: 50 } as never;
       const mockPay = { id: 'p-2', amount: 50 };
-      service.create = vi.fn().mockResolvedValue(mockPay);
+      service.create.mockResolvedValue(mockPay);
       const result = await controller.create(orgId, dto);
       expect(result).toEqual(mockPay);
       expect(service.create).toHaveBeenCalledWith(orgId, dto);
@@ -65,10 +72,19 @@ describe('findOne', () => {
     it('delegates to service.create with idempotency key when provided', async () => {
       const dto = { studentId: 's-1', amount: 50 } as never;
       const mockPay = { id: 'p-2', amount: 50 };
-      service.create = vi.fn().mockResolvedValue(mockPay);
+      service.create.mockResolvedValue(mockPay);
       const result = await controller.create(orgId, dto, 'idemp-key-12345');
       expect(result).toEqual(mockPay);
       expect(service.create).toHaveBeenCalledWith(orgId, dto, 'idemp-key-12345');
+    });
+
+    it('delegates to service.create with cashier userId attribution', async () => {
+      const dto = { studentId: 's-1', amount: 50 } as never;
+      const mockPay = { id: 'p-2', amount: 50, receivedById: 'cashier-1' };
+      service.create.mockResolvedValue(mockPay);
+      const result = await controller.create(orgId, dto, undefined, undefined, 'cashier-1');
+      expect(result).toEqual(mockPay);
+      expect(service.create).toHaveBeenCalledWith(orgId, dto, undefined, 'cashier-1');
     });
   });
 
@@ -76,39 +92,67 @@ describe('findOne', () => {
     it('delegates to service.update', async () => {
       const dto = { status: 'PAID' } as never;
       const mockPay = { id: 'p-1', status: 'PAID' };
-      service.update = vi.fn().mockResolvedValue(mockPay);
+      service.update.mockResolvedValue(mockPay);
       const result = await controller.update(orgId, 'p-1', dto);
       expect(result).toEqual(mockPay);
       expect(service.update).toHaveBeenCalledWith(orgId, 'p-1', dto);
     });
   });
 
+  describe('cashier shift endpoints', () => {
+    it('delegates openCashierShift to service', async () => {
+      const mockShift = { id: 'shift-1', status: 'OPEN', openingBalance: 500000 };
+      service.openCashShift.mockResolvedValue(mockShift);
+      const dto = { openingBalance: 500000, openingNote: 'Ertalabki smena' };
+      const res = await controller.openCashierShift(orgId, 'cashier-1', dto);
+      expect(res).toEqual(mockShift);
+      expect(service.openCashShift).toHaveBeenCalledWith(orgId, 'cashier-1', dto);
+    });
+
+    it('delegates getCurrentShift to service', async () => {
+      const mockActive = { active: true, shift: { id: 'shift-1', status: 'OPEN' } };
+      service.getCurrentShift.mockResolvedValue(mockActive);
+      const res = await controller.getCurrentShift(orgId, 'cashier-1');
+      expect(res).toEqual(mockActive);
+      expect(service.getCurrentShift).toHaveBeenCalledWith(orgId, 'cashier-1');
+    });
+
+    it('delegates getCashierShifts history to service', async () => {
+      const mockHistory = { items: [{ id: 'shift-1' }], total: 1 };
+      service.getCashierShifts.mockResolvedValue(mockHistory);
+      const query = { status: 'CLOSED' as const, limit: 10 };
+      const res = await controller.getCashierShifts(orgId, query);
+      expect(res).toEqual(mockHistory);
+      expect(service.getCashierShifts).toHaveBeenCalledWith(orgId, query);
+    });
+  });
+
   describe('cashier Z-report endpoints', () => {
     it('delegates getZReportSummary to service', async () => {
       const mockSummary = { totalCollected: 1000000 };
-      (service as any).getZReportSummary = vi.fn().mockResolvedValue(mockSummary);
+      service.getZReportSummary.mockResolvedValue(mockSummary);
       const query = { startDate: '2026-10-26T00:00:00.000Z' };
       const res = await controller.getZReportSummary(orgId, query);
       expect(res).toEqual(mockSummary);
-      expect((service as any).getZReportSummary).toHaveBeenCalledWith(orgId, query);
+      expect(service.getZReportSummary).toHaveBeenCalledWith(orgId, query);
     });
 
     it('delegates getZReportHistory to service', async () => {
       const mockHistory = [{ reportNumber: 'Z-20261026-001' }];
-      (service as any).getRecentZReports = vi.fn().mockResolvedValue(mockHistory);
+      service.getRecentZReports.mockResolvedValue(mockHistory);
       const res = await controller.getZReportHistory(orgId, 10);
       expect(res).toEqual(mockHistory);
-      expect((service as any).getRecentZReports).toHaveBeenCalledWith(orgId, 10);
+      expect(service.getRecentZReports).toHaveBeenCalledWith(orgId, 10);
     });
 
     it('delegates closeCashierShift to service', async () => {
       const mockClose = { success: true, reportNumber: 'Z-20261026-001' };
-      (service as any).closeCashierShift = vi.fn().mockResolvedValue(mockClose);
+      service.closeCashierShift.mockResolvedValue(mockClose);
       const user = { sub: 'user-1', firstName: 'Dilshod' };
       const dto = { actualCashCounted: 500000 };
       const res = await controller.closeCashierShift(orgId, user as any, dto);
       expect(res).toEqual(mockClose);
-      expect((service as any).closeCashierShift).toHaveBeenCalledWith(orgId, user, dto);
+      expect(service.closeCashierShift).toHaveBeenCalledWith(orgId, user, dto);
     });
   });
 });

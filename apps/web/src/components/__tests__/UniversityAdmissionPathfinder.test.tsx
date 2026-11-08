@@ -21,90 +21,97 @@ vi.mock('@/hooks/useHaptics', () => ({
   }),
 }));
 
+vi.mock('@/lib/api', () => ({
+  studentsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
+}));
+
+/** Haqiqiy API javobiga mos o'quvchi (qabul maydonlari hali to'ldirilmagan). */
+const realStudent = {
+  id: 'stu-1',
+  user: {
+    id: 'u-1',
+    firstName: 'Sardor',
+    lastName: 'Rahimov',
+    email: 'sardor.rahimov@example.com',
+    phone: '+998901234567',
+    isActive: true,
+  },
+  parentPhone: '+998907654321',
+} as any;
+
+function renderWithStudent() {
+  return render(
+    <UniversityAdmissionPathfinder isOpen onClose={vi.fn()} students={[realStudent]} />,
+  );
+}
+
 describe('UniversityAdmissionPathfinder Component Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders student telemetry, target field, and university cards', () => {
-    render(
-      <UniversityAdmissionPathfinder
-        isOpen={true}
-        onClose={vi.fn()}
-      />
-    );
+  it('shows an honest empty state instead of demo students', () => {
+    render(<UniversityAdmissionPathfinder isOpen onClose={vi.fn()} students={[]} />);
 
-    expect(screen.getByText(/AI Abituriyent & Karyera Admission Pathfinder/i)).toBeInTheDocument();
-    expect(screen.getByText(/Sardor Rahimov/i)).toBeInTheDocument();
-    expect(screen.getByText(/7.5 Band/i)).toBeInTheDocument();
-    expect(screen.getByText(/Yangi O‘zbekiston Universiteti/i)).toBeInTheDocument();
-    expect(screen.getByText(/WIUT/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/AI Abituriyent & Karyera Admission Pathfinder/i)[0]).toBeInTheDocument();
+    expect(screen.getByText(/Talabalar topilmadi/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Sardor Rahimov/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Madina Usmonova/i)).not.toBeInTheDocument();
   });
 
-  it('allows filtering by destination categories', async () => {
-    render(
-      <UniversityAdmissionPathfinder
-        isOpen={true}
-        onClose={vi.fn()}
-      />
-    );
+  it('renders a real student profile from the database', () => {
+    renderWithStudent();
 
-    const dtmFilter = screen.getByText(/DTM Davlat OTMlari/i);
-    fireEvent.click(dtmFilter);
+    expect(screen.getAllByText(/Sardor Rahimov/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Talaba:/i)).toBeInTheDocument();
+    // OTM ma'lumotlari bazada yo'q — demo kartalar o'rniga tushunarli bo'sh holat
+    expect(screen.getByText(/ma.lumotlari kiritilmagan/i)).toBeInTheDocument();
+  });
+
+  it('keeps destination filters working with real data', async () => {
+    renderWithStudent();
+
+    fireEvent.click(screen.getByText(/DTM Davlat OTMlari/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/O‘zbekiston Milliy Universiteti/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Yangi O‘zbekiston Universiteti/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/Natija:/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Yangi O.zbekiston Universiteti/i)).not.toBeInTheDocument();
   });
 
-  it('allows switching to gap analysis tab', async () => {
-    render(
-      <UniversityAdmissionPathfinder
-        isOpen={true}
-        onClose={vi.fn()}
-      />
-    );
+  it('switches to gap analysis with an explicit empty state', async () => {
+    renderWithStudent();
 
-    const gapTab = screen.getByText(/Bo‘shliqlarni To‘ldirish/i);
-    fireEvent.click(gapTab);
+    fireEvent.click(screen.getByText(/90 Kunlik Reja/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/90 Kunlik Strategik Bo‘shliqlarni To‘ldirish Xaritasi/i)).toBeInTheDocument();
+      expect(screen.getByText(/90 Kunlik Strategik/i)).toBeInTheDocument();
     });
+    expect(screen.getByText(/hali kiritilmagan/i)).toBeInTheDocument();
   });
 
-  it('allows switching to career and salary projection tab', async () => {
-    render(
-      <UniversityAdmissionPathfinder
-        isOpen={true}
-        onClose={vi.fn()}
-      />
-    );
+  it('switches to career projection tab', async () => {
+    renderWithStudent();
 
-    const careerTab = screen.getByText(/Karyera Gorizonti/i);
-    fireEvent.click(careerTab);
+    fireEvent.click(screen.getByText(/Karyera Gorizonti/i));
 
     await waitFor(() => {
       expect(screen.getByText(/Kelajak Mutaxassislik Profili/i)).toBeInTheDocument();
-      expect(screen.getAllByText(/AI & Machine Learning Solutions Architect/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 
-  it('allows switching to printable roadmap tab', async () => {
-    render(
-      <UniversityAdmissionPathfinder
-        isOpen={true}
-        onClose={vi.fn()}
-      />
-    );
+  it('switches to printable roadmap tab', async () => {
+    renderWithStudent();
 
-    const roadmapTab = screen.getByText(/A4 Rasmiy Yo‘l Xaritasi/i);
-    fireEvent.click(roadmapTab);
+    fireEvent.click(screen.getByText(/A4 Rasmiy Yo.l Xaritasi/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/Shaxsiy Abituriyent & Karyera Yo‘l Xaritasi/i)).toBeInTheDocument();
-      expect(screen.getByText(/A4 Karyera Pasportini Chop Etish/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Shaxsiy Abituriyent & Karyera Yo.l Xaritasi/i),
+      ).toBeInTheDocument();
     });
+    expect(screen.getByText(/A4 Karyera Pasportini Chop Etish/i)).toBeInTheDocument();
   });
 });

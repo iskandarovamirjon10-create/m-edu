@@ -1,16 +1,22 @@
+'use client';
+
 /**
- * AiComposer — iOS 27 Liquid Glass conversational composer.
  * ============================================================================
- * Premium behaviour:
- *  - Snap-to-glass shell with specular rim, focus halo and gradient ring
- *  - Circular character budget around the send button
- *  - Voice capture with live waveform + elapsed time
- *  - Slash command palette (full keyboard: ↑ ↓ Tab ↵ Esc)
- *  - Draft persistence, history recall (↑), paste clamping and inline retry
- *  - Mobile: 44px targets + safe-area padding; desktop: keyboard hints
- *  - prefers-reduced-motion / contrast / data are all respected
+ * AiComposer — iOS 27 / visionOS "Liquid Glass Conversational Composer"
+ * ============================================================================
+ *
+ * Premium behaviour & fixes:
+ *  • Snap-to-glass shell with chromatic specular rim, focus halo & gradient ring
+ *  • Circular character budget around the send button with dynamic color tone
+ *  • Voice capture with live waveform + elapsed chronometer
+ *  • Slash command palette (full keyboard: ↑ ↓ Tab ↵ Esc) with safe index clamping
+ *  • Image-only submission support + attachment retry memory + ObjectURL cleanup
+ *  • Streaming-aware Stop button (`sending` | `thinking` | `streaming`)
+ *  • Draft persistence, safe history recall (↑/↓), paste & drop image handling
+ *  • prefers-reduced-motion / contrast / data are all respected
  * ============================================================================
  */
+
 import {
   useCallback,
   useEffect,
@@ -19,8 +25,10 @@ import {
   useMemo,
   useRef,
   useState,
+  memo,
   type KeyboardEvent,
   type ClipboardEvent,
+  type DragEvent,
 } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -39,7 +47,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { useSafeI18n } from '@/i18n/I18nProvider';
-import { cn } from '@/lib/design';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 import {
   AiSlashCommandMenu,
   SLASH_COMMANDS,
@@ -52,6 +60,15 @@ const MAX_CHARS = 4000;
 const SOFT_LIMIT = 3600;
 const SOUND_THROTTLE_MS = 260;
 const HISTORY_LIMIT = 50;
+const MAX_ATTACHMENTS = 4;
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
+const SPRING_GEL = {
+  type: 'spring' as const,
+  stiffness: 740,
+  damping: 25,
+  mass: 0.34,
+};
 
 const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -72,6 +89,25 @@ function useMediaQuery(query: string): boolean {
   }, [query]);
   return matches;
 }
+
+function revokeAttachmentUrl(att?: AiAttachment) {
+  if (att?.url && att.url.startsWith('blob:')) {
+    try {
+      URL.revokeObjectURL(att.url);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+const TopSpecular = memo(function TopSpecular({ inset = 'inset-x-6' }: { inset?: string }) {
+  return (
+    <div aria-hidden="true" className={cn('pointer-events-none absolute top-0 z-10', inset)}>
+      <div className="h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/30" />
+      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#5AC8FA]/30 to-transparent dark:via-[#5AC8FA]/20" />
+    </div>
+  );
+});
 
 export interface AiComposerProps {
   status: AiStatus;
@@ -112,9 +148,24 @@ export function AiComposer({
   const [slashMenuOpen, setSlashMenuOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastSent, setLastSent] = useState<string | null>(null);
+  const [lastSentAttachments, setLastSentAttachments] = useState<
+    AiAttachment[] | undefined
+  >(undefined);
   const [voiceElapsed, setVoiceElapsed] = useState(0);
+  const [attachments, setAttachments] = useState<AiAttachment[]>([]);
+  const attachmentsRef = useRef(attachments);
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach(revokeAttachmentUrl);
+    };
+  }, []);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
@@ -123,12 +174,19 @@ export function AiComposer({
   const prevLenRef = useRef(draft.length);
   const historyRef = useRef<string[]>([]);
   const historyIdxRef = useRef(-1);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [attachments, setAttachments] = useState<AiAttachment[]>([]);
 
+  const reduced = usePrefersReducedMotion();
   const haptics = useHaptics();
   const sound = usePremiumSound();
   const { t, locale } = useSafeI18n();
+
+  // Ref-stabilized feedback hooks
+  const hapticsRef = useRef(haptics);
+  const soundRef = useRef(sound);
+  useEffect(() => {
+    hapticsRef.current = haptics;
+    soundRef.current = sound;
+  }, [haptics, sound]);
 
   const voiceStatusId = useId();
   const slashMenuId = useId();
@@ -142,8 +200,8 @@ export function AiComposer({
     const now = Date.now();
     if (now - lastSoundRef.current < SOUND_THROTTLE_MS) return;
     lastSoundRef.current = now;
-    sound.playPop();
-  }, [sound, soundEnabled]);
+    soundRef.current.playPop?.();
+  }, [soundEnabled]);
 
   const speechLang = locale === 'ru' ? 'ru-RU' : locale === 'en' ? 'en-US' : 'uz-UZ';
 
@@ -157,17 +215,28 @@ export function AiComposer({
     lang: speechLang,
     onResult: (text) => {
       setDraft((current) => appendWithinLimit(current, text.trim()));
-      haptics.light();
+      hapticsRef.current.light?.();
     },
   });
 
-  const busy = status === 'sending' || status === 'thinking' || status === 'confirming';
+  // Include 'streaming' so Stop button and busy state stay active while tokens stream
+  const busy =
+    status === 'sending' ||
+    status === 'thinking' ||
+    status === 'streaming' ||
+    status === 'confirming';
   const awaitingConfirmation = status === 'awaiting_confirmation';
   const locked = busy || awaitingConfirmation;
-  const canStop = status === 'sending' || status === 'thinking';
+  const canStop =
+    status === 'sending' || status === 'thinking' || status === 'streaming';
 
   const trimmedDraft = draft.trim();
-  const canSubmit = !locked && trimmedDraft.length > 0 && draft.length <= MAX_CHARS;
+  const hasAttachments = attachments.length > 0;
+  // Fixed: allow submitting when either text OR image attachments are present
+  const canSubmit =
+    !locked &&
+    (trimmedDraft.length > 0 || hasAttachments) &&
+    draft.length <= MAX_CHARS;
 
   const isSlash = draft.startsWith('/') && !draft.includes('\n');
   const filteredCommands = useMemo(() => {
@@ -180,7 +249,19 @@ export function AiComposer({
     );
   }, [draft, isSlash]);
 
-  const showSlashMenu = isSlash && filteredCommands.length > 0 && !locked && slashMenuOpen;
+  const showSlashMenu =
+    isSlash && filteredCommands.length > 0 && !locked && slashMenuOpen;
+
+  // Keep slashIndex strictly within bounds whenever query or filtered list changes
+  useEffect(() => {
+    if (!isSlash) {
+      setSlashIndex(0);
+      return;
+    }
+    setSlashIndex((prev) =>
+      filteredCommands.length > 0 ? Math.min(prev, filteredCommands.length - 1) : 0,
+    );
+  }, [draft, isSlash, filteredCommands.length]);
 
   /* ── Draft persistence ─────────────────────────────────────────────── */
   useEffect(() => {
@@ -199,19 +280,15 @@ export function AiComposer({
     };
   }, [draft, storageKey]);
 
-  useEffect(() => {
-    if (isSlash && slashMenuOpen) {
-      setSlashIndex(0);
-      setSlashMenuOpen(true);
-    }
-  }, [isSlash, slashMenuOpen]);
-
   /* ── Auto-resize ───────────────────────────────────────────────────── */
   useIsomorphicLayoutEffect(() => {
     const element = textareaRef.current;
     if (!element) return;
     element.style.height = 'auto';
-    element.style.height = `${Math.min(Math.max(element.scrollHeight, MIN_HEIGHT), MAX_HEIGHT)}px`;
+    element.style.height = `${Math.min(
+      Math.max(element.scrollHeight, MIN_HEIGHT),
+      MAX_HEIGHT,
+    )}px`;
     element.style.overflowY = element.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }, [draft]);
 
@@ -258,9 +335,11 @@ export function AiComposer({
   }, [isListening]);
 
   useEffect(() => {
-    if (draft.length === MAX_CHARS && prevLenRef.current < MAX_CHARS) haptics.medium();
+    if (draft.length === MAX_CHARS && prevLenRef.current < MAX_CHARS) {
+      hapticsRef.current.medium?.();
+    }
     prevLenRef.current = draft.length;
-  }, [draft.length, haptics]);
+  }, [draft.length]);
 
   /* ── Live announcer ────────────────────────────────────────────────── */
   const [announcement, setAnnouncement] = useState('');
@@ -268,8 +347,9 @@ export function AiComposer({
     let next = '';
     if (error) next = error;
     else if (awaitingConfirmation) next = 'Amal tasdiqlanishi kutilmoqda';
-    else if (status === 'thinking') next = t('ai.composer.thinking') || "O'ylayapman…";
-    else if (status === 'sending') next = t('ai.composer.sending') || 'Yuborilmoqda…';
+    else if (status === 'thinking') next = t('ai.composer.thinking') || 'O‘ylayapman…';
+    else if (status === 'sending' || status === 'streaming')
+      next = t('ai.composer.sending') || 'Yuborilmoqda…';
     else if (lastSent) next = t('ai.composer.sent') || 'Xabar yuborildi';
     if (next !== announcement) setAnnouncement(next);
   }, [status, awaitingConfirmation, error, lastSent, announcement, t]);
@@ -277,120 +357,198 @@ export function AiComposer({
   const handleSelectSlash = useCallback(
     (command: SlashCommand) => {
       if (locked) return;
+      historyIdxRef.current = -1;
       if (command.hasArg) {
         setDraft(command.prompt.slice(0, MAX_CHARS));
+        setSlashMenuOpen(false);
         focusTextarea();
         return;
       }
       setDraft('');
+      setSlashMenuOpen(false);
       onClear?.();
-      haptics.success();
+      hapticsRef.current.success?.();
       playPop();
       try {
         onSend(command.prompt);
         setLastSent(command.prompt);
+        setLastSentAttachments(undefined);
+        setError(null);
       } catch (cause) {
-        setError(t('ai.composer.sendFailed') || "Yuborib bo'lmadi. Qayta urinib ko'ring.");
+        setError(
+          t('ai.composer.sendFailed') || 'Yuborib bo‘lmadi. Qayta urinib ko‘ring.',
+        );
         onSendError?.(cause);
       }
     },
-    [focusTextarea, haptics, locked, onClear, onSend, onSendError, playPop, t],
+    [focusTextarea, locked, onClear, onSend, onSendError, playPop, t],
   );
 
-  const processFiles = useCallback((files: FileList | File[]) => {
-    const validImageFiles = Array.from(files).filter(
-      (file) => file.type.startsWith('image/') && file.size <= 15 * 1024 * 1024
-    );
+  const processFiles = useCallback(
+    (files: FileList | File[]) => {
+      const fileList = Array.from(files);
+      const oversizedFiles = fileList.filter(
+        (file) => file.type.startsWith('image/') && file.size > MAX_IMAGE_BYTES,
+      );
+      if (oversizedFiles.length > 0) {
+        setError(
+          t('ai.composer.imageTooLarge') || 'Rasm hajmi juda katta (maksimal 15 MB).',
+        );
+      }
 
-    if (validImageFiles.length === 0) return;
+      const validImageFiles = fileList.filter(
+        (file) => file.type.startsWith('image/') && file.size <= MAX_IMAGE_BYTES,
+      );
 
-    for (const file of validImageFiles) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const base64 = e.target?.result as string;
-        if (!base64) return;
-        const newAttachment: AiAttachment = {
-          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          type: 'image',
-          url: URL.createObjectURL(file),
-          base64,
-          mimeType: file.type,
-          name: file.name,
-          size: file.size,
+      if (validImageFiles.length === 0) return;
+
+      for (const file of validImageFiles) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target?.result as string;
+          if (!base64) return;
+          const newAttachment: AiAttachment = {
+            id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            type: 'image',
+            url: URL.createObjectURL(file),
+            base64,
+            mimeType: file.type,
+            name: file.name,
+            size: file.size,
+          };
+          setAttachments((prev) => {
+            if (prev.length >= MAX_ATTACHMENTS) {
+              const evicted = prev.slice(0, prev.length - (MAX_ATTACHMENTS - 1));
+              evicted.forEach(revokeAttachmentUrl);
+            }
+            return [...prev.slice(-(MAX_ATTACHMENTS - 1)), newAttachment];
+          });
+          hapticsRef.current.light?.();
         };
-        setAttachments((prev) => [...prev.slice(-3), newAttachment]);
-        haptics.light();
-      };
-      reader.readAsDataURL(file);
-    }
-  }, [haptics]);
+        reader.onerror = () => {
+          setError(
+            t('ai.composer.fileReadError') || 'Faylni o‘qishda xatolik yuz berdi.',
+          );
+        };
+        reader.readAsDataURL(file);
+      }
+    },
+    [t],
+  );
 
-  const handlePaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = event.clipboardData?.items;
-    if (items) {
-      const imageFiles: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.startsWith('image/')) {
-          const file = items[i].getAsFile();
-          if (file) imageFiles.push(file);
+  const handlePaste = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = event.clipboardData?.items;
+      if (items) {
+        const imageFiles: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.startsWith('image/')) {
+            const file = items[i].getAsFile();
+            if (file) imageFiles.push(file);
+          }
+        }
+        if (imageFiles.length > 0) {
+          processFiles(imageFiles);
         }
       }
 
-      if (imageFiles.length > 0) {
-        processFiles(imageFiles);
+      const pasted = event.clipboardData?.getData('text') || '';
+      const current = event.currentTarget.value;
+      if (current.length + pasted.length > MAX_CHARS) {
+        hapticsRef.current.medium?.();
       }
-    }
+    },
+    [processFiles],
+  );
 
-    const pasted = event.clipboardData?.getData('text') || '';
-    const current = event.currentTarget.value;
-    if (current.length + pasted.length > MAX_CHARS) haptics.medium();
-  }, [haptics, processFiles]);
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (locked) return;
+      const files = event.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      const hasImages = Array.from(files).some((f) => f.type.startsWith('image/'));
+      if (hasImages) {
+        event.preventDefault();
+        event.stopPropagation();
+        processFiles(files);
+      }
+    },
+    [locked, processFiles],
+  );
 
   const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
-    haptics.light();
-  }, [haptics]);
+    setAttachments((prev) => {
+      const target = prev.find((a) => a.id === id);
+      if (target) revokeAttachmentUrl(target);
+      return prev.filter((a) => a.id !== id);
+    });
+    hapticsRef.current.light?.();
+  }, []);
 
   const submit = useCallback(() => {
     const text = draft.trim();
-    if ((!text && attachments.length === 0) || locked || text.length > MAX_CHARS) return;
+    if ((!text && attachments.length === 0) || locked || draft.length > MAX_CHARS) {
+      return;
+    }
     if (isListening) toggleVoice();
-    haptics.success();
+    hapticsRef.current.success?.();
     playPop();
+
+    const promptToSend =
+      text ||
+      (attachments.length > 0
+        ? 'Ushbu biriktirilgan rasmni tahlil qilib, xulosa ber.'
+        : '');
+    const sentAttachments = attachments.length > 0 ? [...attachments] : undefined;
+
     try {
-      const promptToSend = text || (attachments.length > 0 ? "Ushbu biriktirilgan rasmni tahlil qilib, xulosa ber." : "");
-      onSend(promptToSend, attachments.length > 0 ? attachments : undefined);
+      onSend(promptToSend, sentAttachments);
       if (text) {
         historyRef.current = [text, ...historyRef.current].slice(0, HISTORY_LIMIT);
-        historyIdxRef.current = -1;
       }
+      historyIdxRef.current = -1;
       setDraft('');
       setAttachments([]);
       setError(null);
       setLastSent(promptToSend);
+      setLastSentAttachments(sentAttachments);
       try {
         window.localStorage.removeItem(storageKey);
       } catch {
         /* ignore */
       }
     } catch (cause) {
-      setError(t('ai.composer.sendFailed') || "Yuborib bo'lmadi. Qayta urinib ko'ring.");
+      setError(
+        t('ai.composer.sendFailed') || 'Yuborib bo‘lmadi. Qayta urinib ko‘ring.',
+      );
       onSendError?.(cause);
     } finally {
       focusTextarea();
     }
-  }, [attachments, draft, focusTextarea, haptics, isListening, locked, onSend, onSendError, playPop, storageKey, t, toggleVoice]);
+  }, [
+    attachments,
+    draft,
+    focusTextarea,
+    isListening,
+    locked,
+    onSend,
+    onSendError,
+    playPop,
+    storageKey,
+    t,
+    toggleVoice,
+  ]);
 
   const retryLast = useCallback(() => {
     if (!lastSent || locked) return;
     setError(null);
     try {
-      onSend(lastSent);
+      onSend(lastSent, lastSentAttachments);
     } catch (cause) {
-      setError(t('ai.composer.sendFailed') || "Yuborib bo'lmadi.");
+      setError(t('ai.composer.sendFailed') || 'Yuborib bo‘lmadi.');
       onSendError?.(cause);
     }
-  }, [lastSent, locked, onSend, onSendError, t]);
+  }, [lastSent, lastSentAttachments, locked, onSend, onSendError, t]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing) return;
@@ -403,7 +561,9 @@ export function AiComposer({
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setSlashIndex((index) => (index - 1 + filteredCommands.length) % filteredCommands.length);
+        setSlashIndex(
+          (index) => (index - 1 + filteredCommands.length) % filteredCommands.length,
+        );
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
@@ -422,9 +582,17 @@ export function AiComposer({
       }
     }
 
-    if (event.key === 'ArrowUp' && !isSlash && draft === '' && historyRef.current.length > 0) {
+    if (
+      event.key === 'ArrowUp' &&
+      !isSlash &&
+      draft === '' &&
+      historyRef.current.length > 0
+    ) {
       event.preventDefault();
-      const nextIndex = Math.min(historyIdxRef.current + 1, historyRef.current.length - 1);
+      const nextIndex = Math.min(
+        historyIdxRef.current + 1,
+        historyRef.current.length - 1,
+      );
       historyIdxRef.current = nextIndex;
       setDraft(historyRef.current[nextIndex]);
       return;
@@ -439,6 +607,7 @@ export function AiComposer({
 
     if (event.key === 'Escape' && draft.length > 0 && !locked) {
       event.preventDefault();
+      historyIdxRef.current = -1;
       setDraft('');
       onClear?.();
       return;
@@ -451,6 +620,7 @@ export function AiComposer({
   };
 
   const clearDraft = () => {
+    historyIdxRef.current = -1;
     setDraft('');
     setError(null);
     onClear?.();
@@ -463,7 +633,8 @@ export function AiComposer({
       ? t('ai.composer.awaitingPlaceholder') || 'Tasdiqlang yoki bekor qiling'
       : busy
         ? t('ai.composer.sendingPlaceholder') || 'Javob tayyorlanmoqda…'
-        : t('ai.composer.placeholder') || "Savol bering, hisobot so'rang yoki topshiriq bering…";
+        : t('ai.composer.placeholder') ||
+          'Savol bering, hisobot so‘rang yoki topshiriq bering…';
 
   const showCounter = draft.length > 0;
   const usage = Math.min(1, draft.length / MAX_CHARS);
@@ -482,13 +653,21 @@ export function AiComposer({
         : 'var(--cp-accent)';
 
   const inputAriaDescription =
-    [error ? errorId : null, isListening ? voiceStatusId : null].filter(Boolean).join(' ') || undefined;
+    [error ? errorId : null, isListening ? voiceStatusId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
     <div
       role="form"
       aria-label={t('ai.composer.formAria') || 'Xabar yozish'}
       data-testid="ai-composer"
+      onDragOver={(e) => {
+        if (e.dataTransfer?.types?.includes('Files')) {
+          e.preventDefault();
+        }
+      }}
+      onDrop={handleDrop}
       className={cn(
         'relative shrink-0 px-2.5 pt-2.5 sm:px-4 sm:pt-3',
         'pb-[max(env(safe-area-inset-bottom),10px)]',
@@ -504,12 +683,13 @@ export function AiComposer({
         <AnimatePresence>
           {isListening && (
             <motion.div
+              key="voice-listening-chip"
               id={voiceStatusId}
               initial={{ opacity: 0, y: 6, height: 0 }}
               animate={{ opacity: 1, y: 0, height: 'auto' }}
               exit={{ opacity: 0, y: 6, height: 0 }}
               transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              className="mb-2 inline-flex min-h-8 items-center gap-2 rounded-full border border-[color:var(--cp-danger)]/25 bg-[color:var(--cp-danger)]/10 px-3 text-[11.5px] font-semibold text-[color:var(--cp-danger)]"
+              className="mb-2 inline-flex min-h-8 items-center gap-2 rounded-full border border-[color:var(--cp-danger)]/30 bg-[color:var(--cp-danger)]/12 px-3 text-[11.5px] font-semibold text-[color:var(--cp-danger)] shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-xl"
             >
               <span className="cp-wave" aria-hidden="true">
                 <span />
@@ -529,9 +709,11 @@ export function AiComposer({
                 type="button"
                 onClick={() => {
                   toggleVoice();
-                  haptics.light();
+                  hapticsRef.current.light?.();
                 }}
-                aria-label={t('ai.composer.cancelVoice') || 'Ovoz yozishni bekor qilish'}
+                aria-label={
+                  t('ai.composer.cancelVoice') || 'Ovoz yozishni bekor qilish'
+                }
                 className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full outline-none transition-colors hover:bg-[color:var(--cp-danger)]/15 focus-visible:ring-2 focus-visible:ring-[color:var(--cp-danger)]/50"
               >
                 <IconClose size={11} />
@@ -544,14 +726,18 @@ export function AiComposer({
         <AnimatePresence>
           {error && (
             <motion.div
+              key="composer-error-banner"
               id={errorId}
               role="alert"
               initial={{ opacity: 0, y: 6, height: 0 }}
               animate={{ opacity: 1, y: 0, height: 'auto' }}
               exit={{ opacity: 0, y: 6, height: 0 }}
-              className="mb-2 flex items-start gap-2 overflow-hidden rounded-xl border border-rose-500/25 bg-rose-500/[0.08] px-3 py-2 text-[12px] text-rose-700 dark:text-rose-300"
+              className="mb-2 flex items-start gap-2 overflow-hidden rounded-xl border border-rose-500/30 bg-rose-500/[0.09] px-3 py-2 text-[12px] text-rose-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-xl dark:text-rose-300"
             >
-              <span aria-hidden="true" className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+              <span
+                aria-hidden="true"
+                className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current"
+              />
               <span className="min-w-0 flex-1 break-words">{error}</span>
               {lastSent && (
                 <button
@@ -571,38 +757,44 @@ export function AiComposer({
         <AnimatePresence>
           {attachments.length > 0 && (
             <motion.div
+              key="composer-attachments-tray"
               initial={{ opacity: 0, y: 6, height: 0 }}
               animate={{ opacity: 1, y: 0, height: 'auto' }}
               exit={{ opacity: 0, y: 6, height: 0 }}
               className="mb-2 flex flex-wrap gap-2 overflow-hidden px-1"
             >
               {attachments.map((att) => (
-                <div
+                <motion.div
                   key={att.id}
-                  className="relative group flex items-center gap-2 rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] p-1.5 pr-2.5 backdrop-blur-md text-xs shadow-xs"
+                  layout
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.92 }}
+                  transition={SPRING_GEL}
+                  className="group relative flex items-center gap-2 rounded-xl border border-white/70 bg-white/75 p-1.5 pr-2.5 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_12px_-2px_rgba(0,0,0,0.06)] backdrop-blur-xl dark:border-white/12 dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
                 >
                   <img
                     src={att.url || att.base64}
                     alt={att.name || 'Attachment'}
-                    className="h-9 w-9 rounded-lg object-cover"
+                    className="h-9 w-9 rounded-lg object-cover ring-1 ring-black/5 dark:ring-white/10"
                   />
-                  <div className="flex flex-col min-w-0 max-w-[120px]">
+                  <div className="flex max-w-[120px] min-w-0 flex-col">
                     <span className="truncate text-[11px] font-medium text-[color:var(--cp-text)]">
                       {att.name || 'Rasm'}
                     </span>
-                    <span className="text-[9.5px] text-[color:var(--cp-text-tertiary)]">
-                      {att.size ? `${Math.round(att.size / 1024)} KB` : 'Rasm'}
+                    <span className="text-[9.5px] tabular-nums text-[color:var(--cp-text-tertiary)]">
+                      {att.size ? `${Math.max(1, Math.round(att.size / 1024))} KB` : 'Rasm'}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeAttachment(att.id)}
-                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-[color:var(--cp-text-secondary)] transition-colors"
-                    aria-label="Rasmni o'chirish"
+                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-[color:var(--cp-text-secondary)] transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                    aria-label="Rasmni o‘chirish"
                   >
                     <LucideX size={12} />
                   </button>
-                </div>
+                </motion.div>
               ))}
             </motion.div>
           )}
@@ -620,10 +812,11 @@ export function AiComposer({
           )}
 
           <div
-            className="cp-composer flex items-end gap-1 p-1.5 sm:gap-1.5 sm:p-2"
+            className="cp-composer relative isolate flex items-end gap-1 overflow-hidden p-1.5 sm:gap-1.5 sm:p-2"
             data-focused={focused ? 'true' : undefined}
             data-locked={locked ? 'true' : undefined}
           >
+            <TopSpecular inset="inset-x-6" />
             <span aria-hidden="true" className="cp-composer__ring" />
 
             <textarea
@@ -631,10 +824,14 @@ export function AiComposer({
               value={draft}
               onChange={(event) => {
                 const next = event.target.value;
-                const clipped = next.length <= MAX_CHARS ? next : next.slice(0, MAX_CHARS);
-                if (clipped !== next) haptics.medium();
+                const clipped =
+                  next.length <= MAX_CHARS ? next : next.slice(0, MAX_CHARS);
+                if (clipped !== next) hapticsRef.current.medium?.();
+                historyIdxRef.current = -1;
                 setDraft(clipped);
-                if (!isSlash) setSlashMenuOpen(true);
+                const nextIsSlash =
+                  clipped.startsWith('/') && !clipped.includes('\n');
+                if (nextIsSlash) setSlashMenuOpen(true);
               }}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
@@ -644,7 +841,11 @@ export function AiComposer({
               aria-label={t('ai.composer.inputAria') || 'Xabar matni'}
               aria-describedby={inputAriaDescription}
               aria-controls={showSlashMenu ? slashMenuId : undefined}
-              aria-activedescendant={showSlashMenu ? `${slashMenuId}-option-${slashIndex}` : undefined}
+              aria-expanded={showSlashMenu}
+              aria-haspopup={showSlashMenu ? 'listbox' : undefined}
+              aria-activedescendant={
+                showSlashMenu ? `${slashMenuId}-option-${slashIndex}` : undefined
+              }
               aria-invalid={error ? true : undefined}
               data-testid="ai-composer-input"
               rows={1}
@@ -652,10 +853,10 @@ export function AiComposer({
               disabled={locked}
               autoFocus={autoFocus}
               className={cn(
-                'min-h-[46px] max-h-[168px] min-w-0 flex-1 resize-none',
+                'max-h-[168px] min-h-[46px] min-w-0 flex-1 resize-none',
                 'border-0 bg-transparent px-2.5 py-3 sm:px-3',
-                'text-base sm:text-[14.5px] leading-[1.55] tracking-[-0.011em]',
-                'text-[#1c1c1e] dark:text-[#f5f5f7] outline-none',
+                'text-base leading-[1.55] tracking-[-0.011em] sm:text-[14.5px]',
+                'text-[#1c1c1e] outline-none dark:text-[#f5f5f7]',
                 'placeholder:text-[#8e8e93] dark:placeholder:text-[#636366]',
                 'focus:ring-0 focus-visible:outline-none',
                 'disabled:cursor-not-allowed',
@@ -686,39 +887,47 @@ export function AiComposer({
                 }
               }}
             />
-            <button
+            <motion.button
               type="button"
+              whileTap={
+                reduced || locked || attachments.length >= MAX_ATTACHMENTS
+                  ? undefined
+                  : { scaleX: 1.06, scaleY: 0.9 }
+              }
+              transition={SPRING_GEL}
               aria-label="Rasm biriktirish"
               title="Rasm biriktirish (screenshot yoki fayl)"
               onClick={() => fileInputRef.current?.click()}
-              disabled={locked || attachments.length >= 4}
-              className="cp-icon-btn mb-0.5 shrink-0 rounded-[13px] text-[color:var(--cp-text-secondary)] hover:text-[color:var(--cp-text)] transition-colors"
+              disabled={locked || attachments.length >= MAX_ATTACHMENTS}
+              className="cp-icon-btn mb-0.5 shrink-0 rounded-[13px] text-[color:var(--cp-text-secondary)] transition-colors hover:text-[color:var(--cp-text)] disabled:opacity-40"
             >
               <Paperclip size={16} />
-            </button>
+            </motion.button>
 
             {isSupported && !busy && !awaitingConfirmation && (
-              <button
+              <motion.button
                 type="button"
+                whileTap={reduced ? undefined : { scaleX: 1.06, scaleY: 0.9 }}
+                transition={SPRING_GEL}
                 aria-label={
                   isListening
-                    ? t('ai.composer.stopVoice') || "Ovozni to'xtatish"
+                    ? t('ai.composer.stopVoice') || 'Ovozni to‘xtatish'
                     : t('ai.composer.voiceInput') || 'Ovoz bilan kiritish'
                 }
                 aria-pressed={isListening}
                 onClick={() => {
-                  haptics.medium();
+                  hapticsRef.current.medium?.();
                   toggleVoice();
                 }}
                 className={cn(
                   'cp-icon-btn mb-0.5 shrink-0 rounded-[13px] transition-all duration-200',
                   isListening
-                    ? 'border-[color:var(--cp-danger)]/30 bg-[color:var(--cp-danger)]/15 text-[color:var(--cp-danger)]'
+                    ? 'border-[color:var(--cp-danger)]/35 bg-[color:var(--cp-danger)]/15 text-[color:var(--cp-danger)] shadow-[0_0_12px_rgba(255,59,48,0.25)]'
                     : '',
                 )}
               >
                 {isListening ? <IconWave size={17} bars={5} /> : <IconMic size={17} />}
-              </button>
+              </motion.button>
             )}
 
             {canStop && (
@@ -726,9 +935,9 @@ export function AiComposer({
                 variant="danger"
                 size="icon-sm"
                 data-testid="ai-stop"
-                aria-label={t('ai.composer.stop') || "To'xtatish"}
+                aria-label={t('ai.composer.stop') || 'To‘xtatish'}
                 onClick={onStop}
-                className="mb-0.5 shrink-0 !h-10 !w-10 rounded-[13px] border border-[color:var(--cp-danger)]/25 bg-[color:var(--cp-danger)]/10"
+                className="mb-0.5 !h-10 !w-10 shrink-0 rounded-[13px] border border-[color:var(--cp-danger)]/25 bg-[color:var(--cp-danger)]/10"
                 icon={<IconStop size={14} />}
               />
             )}
@@ -740,7 +949,14 @@ export function AiComposer({
                   viewBox="0 0 44 44"
                   className="pointer-events-none absolute inset-0 h-10 w-10 -rotate-90"
                 >
-                  <circle cx="22" cy="22" r="20" fill="none" stroke="var(--cp-hairline)" strokeWidth="2" />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="20"
+                    fill="none"
+                    stroke="var(--cp-hairline)"
+                    strokeWidth="2"
+                  />
                   <circle
                     cx="22"
                     cy="22"
@@ -751,7 +967,9 @@ export function AiComposer({
                     strokeLinecap="round"
                     strokeDasharray={125.6}
                     strokeDashoffset={125.6 * (1 - usage)}
-                    style={{ transition: 'stroke-dashoffset 160ms linear, stroke 200ms linear' }}
+                    style={{
+                      transition: 'stroke-dashoffset 160ms linear, stroke 200ms linear',
+                    }}
                   />
                 </svg>
               )}
@@ -763,8 +981,12 @@ export function AiComposer({
                 disabled={!canSubmit}
                 aria-busy={busy ? 'true' : undefined}
                 data-testid="ai-send"
-                aria-label={busy ? t('ai.composer.sending') || 'Yuborilmoqda' : t('ai.composer.send') || 'Yuborish'}
-                className="relative z-[1] shrink-0 !h-10 !w-10 rounded-[14px]"
+                aria-label={
+                  busy
+                    ? t('ai.composer.sending') || 'Yuborilmoqda'
+                    : t('ai.composer.send') || 'Yuborish'
+                }
+                className="relative z-[1] !h-10 !w-10 shrink-0 rounded-[14px]"
               >
                 {busy ? (
                   <span
@@ -784,7 +1006,10 @@ export function AiComposer({
           <div className="min-w-0 text-[10.5px] font-medium text-[color:var(--cp-text-tertiary)]">
             {awaitingConfirmation ? (
               <span className="inline-flex items-center gap-1.5 text-[color:var(--cp-warning)]">
-                <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-current"
+                />
                 <span className="truncate">
                   {t('ai.composer.confirmPending') || 'Amalni tasdiqlashni yakunlang'}
                 </span>
@@ -796,7 +1021,7 @@ export function AiComposer({
                   className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent motion-reduce:animate-none"
                 />
                 {status === 'thinking'
-                  ? t('ai.composer.thinking') || "O'ylayapman…"
+                  ? t('ai.composer.thinking') || 'O‘ylayapman…'
                   : t('ai.composer.sending') || 'Yuborilmoqda…'}
               </span>
             ) : (
@@ -818,7 +1043,13 @@ export function AiComposer({
           </div>
 
           {showCounter && (
-            <span aria-live="off" className={cn('shrink-0 text-[10.5px] font-medium tabular-nums transition-colors', counterTone)}>
+            <span
+              aria-live="off"
+              className={cn(
+                'shrink-0 text-[10.5px] font-medium tabular-nums transition-colors',
+                counterTone,
+              )}
+            >
               {draft.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
             </span>
           )}

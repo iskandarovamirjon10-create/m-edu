@@ -27,6 +27,7 @@ import {
 } from './camera-thresholds';
 import { CameraAlertingService } from './camera-alerting.service';
 import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
+import { isRedisEnabled } from '../config/redis.config';
 import {
   FACE_TEMPLATES_CHANGED_CHANNEL,
   type FaceTemplatesChangedPayload,
@@ -564,6 +565,9 @@ export class CameraWorkerManagerService implements OnModuleInit, OnModuleDestroy
   }
 
   private async initializeRedis(): Promise<void> {
+    if (!isRedisEnabled()) {
+      return;
+    }
     try {
       const mod = await import('ioredis');
       const RedisCtor = (mod.default ||

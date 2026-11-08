@@ -39,7 +39,8 @@ import { formatCurrency } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
-import type { Invoice, InvoicePayment, InvoiceRefund } from '@/lib/types';
+import type { Invoice, InvoicePayment, InvoiceRefund } from '@/types/invoices';
+import type { Student } from '@/types/students';
 import { queryKeys } from '@/lib/query-keys.factory';
 
 /* ============================================================================
@@ -528,13 +529,13 @@ export function InvoicesPage() {
 
   const invoiceDetail = useQuery({
     queryKey: ['invoice-detail', refundTarget?.id],
-    queryFn: () => (refundTarget ? (invoicesApi.get(refundTarget.id) as Promise<any>) : null),
+    queryFn: () => (refundTarget ? (invoicesApi.get(refundTarget.id) as Promise<Invoice>) : null),
     enabled: !!refundTarget,
   });
 
   const students = useQuery({
     queryKey: queryKeys.students.selectors(),
-    queryFn: () => studentsApi.list({ limit: 100 }),
+    queryFn: () => studentsApi.list({ limit: 100 }) as Promise<{ items: Student[]; total: number }>,
   });
 
   const createInvoice = useMutation({
@@ -588,15 +589,15 @@ export function InvoicesPage() {
 
   const invoices = useQuery({
     queryKey: queryKeys.invoices.list({ status: statusFilter || undefined, limit: 100 }),
-    queryFn: () => invoicesApi.list({ status: statusFilter || undefined, limit: 100 }) as Promise<any>,
+    queryFn: () => invoicesApi.list({ status: statusFilter || undefined, limit: 100 }) as Promise<{ items: Invoice[]; total: number }>,
   });
 
   const remaining = (inv: Invoice) => {
     if (['DRAFT', 'CANCELLED', 'REFUNDED'].includes(inv.status)) return 0;
-    if (typeof (inv as any).remaining === 'number') return (inv as any).remaining;
+    if (typeof inv.remaining === 'number') return inv.remaining;
     const totalMinor = Math.round((Number(inv.total) || 0) * 100);
-    const paidMinor = Math.round((Number((inv as any).paidAmount) || 0) * 100);
-    const refundedMinor = Math.round((Number((inv as any).refundedAmount) || 0) * 100);
+    const paidMinor = Math.round((Number(inv.paidAmount) || 0) * 100);
+    const refundedMinor = Math.round((Number(inv.refundedAmount) || 0) * 100);
     return Math.max(0, Math.round(totalMinor - paidMinor + refundedMinor)) / 100;
   };
 
@@ -616,12 +617,12 @@ export function InvoicesPage() {
   });
 
   /* ── Derived stats ────────────────────────────────────────────────── */
-  const items: any[] = (invoices.data as any)?.items ?? [];
+  const items: Invoice[] = invoices.data?.items ?? [];
 
   const stats = useMemo(() => {
     const totalMinor = items.reduce((sum, inv) => sum + Math.round((Number(inv.total) || 0) * 100), 0);
     const paidMinor = items.reduce((sum, inv) => sum + Math.round((Number(inv.paidAmount) || 0) * 100), 0);
-    const outstandingMinor = items.reduce((sum, inv) => sum + Math.round(remaining(inv as any) * 100), 0);
+    const outstandingMinor = items.reduce((sum, inv) => sum + Math.round(remaining(inv) * 100), 0);
     const overdue = items.filter((inv) => inv.status === 'OVERDUE').length;
     return {
       total: Math.round(totalMinor) / 100,
@@ -1478,7 +1479,7 @@ export function InvoicesPage() {
                   {t('invoices.invoiceLabel')}
                 </p>
                 <p className="mt-1 font-mono text-[13.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
-                  {(invoiceDetail.data as any).number}
+                  {invoiceDetail.data?.number}
                 </p>
               </div>
               <div className="text-right">
@@ -1489,8 +1490,8 @@ export function InvoicesPage() {
                   {formatCurrency(
                     Math.max(
                       0,
-                      Number((invoiceDetail.data as any).paidAmount || 0) -
-                        Number((invoiceDetail.data as any).refundedAmount ?? 0),
+                      Number(invoiceDetail.data?.paidAmount || 0) -
+                        Number(invoiceDetail.data?.refundedAmount ?? 0),
                     ),
                   )}
                 </p>
@@ -1498,9 +1499,9 @@ export function InvoicesPage() {
             </div>
 
             <GlassField label={t('invoices.paymentLabel')} required hint={t('invoices.paymentSelectHint')}>
-              {(invoiceDetail.data as any).payments && (invoiceDetail.data as any).payments.length > 0 ? (
+              {invoiceDetail.data?.payments && invoiceDetail.data.payments.length > 0 ? (
                 <div className="space-y-2">
-                  {(invoiceDetail.data as any).payments.map((p: InvoicePayment) => {
+                  {invoiceDetail.data?.payments?.map((p: InvoicePayment) => {
                     const isSelected = refundForm.paymentId === p.id;
                     const isSucceeded = p.status === 'SUCCEEDED' || p.status === 'PAID';
                     return (
@@ -1570,12 +1571,12 @@ export function InvoicesPage() {
               </GlassField>
             </div>
 
-            {(invoiceDetail.data as any).refunds && (invoiceDetail.data as any).refunds.length > 0 && (
+            {Boolean(invoiceDetail.data?.refunds && invoiceDetail.data.refunds.length > 0) && (
               <div className="space-y-2 border-t border-slate-200/80 dark:border-slate-800 pt-4 dark:border-[#ffffff08]">
                 <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                   {t('invoices.refundHistory')}
                 </p>
-                {(invoiceDetail.data as any).refunds.map((r: InvoiceRefund) => (
+                {invoiceDetail.data?.refunds?.map((r: InvoiceRefund) => (
                   <div
                     key={r.id}
                     className="flex flex-col gap-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-500/[0.02] p-3.5 dark:border-[#ffffff08] dark:bg-[#ffffff04] sm:flex-row sm:items-center sm:justify-between"
@@ -1874,7 +1875,7 @@ export function InvoicesPage() {
                 className="pl-11"
               >
                 <option value="">{t('payments.form.selectStudent')}</option>
-                {(((students.data as any)?.items) ?? []).map((st: any) => (
+                {(students.data?.items ?? []).map((st: Student) => (
                   <option key={st.id} value={st.id}>
                     {st.user?.firstName} {st.user?.lastName}
                   </option>
@@ -2088,7 +2089,7 @@ export function InvoicesPage() {
                   <tbody>
                     <tr>
                       <td className="px-4 py-3">
-                        {previewTarget.notes || (previewTarget as any).description || t('invoices.preview.defaultItem')}
+                        {previewTarget.notes || previewTarget.items?.[0]?.description || t('invoices.preview.defaultItem')}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-medium">
                         {formatCurrency(Number(previewTarget.total || previewTarget.subtotal || 0))}
@@ -2230,9 +2231,9 @@ export function InvoicesPage() {
               className="min-h-[44px]"
             >
               <option value="">{t('payments.form.selectStudent')}</option>
-              {((students.data as any)?.items || []).map((s: any) => (
+              {(students.data?.items ?? []).map((s: Student) => (
                 <option key={s.id} value={s.id}>
-                  {s.user?.firstName} {s.user?.lastName} {s.phone ? `(${s.phone})` : ''}
+                  {s.user?.firstName} {s.user?.lastName} {s.user?.phone ? `(${s.user.phone})` : ''}
                 </option>
               ))}
             </GlassSelect>
@@ -2413,7 +2414,7 @@ export function InvoicesPage() {
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white p-5 text-center shadow-sm dark:border-white/[0.08] dark:bg-black/40">
                   <img
                     src={paymentLinksQuery.data.qrCodeUrl}
-                    alt="To'lov QR Kodi"
+                    alt="To‘lov QR Kodi"
                     decoding="async"
                     className="h-44 w-44 rounded-xl border border-black/[0.08] p-2 dark:border-white/[0.08]"
                   />
@@ -2427,9 +2428,9 @@ export function InvoicesPage() {
 
                 <a
                   href={`https://t.me/share/url?url=${encodeURIComponent(paymentLinksQuery.data.paymeUrl)}&text=${encodeURIComponent(
-                    `Hurmatli ota-ona! ${paymentLinksTarget.number || 'Invoys'} uchun to'lov miqdori: ${formatCurrency(
+                    `Hurmatli ota-ona! ${paymentLinksTarget.number || 'Invoys'} uchun to‘lov miqdori: ${formatCurrency(
                       remaining(paymentLinksTarget)
-                    )}. Quyidagi havola orqali to'lashingiz mumkin:`
+                    )}. Quyidagi havola orqali to‘lashingiz mumkin:`
                   )}`}
                   target="_blank"
                   rel="noreferrer"

@@ -45,6 +45,20 @@ export class AiGatewayService {
     conversationId: string,
     content: string,
   ): Promise<AiSendMessageResponse> {
+    if (!context?.organizationId || !context?.userId) {
+      throw new AiException(
+        AiErrorCode.AI_TOOL_NOT_AUTHORIZED,
+        'Tenant and user context required',
+      );
+    }
+
+    if (!content || !content.trim()) {
+      throw new AiException(
+        AiErrorCode.AI_INVALID_INPUT,
+        'Message content cannot be empty',
+      );
+    }
+
     // Ownership + tenant check happens inside `appendMessage`'s conversation
     // lookups below; assert explicitly so an invalid id fails before we write.
     await this.conversation.get(context, conversationId);
@@ -59,10 +73,17 @@ export class AiGatewayService {
     const history = await this.conversation.recentMessages(context, conversationId, HISTORY_LIMIT);
     const providerMessages: AiProviderMessage[] = history
       .filter((message) => message.role === AiRole.USER || message.role === AiRole.ASSISTANT)
-      .filter((message) => message.content.trim().length > 0)
+      .filter(
+        (message) =>
+          message.content.trim().length > 0 ||
+          (Boolean(message.toolCalls) && (message.toolCalls?.length ?? 0) > 0),
+      )
       .map((message) => ({
         role: message.role,
         content: message.content,
+        ...(message.toolCalls && message.toolCalls.length > 0
+          ? { toolCalls: message.toolCalls }
+          : {}),
       }));
 
     const systemInstruction = this.buildSystemInstruction(context);

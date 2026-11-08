@@ -767,7 +767,7 @@ export function GroupDetailPage() {
         window.dispatchEvent(
           new CustomEvent('open-ai-copilot', {
             detail: {
-              prompt: `"${groupData.name}" guruhi bo'yicha tahlil ber: o'quvchilar soni (${stats.totalMembers} nafar, sig'imi ${stats.capacity || 'cheklanmagan'}), o'qituvchi (${teacherName}), dars xonasi (${groupData.room || 'belgilanmagan'}) va dars jadvali.`,
+              prompt: `"${groupData?.name ?? ''}" guruhi bo'yicha tahlil ber: o'quvchilar soni (${stats.totalMembers} nafar, sig'imi ${stats.capacity || 'cheklanmagan'}), o'qituvchi (${teacherName}), dars xonasi (${groupData?.room || 'belgilanmagan'}) va dars jadvali.`,
             },
           }),
         );
@@ -994,7 +994,7 @@ export function GroupDetailPage() {
                     window.dispatchEvent(
                       new CustomEvent('open-ai-copilot', {
                         detail: {
-                          prompt: `"${groupData.name}" guruhi bo'yicha tahlil ber: o'quvchilar soni (${stats.totalMembers} nafar, sig'imi ${stats.capacity || 'cheklanmagan'}), o'qituvchi (${teacherName}), dars xonasi (${groupData.room || 'belgilanmagan'}) va dars jadvali.`,
+                          prompt: `"${groupData?.name ?? ''}" guruhi bo'yicha tahlil ber: o'quvchilar soni (${stats.totalMembers} nafar, sig'imi ${stats.capacity || 'cheklanmagan'}), o'qituvchi (${teacherName}), dars xonasi (${groupData?.room || 'belgilanmagan'}) va dars jadvali.`,
                         },
                       }),
                     );

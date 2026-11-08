@@ -378,7 +378,7 @@ function AssignmentCard({
   const statusLabel = t(statusKey);
   const statusText = statusLabel === statusKey ? assignment.status : statusLabel;
 
-  const groupStudents = (assignment as any).group?.studentCount || (assignment as any).group?._count?.students || 0;
+  const groupStudents = (assignment as { group?: { studentCount?: number; _count?: { students?: number } } }).group?.studentCount || (assignment as { group?: { _count?: { students?: number } } }).group?._count?.students || 0;
   const progress = groupStudents > 0 ? Math.min(100, Math.round((submissionCount / groupStudents) * 100)) : (submissionCount > 0 ? 100 : 0);
 
   return (
@@ -611,12 +611,12 @@ export default function AssignmentsPage() {
   });
 
   const assignments: Assignment[] = useMemo(
-    () => (Array.isArray(data) ? data : (data as any)?.items ?? []),
+    () => (Array.isArray(data) ? data : (data as { items?: unknown[] })?.items ?? []),
     [data],
   );
 
   const groups: Group[] = useMemo(
-    () => (Array.isArray(groupsData) ? groupsData : (groupsData as any)?.items ?? []),
+    () => (Array.isArray(groupsData) ? groupsData : (groupsData as { items?: unknown[] })?.items ?? []),
     [groupsData],
   );
 
@@ -818,7 +818,7 @@ export default function AssignmentsPage() {
 
   /* ---------------- Main View ---------------- */
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       <AuroraMesh variant="corporate" opacity={0.65} />
       <motion.div
         variants={containerVariants}

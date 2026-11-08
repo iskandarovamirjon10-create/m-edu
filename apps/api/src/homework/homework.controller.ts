@@ -8,6 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AllowAnyRole } from '../auth/roles.decorator';
+import type { RequestUser } from '../auth/types';
 
 @ApiTags('Homework')
 @ApiBearerAuth()
@@ -19,28 +20,57 @@ export class HomeworkController {
   @AllowAnyRole()
   @Get()
   @ApiOperation({ summary: 'List homework' })
-  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: HomeworkQuery) {
+  findAll(
+    @CurrentUser('organizationId') orgId: string,
+    @Query() query: HomeworkQuery,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.homeworkService.findAll(orgId, query, user);
+    }
     return this.homeworkService.findAll(orgId, query);
   }
 
   @AllowAnyRole()
   @Get(':id')
   @ApiOperation({ summary: 'Get homework details' })
-  findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
+  findOne(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.homeworkService.findOne(orgId, id, user);
+    }
     return this.homeworkService.findOne(orgId, id);
   }
 
   @Post()
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER')
   @ApiOperation({ summary: 'Create homework' })
-  create(@CurrentUser('organizationId') orgId: string, @Body() dto: CreateHomeworkDto) {
+  create(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: CreateHomeworkDto,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.homeworkService.create(orgId, dto, user);
+    }
     return this.homeworkService.create(orgId, dto);
   }
 
   @Patch(':id')
   @Roles('SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'TEACHER')
   @ApiOperation({ summary: 'Update homework' })
-  update(@CurrentUser('organizationId') orgId: string, @Param('id') id: string, @Body() dto: UpdateHomeworkDto) {
+  update(
+    @CurrentUser('organizationId') orgId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateHomeworkDto,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.homeworkService.update(orgId, id, dto, user);
+    }
     return this.homeworkService.update(orgId, id, dto);
   }
 
@@ -51,4 +81,3 @@ export class HomeworkController {
     return this.homeworkService.remove(orgId, id);
   }
 }
-

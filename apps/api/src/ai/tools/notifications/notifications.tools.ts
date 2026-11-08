@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Role } from '@prisma/client';
 import {
   AiPermission,
   AiToolRiskLevel,
@@ -112,7 +113,7 @@ export function createNotificationsTools(prisma: PrismaService): AiToolDefinitio
           const users = await prisma.user.findMany({
             where: {
               organizationId,
-              role: { in: ['STUDENT', 'PARENT'] as never[] },
+              role: { in: [Role.STUDENT, Role.PARENT] },
             },
             select: { id: true },
             take: MAX_RECIPIENTS,

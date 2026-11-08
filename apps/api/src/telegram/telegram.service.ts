@@ -33,6 +33,30 @@ const TELEGRAM_API_TIMEOUT_MS = 10_000;
 const DEFAULT_TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
 
 /** One entry of the bot's command menu (`setMyCommands`). */
+/** Basic bot profile returned by getMe */
+export interface TelegramBotInfo {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  username?: string;
+  can_join_groups?: boolean;
+  can_read_all_group_messages?: boolean;
+  supports_inline_queries?: boolean;
+}
+
+/** Current webhook configuration returned by getWebhookInfo */
+export interface TelegramWebhookInfo {
+  url: string;
+  has_custom_certificate: boolean;
+  pending_update_count: number;
+  ip_address?: string;
+  last_error_date?: number;
+  last_error_message?: string;
+  last_synchronization_error_date?: number;
+  max_connections?: number;
+  allowed_updates?: string[];
+}
+
 export interface TelegramBotCommand {
   command: string;
   description: string;
@@ -201,7 +225,122 @@ export class TelegramService {
     return ok;
   }
 
+    /**
+   * Delete the registered webhook so Telegram allows getUpdates (Long-Polling).
+   */
+  async deleteWebhook(dropPendingUpdates = false): Promise<boolean> {
+    if (!this.isEnabled) return false;
+    const ok = await this.callControlMethod('deleteWebhook', {
+      drop_pending_updates: dropPendingUpdates,
+    });
+    if (ok) {
+      this.logger.log(JSON.stringify({ event: 'telegram_webhook_deleted', dropPendingUpdates }));
+    }
+    return ok;
+  }
+
   /**
+   * Generic Bot API caller with JSON response decoding.
+   */
+  async callApiMethod<T = unknown>(
+    method: string,
+    payload?: Record<string, unknown>,
+    timeoutMs = TELEGRAM_API_TIMEOUT_MS,
+  ): Promise<{ ok: boolean; result?: T; description?: string }> {
+    if (!this.isEnabled) {
+      return { ok: false, description: 'Telegram is not configured' };
+    }
+    if (this.isMock || this.botToken.startsWith('mock')) {
+      if (method === 'getMe') {
+        return {
+          ok: true,
+          result: {
+            id: 987654321,
+            is_bot: true,
+            first_name: 'M-EDU Test Bot (Mock)',
+            username: this.getBotUsername() || 'medu_education_bot',
+            can_join_groups: true,
+            can_read_all_group_messages: false,
+            supports_inline_queries: false,
+          } as unknown as T,
+        };
+      }
+      if (method === 'getWebhookInfo') {
+        return {
+          ok: true,
+          result: {
+            url: '',
+            has_custom_certificate: false,
+            pending_update_count: 0,
+          } as unknown as T,
+        };
+      }
+      if (method === 'getUpdates') {
+        return { ok: true, result: [] as unknown as T };
+      }
+      return { ok: true, result: {} as T };
+    }
+
+    try {
+      const response = await fetch(this.endpoint(method), {
+        method: payload ? 'POST' : 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        ...(payload ? { body: JSON.stringify(payload) } : {}),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      const data = (await response.json()) as { ok: boolean; result?: T; description?: string };
+      return data;
+    } catch (error: unknown) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'telegram_api_call_error',
+          method,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return { ok: false, description: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
+   * Fetch bot profile info from Telegram (getMe).
+   */
+  async getMe(): Promise<TelegramBotInfo | null> {
+    const res = await this.callApiMethod<TelegramBotInfo>('getMe');
+    return res.ok && res.result ? res.result : null;
+  }
+
+  /**
+   * Fetch current webhook status from Telegram (getWebhookInfo).
+   */
+  async getWebhookInfo(): Promise<TelegramWebhookInfo | null> {
+    const res = await this.callApiMethod<TelegramWebhookInfo>('getWebhookInfo');
+    return res.ok && res.result ? res.result : null;
+  }
+
+  /**
+   * Fetch pending updates from Telegram via Long-Polling (getUpdates).
+   */
+  async getUpdates(
+    offset?: number,
+    limit = 100,
+    timeoutSec = 20,
+  ): Promise<any[]> {
+    const payload: Record<string, unknown> = {
+      limit,
+      timeout: timeoutSec,
+      allowed_updates: ['message', 'callback_query'],
+    };
+    if (typeof offset === 'number') {
+      payload.offset = offset;
+    }
+    const fetchTimeoutMs = (timeoutSec + 5) * 1000;
+    const res = await this.callApiMethod<any[]>('getUpdates', payload, fetchTimeoutMs);
+    return res.ok && Array.isArray(res.result) ? res.result : [];
+  }
+
+/**
    * Publish the bot's command menu (Telegram's command autocomplete).
    *
    * `languageCode` is an ISO 639-1 code; omit it to (re)register the DEFAULT

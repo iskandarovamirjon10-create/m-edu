@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SmartClassroomSeatingStudio } from '../groups/SmartClassroomSeatingStudio';
 import { VoiceSpeakingDiagnosticStudio } from '../exams/VoiceSpeakingDiagnosticStudio';
 
@@ -30,6 +30,17 @@ vi.mock('@/components/ui', async (importOriginal) => {
   };
 });
 
+vi.mock('@/lib/api', () => ({
+  studentsApi: {
+    list: vi.fn().mockResolvedValue({
+      items: [
+        { id: 'sp-1', firstName: 'Dilnoza', lastName: 'Karimova', groupName: 'IELTS Intensive C1', predictedBand: '7.5 (C1)' },
+        { id: 'sp-2', firstName: 'Temurbek', lastName: 'Oripov', groupName: 'General English B2', predictedBand: '6.5 (B2)' },
+      ],
+    }),
+  },
+}));
+
 describe('Two Ultra-Creative Features V2 Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,8 +50,25 @@ describe('Two Ultra-Creative Features V2 Suite', () => {
    * 1. SmartClassroomSeatingStudio Tests
    * ════════════════════════════════════════════════════════════════════════ */
   it('1. SmartClassroomSeatingStudio renders 2D desk matrix, podium and swaps seats', () => {
+    const mockGroup = {
+      id: 'g-1',
+      name: 'IELTS Pro 2026',
+      room: 'Auditoriya 305',
+      enrollments: [
+        {
+          isActive: true,
+          student: { id: 's-1', user: { firstName: 'Alisher', lastName: 'Qodirov' }, score: 92, attendanceRate: 98, hasGlasses: true },
+        },
+        {
+          isActive: true,
+          student: { id: 's-2', user: { firstName: 'Zilola', lastName: 'Rahimova' }, score: 88, attendanceRate: 95 },
+        },
+      ],
+    } as any;
+
     render(
       <SmartClassroomSeatingStudio
+        group={mockGroup}
         groupName="IELTS Pro 2026"
         roomName="Auditoriya 305"
       />
@@ -54,7 +82,7 @@ describe('Two Ultra-Creative Features V2 Suite', () => {
     // Verify Teacher Podium and Whiteboard
     expect(screen.getByText(/O'qituvchi Minbari va Smart Interaktiv Doska/i)).toBeInTheDocument();
 
-    // Verify default students are placed
+    // Verify enrolled students are placed
     expect(screen.getByText(/Alisher Qodirov/i)).toBeInTheDocument();
     expect(screen.getByText(/Zilola Rahimova/i)).toBeInTheDocument();
 
@@ -76,7 +104,7 @@ describe('Two Ultra-Creative Features V2 Suite', () => {
   /* ══════════════════════════════════════════════════════════════════════════
    * 2. VoiceSpeakingDiagnosticStudio Tests
    * ════════════════════════════════════════════════════════════════════════ */
-  it('2. VoiceSpeakingDiagnosticStudio renders acoustic HUD, WPM cadence and switches phases', () => {
+  it('2. VoiceSpeakingDiagnosticStudio renders acoustic HUD, WPM cadence and switches phases', async () => {
     render(
       <VoiceSpeakingDiagnosticStudio
         examTitle="IELTS Mock Oral Exam — London Center"
@@ -93,9 +121,11 @@ describe('Two Ultra-Creative Features V2 Suite', () => {
     expect(screen.getByText(/Ikkilanish & To‘xtalish/i)).toBeInTheDocument();
     expect(screen.getByText(/Prognoz Qilingan Daraja/i)).toBeInTheDocument();
 
-    // Verify Candidates list & Switch candidate
-    expect(screen.getByText(/Dilnoza Karimova/i)).toBeInTheDocument();
-    expect(screen.getByText(/Temurbek Oripov/i)).toBeInTheDocument();
+    // Wait for candidates from API to load
+    await waitFor(() => {
+      expect(screen.getByText(/Dilnoza Karimova/i)).toBeInTheDocument();
+      expect(screen.getByText(/Temurbek Oripov/i)).toBeInTheDocument();
+    });
 
     const temurBtn = screen.getByRole('button', { name: /Temurbek Oripov/i });
     fireEvent.click(temurBtn);

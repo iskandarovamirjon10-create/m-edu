@@ -507,6 +507,12 @@ export class CreatePaymentDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200)
   reference?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsUUID()
+  receivedById?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsUUID()
+  shiftId?: string;
 }
 
 export class UpdatePaymentDto {

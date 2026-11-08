@@ -99,8 +99,9 @@ export function QuickPaymentModal() {
 
   // Focus management on open
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (open) {
-      setTimeout(() => {
+      timer = setTimeout(() => {
         if (!selectedStudent) {
           searchInputRef.current?.focus();
         } else {
@@ -113,6 +114,9 @@ export function QuickPaymentModal() {
       setDescription('');
       idempotencyKeyRef.current = generateIdempotencyKey();
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [open, selectedStudent]);
 
   const recordPayment = useMutation({
@@ -176,6 +180,15 @@ export function QuickPaymentModal() {
 
   if (!open) return null;
 
+  const studentList: any[] = Array.isArray(studentsData)
+    ? studentsData
+    : Array.isArray(studentsData?.items)
+      ? studentsData.items
+      : Array.isArray((studentsData as any)?.data)
+        ? (studentsData as any).data
+        : [];
+
+  // Dropdown search results
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 dark:bg-slate-950/70 backdrop-blur-md animate-fade-in"
@@ -278,9 +291,9 @@ export function QuickPaymentModal() {
                 )}
 
                 {/* Dropdown search results */}
-                {searchTerm.trim().length >= 2 && studentsData?.items && studentsData.items.length > 0 && (
+                {searchTerm.trim().length >= 2 && studentList.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-1 shadow-2xl backdrop-blur-xl dark:border-white/15 dark:bg-slate-900/95">
-                    {studentsData.items.map((student: any) => (
+                    {studentList.map((student: any) => (
                       <button
                         key={student.id}
                         type="button"

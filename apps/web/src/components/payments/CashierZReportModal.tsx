@@ -11,12 +11,13 @@ import {
   Printer,
   History,
   Lock,
+  Unlock,
 } from 'lucide-react';
 import { GlassModal, GlassButton, useToast } from '@/components/ui';
 import { paymentsApi } from '@/lib/api';
 import { formatCurrency, parseFinancialAmount } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys.factory';
-import type { ZReportSummary, ZReportRecord } from '@/types/finance';
+import type { ZReportSummary, ZReportRecord, CurrentShiftResponse } from '@/types/finance';
 import { triggerPrint } from '@/lib/printEngine';
 
 interface CashierZReportModalProps {
@@ -24,6 +25,8 @@ interface CashierZReportModalProps {
   onClose: () => void;
   onShiftClosed?: (report: ZReportRecord) => void;
 }
+
+const OPENING_PRESETS = [0, 100_000, 200_000, 500_000, 1_000_000];
 
 export function CashierZReportModal({
   open,
@@ -35,41 +38,99 @@ export function CashierZReportModal({
 
   const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
   const [actualCashStr, setActualCashStr] = useState<string>('');
+  const [handoverAmountStr, setHandoverAmountStr] = useState<string>('');
   const [closingNotes, setClosingNotes] = useState<string>('');
   const [closedReport, setClosedReport] = useState<ZReportRecord | null>(null);
 
-  // Live reconciliation summary for current open shift
+  // Opening shift state
+  const [openingBalanceStr, setOpeningBalanceStr] = useState<string>('0');
+  const [openingNote, setOpeningNote] = useState<string>('');
+
+  // 1. Current active shift query
   const {
-    data: summary,
-    isLoading,
-    refetch,
-  } = useQuery<ZReportSummary>({
-    queryKey: ['cashier-z-report-summary'],
-    queryFn: () => paymentsApi.getZReportSummary(),
+    data: currentShiftData,
+    isLoading: isLoadingShift,
+    refetch: refetchShift,
+  } = useQuery<CurrentShiftResponse>({
+    queryKey: ['cashier-current-shift'],
+    queryFn: () => paymentsApi.getCurrentCashierShift(),
     enabled: open && activeTab === 'current' && !closedReport,
     refetchInterval: 15_000,
   });
 
-  // Historical Z-Reports
+  const activeShift = currentShiftData?.active ? currentShiftData.shift : null;
+
+  // 2. Live reconciliation summary for current open shift
+  const {
+    data: summary,
+    isLoading: isLoadingSummary,
+    refetch: refetchSummary,
+  } = useQuery<ZReportSummary>({
+    queryKey: ['cashier-z-report-summary', activeShift?.id],
+    queryFn: () =>
+      paymentsApi.getZReportSummary({
+        startDate: activeShift?.openedAt,
+        cashierId: activeShift?.cashierId,
+      }),
+    enabled: open && activeTab === 'current' && !closedReport,
+    refetchInterval: 15_000,
+  });
+
+  // 3. Historical Z-Reports
   const { data: history = [], isLoading: isLoadingHistory } = useQuery<ZReportRecord[]>({
     queryKey: ['cashier-z-reports-history'],
-    queryFn: () => paymentsApi.getRecentZReports(15),
+    queryFn: () => paymentsApi.getRecentZReports(20),
     enabled: open && activeTab === 'history',
   });
 
-  const expectedCash = summary?.netCashDrawerExpected ?? 0;
+  const openingBalance = activeShift ? Number(activeShift.openingBalance) || 0 : 0;
+  const netCollectedCash = summary?.byMethod?.cash?.amount ?? 0;
+  const cashRefunds = summary?.refunds?.cashRefundsAmount ?? 0;
+
+  // Expected cash in drawer = opening cash + cash collected - cash refunds
+  const expectedCash = openingBalance + netCollectedCash - cashRefunds;
+
   const actualCash = useMemo(() => {
     if (!actualCashStr.trim()) return expectedCash;
     const parsed = parseFinancialAmount(actualCashStr);
     return isNaN(parsed) ? 0 : parsed;
   }, [actualCashStr, expectedCash]);
 
+  const handoverAmount = useMemo(() => {
+    if (!handoverAmountStr.trim()) return 0;
+    const parsed = parseFinancialAmount(handoverAmountStr);
+    return isNaN(parsed) ? 0 : parsed;
+  }, [handoverAmountStr]);
+
   const variance = actualCash - expectedCash;
 
+  // Mutation to open cashier shift
+  const openShiftMutation = useMutation({
+    mutationFn: async () => {
+      const balance = parseFinancialAmount(openingBalanceStr) || 0;
+      return paymentsApi.openCashierShift({
+        openingBalance: balance,
+        openingNote: openingNote.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      push('success', 'Kassa smenasi muvaffaqiyatli ochildi');
+      queryClient.invalidateQueries({ queryKey: ['cashier-current-shift'] });
+      queryClient.invalidateQueries({ queryKey: ['cashier-z-report-summary'] });
+    },
+    onError: (err: any) => {
+      push('error', err?.message || 'Smenani ochishda xatolik yuz berdi');
+    },
+  });
+
+  // Mutation to close cashier shift
   const closeShiftMutation = useMutation({
     mutationFn: async () => {
       return paymentsApi.closeCashierShift({
+        shiftId: activeShift?.id,
+        startDate: activeShift?.openedAt,
         actualCashCounted: actualCash,
+        handoverAmount: handoverAmount > 0 ? handoverAmount : undefined,
         closingNotes: closingNotes.trim() || undefined,
       });
     },
@@ -77,6 +138,7 @@ export function CashierZReportModal({
       setClosedReport(data);
       push('success', 'Kassa smenasi muvaffaqiyatli yopildi va Z-Hisobot tasdiqlandi');
       queryClient.invalidateQueries({ queryKey: queryKeys.payments.all() });
+      queryClient.invalidateQueries({ queryKey: ['cashier-current-shift'] });
       queryClient.invalidateQueries({ queryKey: ['cashier-z-reports-history'] });
       onShiftClosed?.(data);
     },
@@ -95,9 +157,14 @@ export function CashierZReportModal({
   const handleResetModal = () => {
     setClosedReport(null);
     setActualCashStr('');
+    setHandoverAmountStr('');
     setClosingNotes('');
+    setOpeningBalanceStr('0');
+    setOpeningNote('');
     onClose();
   };
+
+  const isLoading = isLoadingShift || isLoadingSummary;
 
   return (
     <GlassModal
@@ -178,6 +245,10 @@ export function CashierZReportModal({
 
               <div className="border-t border-b border-dashed border-white/20 py-2 space-y-1.5 text-[11px]">
                 <div className="flex justify-between font-bold text-white print:text-black">
+                  <span>BOSHLANG'ICH QOLDIQ:</span>
+                  <span>{formatCurrency((closedReport as any).openingBalance || 0)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-white print:text-black pt-1">
                   <span>JAMI TUSHUM:</span>
                   <span>{formatCurrency(closedReport.summary.totalCollected)}</span>
                 </div>
@@ -225,6 +296,12 @@ export function CashierZReportModal({
                     {formatCurrency(closedReport.variance)}
                   </span>
                 </div>
+                {(closedReport as any).handoverAmount > 0 && (
+                  <div className="flex justify-between border-t border-dashed border-white/20 pt-1 text-sky-400 font-semibold">
+                    <span>Topshirilgan summa (Inkassatsiya):</span>
+                    <span>{formatCurrency((closedReport as any).handoverAmount)}</span>
+                  </div>
+                )}
               </div>
 
               {closedReport.closingNotes && (
@@ -255,8 +332,99 @@ export function CashierZReportModal({
               <div className="py-12 text-center text-sm text-slate-400">
                 Kassa ma'lumotlari yuklanmoqda...
               </div>
+            ) : !activeShift && (summary?.totalPaymentsCount === 0 || !summary) ? (
+              /* PROMPT TO OPEN A NEW CASHIER SHIFT */
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400">
+                    <Unlock className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-white">
+                      Yangi Kassa Smenasini Boshlash
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      To'lovlarni qabul qilish va kassadagi naqd pul harakatini to'liq nazorat qilish uchun yangi kassa smenasini oching.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                  <label className="text-xs font-bold text-slate-200">
+                    Kassadagi boshlang'ich naqd pul qoldig'i (Tortmadagi pul, UZS)
+                  </label>
+                  <input
+                    type="text"
+                    value={openingBalanceStr}
+                    onChange={(e) => setOpeningBalanceStr(e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-base font-bold text-white outline-none focus:border-emerald-500/50"
+                  />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[11px] text-slate-400 mr-1">Tezkor:</span>
+                    {OPENING_PRESETS.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setOpeningBalanceStr(String(preset))}
+                        className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition-all"
+                      >
+                        {preset === 0 ? '0 (Bo‘sh)' : formatCurrency(preset)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pt-2">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Smena ochilishi haqida izoh (ixtiyoriy)
+                    </label>
+                    <input
+                      type="text"
+                      value={openingNote}
+                      onChange={(e) => setOpeningNote(e.target.value)}
+                      placeholder="Masalan: Ertalabki navbat boshlandi"
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2 text-xs text-white outline-none focus:border-emerald-500/50 placeholder:text-slate-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <GlassButton variant="secondary" onClick={onClose}>
+                    Bekor qilish
+                  </GlassButton>
+                  <GlassButton
+                    variant="primary"
+                    disabled={openShiftMutation.isPending}
+                    onClick={() => openShiftMutation.mutate()}
+                  >
+                    <Unlock className="mr-1.5 h-4 w-4" />
+                    {openShiftMutation.isPending ? 'Smena ochilmoqda...' : 'Smenani ochish'}
+                  </GlassButton>
+                </div>
+              </div>
             ) : summary ? (
               <>
+                {/* Active Shift Header if Shift is Open */}
+                {activeShift && (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-xs font-bold text-white">
+                        Ochiq kassa smenasi
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        ({new Date(activeShift.openedAt).toLocaleTimeString('uz-UZ')} da ochilgan)
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold text-emerald-300">
+                      Boshlang'ich qoldiq: <strong className="text-white">{formatCurrency(openingBalance)}</strong>
+                    </div>
+                  </div>
+                )}
+
                 {/* 4 Summary Metric Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-3.5 space-y-1">
@@ -319,10 +487,12 @@ export function CashierZReportModal({
                       Kassadagi kutilayotgan naqd pul (Sof kassa)
                     </span>
                     <p className="text-2xl font-black text-white">
-                      {formatCurrency(summary.netCashDrawerExpected)}
+                      {formatCurrency(expectedCash)}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      Naqd tushum ({formatCurrency(summary.byMethod.cash.amount)}) - Naqd qaytarish ({formatCurrency(summary.refunds.cashRefundsAmount)})
+                      {openingBalance > 0 ? `Boshlang'ich (${formatCurrency(openingBalance)}) + ` : ''}
+                      Naqd tushum ({formatCurrency(summary.byMethod.cash.amount)})
+                      {cashRefunds > 0 ? ` - Qaytarish (${formatCurrency(cashRefunds)})` : ''}
                     </p>
                   </div>
                   <div className="text-right text-xs text-slate-400">
@@ -353,6 +523,20 @@ export function CashierZReportModal({
                     onChange={(e) => setActualCashStr(e.target.value)}
                     className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-base font-bold text-white outline-none focus:border-emerald-500/50"
                   />
+
+                  {/* Handover Amount Input */}
+                  <div className="pt-2">
+                    <label className="text-xs font-semibold text-slate-300">
+                      Topshirilayotgan summa / Inkassatsiya (ixtiyoriy, UZS)
+                    </label>
+                    <input
+                      type="text"
+                      value={handoverAmountStr}
+                      placeholder="0"
+                      onChange={(e) => setHandoverAmountStr(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2 text-xs font-bold text-sky-300 outline-none focus:border-sky-500/50 placeholder:text-slate-500"
+                    />
+                  </div>
 
                   {/* Discrepancy indicator */}
                   <div
@@ -394,7 +578,7 @@ export function CashierZReportModal({
                     rows={2}
                     value={closingNotes}
                     onChange={(e) => setClosingNotes(e.target.value)}
-                    placeholder="Masalan: Barcha cheklar va terminal lentalari solishtirildi. Kamomad sababi..."
+                    placeholder="Masalan: Barcha cheklar va terminal lentalari solishtirildi..."
                     className="w-full rounded-xl border border-white/10 bg-black/30 p-2.5 text-base sm:text-xs text-white outline-none focus:border-emerald-500/50 placeholder:text-slate-500"
                   />
                 </div>
@@ -403,7 +587,10 @@ export function CashierZReportModal({
                 <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => refetch()}
+                    onClick={() => {
+                      refetchShift();
+                      refetchSummary();
+                    }}
                     className="text-xs text-slate-400 hover:text-white transition-colors"
                   >
                     Ma'lumotlarni yangilash

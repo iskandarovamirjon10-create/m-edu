@@ -178,13 +178,13 @@ describe('Attendance Enterprise Features Suite', () => {
     // Switch to Absenteeism Radar tab
     fireEvent.click(screen.getByText('Yo‘qlovlar va Xavf'));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Yo‘qlovlar va Xavf/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Yo‘qlovlar va Xavf/i })).toBeInTheDocument();
     });
 
     // Switch to Flow tab
     fireEvent.click(screen.getByText('Turniket va Oqim'));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Turniket va Oqim/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Turniket va Oqim/i })).toBeInTheDocument();
     });
   });
 

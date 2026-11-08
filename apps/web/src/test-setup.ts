@@ -6,7 +6,7 @@ import { loadLocale } from './i18n';
 // synchronously and expect translated strings immediately, so warm uz/ru once
 // per test file before any component mounts.
 beforeAll(async () => {
-  await Promise.all([loadLocale('uz'), loadLocale('ru')]);
+  await Promise.all([loadLocale('uz'), loadLocale('ru'), loadLocale('en')]);
 });
 
 /**

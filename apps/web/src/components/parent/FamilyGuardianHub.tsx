@@ -33,32 +33,7 @@ export interface FamilyGuardianHubProps {
   readonly className?: string;
 }
 
-const DEFAULT_SIBLINGS: readonly SiblingChild[] = [
-  {
-    id: 'ch-1',
-    name: 'Akrom Karimov',
-    age: 15,
-    group: 'Web & AI Intensive',
-    attendancePct: 96,
-    currentModule: 'Fullstack React & Node.js',
-    lastTurnstileEvent: { type: 'entry', time: '08:45 bugun', gate: 'Turniket #1' },
-    tuitionUzs: 1400000,
-    siblingDiscountPct: 0,
-    balanceUzs: 0,
-  },
-  {
-    id: 'ch-2',
-    name: 'Madina Karimova',
-    age: 12,
-    group: 'Python Kids',
-    attendancePct: 98,
-    currentModule: 'Algoritmlar',
-    lastTurnstileEvent: { type: 'entry', time: '08:50 bugun', gate: 'Turniket #2' },
-    tuitionUzs: 1200000,
-    siblingDiscountPct: 15,
-    balanceUzs: 150000,
-  },
-];
+const DEFAULT_SIBLINGS: readonly SiblingChild[] = [];
 
 export function FamilyGuardianHub({
   parentName = 'Ota-ona',
@@ -68,7 +43,7 @@ export function FamilyGuardianHub({
   const toast = useToast();
 
   const [children, setChildren] = useState<readonly SiblingChild[]>(DEFAULT_SIBLINGS);
-  const [selectedChildId, setSelectedChildId] = useState<string>('ch-1');
+  const [selectedChildId, setSelectedChildId] = useState<string>('');
 
   // Connect to real backend parent portal API
   useEffect(() => {
@@ -78,18 +53,25 @@ export function FamilyGuardianHub({
         const res = await parentPortalApi.children().catch(() => null);
         const rawList = Array.isArray(res) ? res : (res as { items?: unknown[] })?.items;
         if (isMounted && Array.isArray(rawList) && rawList.length > 0) {
-          const mapped: SiblingChild[] = (rawList as Array<{ id?: string; firstName?: string; lastName?: string; groupName?: string }>).map((c, idx) => ({
-            id: c.id || `child-${idx}`,
-            name: `${c.firstName || 'Farzand'} ${c.lastName || `#${idx + 1}`}`,
-            age: 14 + idx,
-            group: c.groupName || 'Dasturlash Asoslari',
-            attendancePct: 95 - idx * 2,
-            currentModule: 'Web Development & AI',
-            lastTurnstileEvent: { type: 'entry', time: '08:45 bugun', gate: `Turniket #${idx + 1}` },
-            tuitionUzs: 1200000,
-            siblingDiscountPct: idx === 0 ? 0 : idx === 1 ? 10 : 20,
-            balanceUzs: 0,
-          }));
+          const mapped: SiblingChild[] = (rawList as any[]).map((c, index) => {
+            const student = c.student || {};
+            const user = student.user || {};
+            const fullName = c.name || [user.firstName, user.lastName].filter(Boolean).join(' ') || ('Farzand #' + (index + 1));
+            const groupName = student.groups?.[0]?.group?.name || 'Asosiy Guruh';
+            const balance = Number(student.balance ?? 0);
+            return {
+              id: c.studentId || student.id || ('child-' + index),
+              name: fullName,
+              age: 15,
+              group: groupName,
+              attendancePct: 98,
+              currentModule: groupName,
+              lastTurnstileEvent: { type: 'entry' as const, time: 'Bugun 08:50', gate: 'Turniket #1 (Asosiy)' },
+              tuitionUzs: 500000,
+              siblingDiscountPct: index === 0 ? 0 : index === 1 ? 10 : 20,
+              balanceUzs: balance,
+            };
+          });
           setChildren(mapped);
           setSelectedChildId(mapped[0]?.id || '');
           return;

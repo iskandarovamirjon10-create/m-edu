@@ -19,6 +19,9 @@ import {
   MessageSquare,
   HelpCircle,
   TrendingUp,
+  Activity,
+  Award,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/design';
 
@@ -37,17 +40,17 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     id: 'attendance',
     command: '/davomat',
     title: 'Davomat Tahlili',
-    description: 'Bugungi umumiy davomat koʻrsatkichlari va davomat kartasi',
+    description: 'Bugungi umumiy davomat ko‘rsatkichlari va davomat kartasi',
     icon: BarChart3,
-    prompt: 'Bugungi umumiy davomat tahlilini koʻrsat',
+    prompt: 'Bugungi umumiy davomat tahlilini ko‘rsat',
   },
   {
     id: 'debtors',
     command: '/qarz',
     title: 'Qarzdorliklar',
-    description: 'Muddati oʻtgan toʻlovlar va qarzdor talabalar roʻyxati',
+    description: 'Muddati o‘tgan to‘lovlar va qarzdor talabalar ro‘yxati',
     icon: CreditCard,
-    prompt: 'Muddati oʻtgan toʻlovlar va qarzdorlar roʻyxatini koʻrsat',
+    prompt: 'Muddati o‘tgan to‘lovlar va qarzdorlar ro‘yxatini ko‘rsat',
   },
   {
     id: 'schedule',
@@ -55,7 +58,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     title: 'Darslar Jadvali',
     description: 'Bugungi darslar vaqti, guruhlar va xonalar taqsimoti',
     icon: Calendar,
-    prompt: 'Bugungi darslar jadvalini koʻrsat',
+    prompt: 'Bugungi darslar jadvalini ko‘rsat',
   },
   {
     id: 'student',
@@ -70,17 +73,17 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     id: 'risk',
     command: '/xavf',
     title: 'Akademik Xavf Tahlili',
-    description: 'Orqada qolayotgan va xavf guruhidagi talabalar roʻyxati',
+    description: 'Orqada qolayotgan va xavf guruhidagi talabalar ro‘yxati',
     icon: AlertTriangle,
-    prompt: 'Akademik xavf ostidagi oʻquvchilar tahlilini koʻrsat',
+    prompt: 'Akademik xavf ostidagi o‘quvchilar tahlilini ko‘rsat',
   },
   {
     id: 'lesson-plan',
     command: '/dars-rejasi',
     title: 'Dars Rejasi (Bloom)',
-    description: 'Bloom taksonomiyasi boʻyicha 5 bosqichli 45 daqiqalik dars konspekti',
+    description: 'Bloom taksonomiyasi bo‘yicha 5 bosqichli 45 daqiqalik dars konspekti',
     icon: BookOpen,
-    prompt: 'Quyidagi mavzu boʻyicha 45 daqiqalik dars rejasi tuzib ber: ',
+    prompt: 'Quyidagi mavzu bo‘yicha 45 daqiqalik dars rejasi tuzib ber: ',
     hasArg: true,
   },
   {
@@ -93,29 +96,73 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     hasArg: true,
   },
   {
+    id: 'smm-announcement',
+    command: '/smm',
+    title: 'SMM & E\'lon Generator',
+    description: 'Telegram, Instagram va SMS uchun 3 xil yuqori konversiyali e\'lon',
+    icon: Megaphone,
+    prompt: 'Quyidagi kurs/mavzu bo‘yicha Telegram va Instagram uchun yuqori konversiyali SMM e\'loni yozib ber: ',
+    hasArg: true,
+  },
+  {
+    id: 'announcement',
+    command: '/elon',
+    title: 'E\'lon Matni',
+    description: 'Yangi guruh qabuli, aksiya va ochiq darslar uchun e\'lon',
+    icon: Megaphone,
+    prompt: 'Quyidagi mavzu bo‘yicha ta\'lim markazi uchun jozibador e\'lon matnini tayyorla: ',
+    hasArg: true,
+  },
+  {
     id: 'quiz',
     command: '/test',
     title: 'Test / Mini-Viktorina',
-    description: 'Mavzu boʻyicha 5 ta test savoli, javoblar va baholash mezonlari',
+    description: 'Mavzu bo‘yicha 5 ta test savoli, javoblar va baholash mezonlari',
     icon: HelpCircle,
-    prompt: 'Quyidagi mavzu boʻyicha toʻgʻri javoblari va baholash mezonlari bilan 5 ta test savoli tuz: ',
+    prompt: 'Quyidagi mavzu bo‘yicha to‘g‘ri javoblari va baholash mezonlari bilan 5 ta test savoli tuz: ',
     hasArg: true,
   },
   {
     id: 'finance',
     command: '/moliya',
-    title: 'Moliyaviy Koʻrsatkichlar',
-    description: 'Oylik tushum, kutilayotgan toʻlovlar va kassa holati',
+    title: 'Moliyaviy Ko‘rsatkichlar',
+    description: 'Oylik tushum, kutilayotgan to‘lovlar va kassa holati',
     icon: TrendingUp,
-    prompt: 'Markazning joriy moliyaviy koʻrsatkichlari va tushumlar dinamikasini koʻrsat',
+    prompt: 'Markazning joriy moliyaviy ko‘rsatkichlari va tushumlar dinamikasini ko‘rsat',
+  },
+  {
+    id: 'diagnostic',
+    command: '/diagnostika',
+    title: 'O‘quvchi 360° Diagnostikasi',
+    description: 'Akademik salomatlik, SWOT, xatarlar va ota-onaga xabarnoma',
+    icon: Activity,
+    prompt: 'O‘quvchining 360 darajali akademik diagnostikasi va pedagogik tahlilini o‘tkaz: ',
+    hasArg: true,
+  },
+  {
+    id: 'exam',
+    command: '/imtihon',
+    title: 'Imtihon & Baholash Mezonlari',
+    description: 'Bloom taksonomiyasi asosida to‘liq nazorat ishi va javob kalitlari',
+    icon: Award,
+    prompt: 'Quyidagi fan va mavzu bo‘yicha Bloom taksonomiyasiga mos to‘liq imtihon va baholash mezonlarini tuz: ',
+    hasArg: true,
+  },
+  {
+    id: 'course-analysis',
+    command: '/kurs-tahlili',
+    title: 'Kurs va Guruhlar Tahlili',
+    description: 'Guruhlardagi o‘zlashtirish, faollik va o‘sish ko‘rsatkichlari',
+    icon: TrendingUp,
+    prompt: 'Barcha faol guruhlar va kurslarning o‘zlashtirish dinamikasini tahlil qil',
   },
   {
     id: 'summary',
     command: '/xulosa',
     title: 'Muloqot Xulosasi',
-    description: 'Ushbu suhbat boʻyicha rasmiy boshqaruv xulosasi va topshiriqlar',
+    description: 'Ushbu suhbat bo‘yicha rasmiy boshqaruv xulosasi va topshiriqlar',
     icon: FileText,
-    prompt: 'Ushbu suhbat boʻyicha asosiy xulosa va ijro topshiriqlarini tayyorla',
+    prompt: 'Ushbu suhbat bo‘yicha asosiy xulosa va ijro topshiriqlarini tayyorla',
   },
 ];
 
@@ -142,19 +189,25 @@ export function AiSlashCommandMenu({
   const filtered = SLASH_COMMANDS.filter(
     (cmd) =>
       cmd.command.toLowerCase().startsWith(cleanQuery) ||
-      cmd.title.toLowerCase().includes(cleanQuery.replace('/', ''))
+      cmd.title.toLowerCase().includes(cleanQuery.replace(/^\/+/, ''))
   );
 
   // Auto-scroll active item into view
   useEffect(() => {
     if (!listRef.current) return;
-    const active = listRef.current.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (active && typeof active.scrollIntoView === 'function') {
-      active.scrollIntoView({ block: 'nearest' });
+    try {
+      const active = listRef.current.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (active && typeof active.scrollIntoView === 'function') {
+        active.scrollIntoView({ block: 'nearest' });
+      }
+    } catch {
+      /* JSDOM or unsupported scroll environment */
     }
   }, [selectedIndex]);
 
   if (filtered.length === 0) return null;
+
+  const safeSelectedIndex = Math.max(0, Math.min(selectedIndex, filtered.length - 1));
 
   return (
     <div
@@ -181,7 +234,7 @@ export function AiSlashCommandMenu({
 
       <div className="flex flex-col gap-1 pt-1">
         {filtered.map((item, idx) => {
-          const isSelected = idx === Math.min(selectedIndex, filtered.length - 1);
+          const isSelected = idx === safeSelectedIndex;
           const Icon = item.icon;
 
           return (

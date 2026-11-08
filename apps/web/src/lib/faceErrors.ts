@@ -9,7 +9,7 @@ import { getStoredLocale } from '@/i18n';
 
 export type SupportedLocale = 'uz' | 'ru' | 'en';
 
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 export const FACE_ERROR_MESSAGES: Record<SupportedLocale, Record<string, string>> = {
   uz: {
@@ -215,7 +215,9 @@ export function friendlyFaceError(err: unknown, requestedLocale?: string): strin
       message?: string;
     } | null | undefined;
 
-    const reason = (details as any)?.reason;
+    const reason = typeof (details as Record<string, unknown> | null | undefined)?.reason === 'string'
+      ? ((details as Record<string, unknown>).reason as string)
+      : undefined;
     if (reason && (FACE_ERROR_MESSAGES[loc]?.[reason] || FACE_ERROR_MESSAGES.en[reason])) {
       return FACE_ERROR_MESSAGES[loc]?.[reason] || FACE_ERROR_MESSAGES.en[reason];
     }

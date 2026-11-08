@@ -925,7 +925,94 @@ export function usePremiumSound() {
     setAudioMuted(!isAudioMuted());
   }, []);
 
+  const toggleHaptics = useCallback(() => {
+    setHapticsEnabled(!isHapticsEnabled());
+  }, []);
+
+  /** Safe universal play helper for any preset or named sound */
+  const play = useCallback(
+    (presetOrName?: string) => {
+      if (!presetOrName) return;
+      try {
+        switch (presetOrName) {
+          case 'pop':
+            playPop();
+            break;
+          case 'tick':
+            playTick();
+            break;
+          case 'success':
+            playSuccess();
+            break;
+          case 'error':
+            playError();
+            break;
+          case 'notification':
+            playNotification();
+            break;
+          case 'celebration':
+          case 'victory':
+            playCelebration();
+            break;
+          case 'shutter':
+            playShutter();
+            break;
+          case 'payment':
+            playPayment();
+            break;
+          case 'switch':
+            playSwitch();
+            break;
+          case 'sent':
+            playSent();
+            break;
+          case 'delete':
+          case 'defeat':
+            playDelete();
+            break;
+          case 'faceid_match':
+            playFaceIdMatch();
+            break;
+          case 'faceid_denied':
+            playFaceIdDenied();
+            break;
+          case 'faceid_duplicate':
+            playFaceIdDuplicate();
+            break;
+          case 'laser_scan':
+          case 'whoosh':
+          case 'zap':
+            playLaserScan();
+            break;
+          default:
+            playTick();
+            break;
+        }
+      } catch {
+        // Safe acoustic fallback: never throw in interactive UI
+      }
+    },
+    [
+      playPop,
+      playTick,
+      playSuccess,
+      playError,
+      playNotification,
+      playCelebration,
+      playShutter,
+      playPayment,
+      playSwitch,
+      playSent,
+      playDelete,
+      playFaceIdMatch,
+      playFaceIdDenied,
+      playFaceIdDuplicate,
+      playLaserScan,
+    ]
+  );
+
   return {
+    play,
     playPop,
     playSuccess,
     playError,
@@ -947,6 +1034,8 @@ export function usePremiumSound() {
     volume,
     hapticsEnabled,
     toggleMute,
+    toggleMuted: toggleMute,
+    toggleHaptics,
     setMuted: setAudioMuted,
     setVolume: setAudioVolume,
     setHapticsEnabled,

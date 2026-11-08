@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
 export type Operator = '+' | '-' | '×' | '÷' | null;
 
@@ -243,45 +243,7 @@ export function useCalculator() {
     setWaitingForNewValue(true);
   }, [currentValue]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in an input field somewhere else
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
-      const key = e.key;
-      if (/[0-9]/.test(key)) {
-        e.preventDefault();
-        inputDigit(key);
-      } else if (key === '.') {
-        e.preventDefault();
-        inputDot();
-      } else if (key === '+' || key === '-') {
-        e.preventDefault();
-        performOperation(key as Operator);
-      } else if (key === '*' || key === 'x') {
-        e.preventDefault();
-        performOperation('×');
-      } else if (key === '/') {
-        e.preventDefault();
-        performOperation('÷');
-      } else if (key === 'Enter' || key === '=') {
-        e.preventDefault();
-        calculateEquals();
-      } else if (key === 'Backspace') {
-        e.preventDefault();
-        backspace();
-      } else if (key === 'Escape') {
-        e.preventDefault();
-        clear();
-      } else if (key === '%') {
-        e.preventDefault();
-        inputPercent();
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [inputDigit, inputDot, performOperation, calculateEquals, backspace, clear, inputPercent]);
 
   return {
     currentValue,

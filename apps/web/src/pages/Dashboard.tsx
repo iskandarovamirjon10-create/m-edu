@@ -18,6 +18,7 @@ import { GlassErrorState, GlassSurface, GlassModal } from '@/components/ui';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { DashboardStats } from '@/lib/types';
+import { isTeacherRole, isParentRole, isStudentRole } from '@/lib/roles';
 import { SchoolLaunchWizardStudio } from '@/components/onboarding/SchoolLaunchWizardStudio';
 
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
@@ -93,7 +94,7 @@ const DASHBOARD_I18N: Readonly<
 > = {
   uz: {
     pageTitle: 'Asosiy boshqaruv paneli',
-    loadFailedTitle: "Boshqaruv panelini yuklab bo'lmadi",
+    loadFailedTitle: "Boshqaruv panelini yuklab bo‘lmadi",
     tabOverview: 'Asosiy Tahlil',
     tabOperations: 'Operatsion Radar & Xavflar',
     tabKiosk: 'Jonli Face ID Kiosk',
@@ -103,25 +104,25 @@ const DASHBOARD_I18N: Readonly<
     lastUpdatedLabel: 'Oxirgi yangilanish:',
     syncingLabel: 'Yangilanmoqda...',
     shortcutRefreshHint: 'Yangilash (R)',
-    shortcutNewStudentHint: "Yangi o'quvchi (N)",
+    shortcutNewStudentHint: "Yangi o‘quvchi (N)",
     analyticsRegionLabel: 'Moliyaviy tushum va davomat dinamikasi',
-    activityRegionLabel: "So'nggi to'lovlar va eslatmalar",
+    activityRegionLabel: "So‘nggi to‘lovlar va eslatmalar",
     operationsRegionLabel: 'Operatsion radar va xavflar monitoringi',
     kioskRegionLabel: 'Biometrik Face ID terminali va telemetriya',
-    kioskTelemetryTitle: "Kiosk Telemetriyasi & Ko'rsatkichlar",
+    kioskTelemetryTitle: "Kiosk Telemetriyasi & Ko‘rsatkichlar",
     kioskTelemetrySubtitle:
       'Bugungi avtomatlashtirilgan kirish-chiqish statistikasi',
     presentTodayLabel: 'Bugun kelganlar',
-    presentTodaySublabel: "O'z vaqtida kelgan",
+    presentTodaySublabel: "O‘z vaqtida kelgan",
     lateTodayLabel: 'Kechikkanlar',
     lateTodaySublabel: 'Kechikish qayd etilgan',
     absentTodayLabel: 'Kelmaganlar',
     absentTodaySublabel: 'Dars qoldirganlar',
-    liveAttendanceRateLabel: "Bugungi umumiy qatnashish ko'rsatkichi",
+    liveAttendanceRateLabel: "Bugungi umumiy qatnashish ko‘rsatkichi",
     quickLinksHeading: 'Tezkor havolalar',
     linkFaceDatabase: 'Face ID Bazasi va Model Boshqaruvi',
     linkIpCameras: 'IP Kameralar va RTSP Oqimlari',
-    linkAttendanceJournal: "To'liq Davomat Jurnali",
+    linkAttendanceJournal: "To‘liq Davomat Jurnali",
     operationalHealthBadge: 'Tizim barqaror',
     attentionRequiredBadge: 'Diqqat talab etiladi',
   },
@@ -296,6 +297,7 @@ function isValidDashboardTab(value: string | null): value is DashboardTabId {
 const DEDICATED_PORTAL_ROLES: ReadonlySet<string> = new Set([
   'PARENT',
   'TEACHER',
+  'ASSISTANT',
   'STUDENT',
 ]);
 
@@ -357,14 +359,18 @@ export function DashboardPage() {
 
   /* ── Role-Based Landing Redirects & Query Gate ────────────────── */
   const role = user?.role?.toUpperCase() ?? '';
-  const isDedicatedRole = DEDICATED_PORTAL_ROLES.has(role);
+  const isDedicatedRole =
+    DEDICATED_PORTAL_ROLES.has(role) ||
+    isTeacherRole(role) ||
+    isParentRole(role) ||
+    isStudentRole(role);
 
   useEffect(() => {
-    if (role === 'PARENT') {
+    if (isParentRole(role)) {
       navigate('/parent-portal', { replace: true });
-    } else if (role === 'TEACHER') {
-      navigate('/attendance', { replace: true });
-    } else if (role === 'STUDENT') {
+    } else if (isTeacherRole(role)) {
+      navigate('/teacher-cockpit', { replace: true });
+    } else if (isStudentRole(role)) {
       navigate('/schedule', { replace: true });
     }
   }, [role, navigate]);
@@ -736,7 +742,7 @@ export function DashboardPage() {
                 setIsThemeStudioOpen(true);
               }}
               className="flex h-7 w-7 items-center justify-center rounded-full text-purple-600 hover:bg-purple-500/15 dark:text-purple-400 dark:hover:bg-purple-500/20 transition-all"
-              title="Mavzu va Urg'u Palitrasi"
+              title="Mavzu va Urg‘u Palitrasi"
               aria-label="Mavzu Palitrasi"
             >
               <Icon name="sparkles" size={14} />

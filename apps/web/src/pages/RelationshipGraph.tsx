@@ -590,7 +590,7 @@ export function RelationshipGraphPage() {
       subtitle: `${metaLabel} · ${node.subLabel || node.id}`,
       badge: {
         text: metaLabel,
-        tone: (meta.tone === 'orange' ? 'amber' : meta.tone === 'red' ? 'rose' : meta.tone) as any,
+        tone: (meta.tone === 'orange' ? 'amber' : meta.tone === 'red' ? 'rose' : meta.tone) as 'amber' | 'rose' | 'emerald' | 'blue' | 'purple' | 'slate',
       },
       metrics: [
         { label: 'Turi', value: metaLabel },
@@ -637,7 +637,7 @@ export function RelationshipGraphPage() {
 
   /* ═══ Render ═══ */
   return (
-    <div className="relative min-h-screen pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraBackdrop />
 
       <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">

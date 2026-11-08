@@ -17,6 +17,68 @@ function AuroraMesh() {
   );
 }
 
+
+export interface ServiceHealth {
+  status?: string;
+  responseTimeMs?: number;
+}
+
+export interface SystemHealthData {
+  status?: string;
+  uptime?: number;
+  memory?: { heapUsed?: number; heapTotal?: number };
+  services?: {
+    postgres?: ServiceHealth;
+    redis?: ServiceHealth;
+    [key: string]: ServiceHealth | undefined;
+  };
+}
+
+export interface SystemMetricsData {
+  memory?: { total?: number; free?: number; used?: number };
+  cpu?: { loadAverage?: { '1m'?: number; '5m'?: number; '15m'?: number } };
+  nodeVersion?: string;
+}
+
+export interface QueueHealthData {
+  name: string;
+  waiting?: number;
+  active?: number;
+  completed?: number;
+  failed?: number;
+  delayed?: number;
+  paused?: boolean;
+}
+
+export interface IntegrationData {
+  name: string;
+  status: string;
+  latencyMs?: number;
+  lastChecked?: string;
+  error?: string | null;
+}
+
+export interface ApiMetricsData {
+  p50?: number;
+  p95?: number;
+  p99?: number;
+  totalRequests?: number;
+  errorRate?: number;
+  topEndpoints?: Array<{ path: string; count: number; avgLatency: number }>;
+  avgResponseTimeMs?: number;
+  requestsPerMinute?: number;
+  p95ResponseTimeMs?: number;
+  p99ResponseTimeMs?: number;
+  endpointBreakdown?: Array<{ method: string; path: string; count: number; avgResponseTimeMs: number; errorCount: number }>;
+}
+
+export interface DbMetricsData {
+  activeConnections?: number;
+  cacheHitRatio?: number;
+  totalQueries?: number;
+  slowQueries?: number;
+}
+
 type Tab = 'health' | 'queues' | 'integrations' | 'api-metrics';
 
 function StatusDot({ status }: { status: string }) {
@@ -242,7 +304,7 @@ export function ObservabilityPage() {
 
  if (healthQuery.isError) {
  return (
- <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+ <div className="min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
  <GlassErrorState message={(healthQuery.error as Error)?.message ??'Failed to load health data'} onRetry={() => healthQuery.refetch()} />
  </div>
  );
@@ -255,15 +317,15 @@ export function ObservabilityPage() {
  { key:'api-metrics', label:'API Metrics', labelKey:'obs.tabApiMetrics'},
  ];
 
- const health = healthQuery.data as any;
- const metrics = metricsQuery.data as any;
- const queues = (queueQuery.data as any[]) ?? [];
- const integrations = (integrationQuery.data as any[]) ?? [];
- const apiMetrics = apiMetricsQuery.data as any;
- const dbMetrics = dbQuery.data as any;
+ const health = healthQuery.data as SystemHealthData | undefined;
+ const metrics = metricsQuery.data as SystemMetricsData | undefined;
+ const queues = (queueQuery.data as QueueHealthData[] | undefined) ?? [];
+ const integrations = (integrationQuery.data as IntegrationData[] | undefined) ?? [];
+ const apiMetrics = apiMetricsQuery.data as ApiMetricsData | undefined;
+ const dbMetrics = dbQuery.data as DbMetricsData | undefined;
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30 pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30 pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
 
  <div className="relative z-10 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 animate-in fade-in duration-500">
@@ -325,7 +387,7 @@ export function ObservabilityPage() {
  <MetricRow label={t('obs.responseTime')} value={health?.services?.postgres?.responseTimeMs !== undefined ? `${health.services.postgres.responseTimeMs}ms` :'—'} />
  {dbMetrics && (
  <>
- <MetricRow label={t('obs.activeConnections')} value={dbMetrics.activeConnections} />
+ <MetricRow label={t('obs.activeConnections')} value={dbMetrics.activeConnections ?? '—'} />
  <MetricRow label={t('obs.cacheHitRatio')} value={`${dbMetrics.cacheHitRatio}%`} />
  </>
  )}

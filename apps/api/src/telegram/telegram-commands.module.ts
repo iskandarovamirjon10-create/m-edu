@@ -12,7 +12,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { AiModule } from '../ai/ai.module';
 import { TelegramCoreModule } from './telegram-core.module';
 import { TelegramWebhookController } from './telegram-webhook.controller';
+import { TelegramAdminController } from './telegram-admin.controller';
 import { TelegramBootstrapService } from './telegram-bootstrap.service';
+import { TelegramUpdateDispatcherService } from './telegram-update-dispatcher.service';
+import { TelegramPollingService } from './telegram-polling.service';
 import {
   TELEGRAM_COMMANDS,
   TelegramCommandHandler,
@@ -104,6 +107,7 @@ const COMMAND_HANDLERS = [
   ],
   controllers: [
     TelegramWebhookController,
+    TelegramAdminController,
     TelegramWebAppAuthController,
     TelegramCalendarController,
   ],
@@ -116,12 +120,16 @@ const COMMAND_HANDLERS = [
     },
     TelegramCommandRouter,
     TelegramCallbackRouter,
+    TelegramUpdateDispatcherService,
+    TelegramPollingService,
     TelegramBootstrapService,
     TelegramWebAppAuthService,
     TelegramCalendarService,
     TelegramExecutiveBriefingService,
   ],
   exports: [
+    TelegramUpdateDispatcherService,
+    TelegramPollingService,
     TelegramWebAppAuthService,
     TelegramCalendarService,
     TelegramExecutiveBriefingService,

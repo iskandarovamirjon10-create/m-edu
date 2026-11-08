@@ -1,13 +1,21 @@
+'use client';
+
 /**
- * M-EDU App — v2.0 (v22 "Liquid Glass · Apple Vision Pro" Root Shell & Resilience Engine)
+ * ============================================================================
+ * M-EDU App — v3.0 (iOS 27 / visionOS "Liquid Glass Root Shell & Resilience Engine")
+ * ============================================================================
  *
- * 🎯 v2.0 Architectural, Performance & Spatial UI Upgrades:
- *  ✅ Auto-Healing Chunk Guard — Automatically reloads once per session on Vite/Webpack deployment mismatch without infinite loops.
- *  ✅ Full Keyboard Recovery Matrix — `R` (Retry), `H` (Home), `D` (Diagnostics toggle), `C` (Copy report) with visual <kbd> hints.
- *  ✅ Deep Telemetry Inspector — Captures Stack Trace, Network Status, Viewport, and Timestamp in a sleek terminal drawer.
- *  ✅ Dynamic Island PWA Banner — Animated Liquid Glass floating capsule with dismiss & instant update actions.
- *  ✅ Adaptive Viewport Synchronizer — Passive `--app-vh` CSS variable calibration for mobile Safari/Chrome address bars.
- *  ✅ Multi-Depth Specular Skeleton — Staggered shimmer wave physics across anatomical bone structures.
+ * 🎯 v3.0 Architectural, Performance & Spatial UI Upgrades:
+ *  ✅ True Async Cache-Flush Chunk Guard + `vite:preloadError` Auto-Healing
+ *  ✅ Stabilized Audio Refs — Zero accidental sound replays on state toggles
+ *  ✅ Root-Level `<IconDefsHost />` — SVG gradients survive even root-level crashes
+ *  ✅ Full Keyboard Recovery Matrix — `R` (Retry), `H` (Home), `D` (Diagnostics),
+ *     `C` (Copy report) with dialog/select collision protection
+ *  ✅ Dynamic Island PWA Banner — Adaptive dark-glass capsule positioned safely
+ *     above mobile bottom navigation docks
+ *  ✅ Adaptive Viewport Synchronizer — Passive `--app-vh` & `--app-vw` calibration
+ *  ✅ Multi-Depth Specular Skeleton — Staggered shimmer wave physics
+ * ============================================================================
  */
 
 import {
@@ -49,14 +57,15 @@ import { Protected, PublicOnly } from './routes/guards';
 export { Protected, PublicOnly };
 
 /* ══════════════════════════════════════════════════════════════════════════
- * MOTION TOKENS & APPLE STUDIO PHYSICS
+ * MOTION TOKENS & iOS 27 APPLE STUDIO PHYSICS
  * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
   snappy: { type: 'spring' as const, stiffness: 540, damping: 34, mass: 0.65 },
-  smooth: { type: 'spring' as const, stiffness: 320, damping: 28, mass: 0.85 },
-  soft:   { type: 'spring' as const, stiffness: 220, damping: 26, mass: 1.0 },
-  island: { type: 'spring' as const, stiffness: 420, damping: 30, mass: 0.8 },
+  smooth: { type: 'spring' as const, stiffness: 360, damping: 30, mass: 0.82 },
+  soft: { type: 'spring' as const, stiffness: 220, damping: 26, mass: 1.0 },
+  island: { type: 'spring' as const, stiffness: 440, damping: 32, mass: 0.75 },
+  gel: { type: 'spring' as const, stiffness: 740, damping: 25, mass: 0.34 },
 } as const;
 
 const EASE_APPLE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -69,16 +78,25 @@ const containerVariants: Variants = {
   },
 };
 
+// WebKit-safe card variants (no filter:blur to prevent backdrop-filter drop/flicker)
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 16, scale: 0.97, filter: 'blur(6px)' },
+  hidden: { opacity: 0, y: 16, scale: 0.975 },
   visible: {
     opacity: 1,
     y: 0,
     scale: 1,
-    filter: 'blur(0px)',
     transition: SPRING.smooth,
   },
 };
+
+const TopSpecular = memo(function TopSpecular({ inset = 'inset-x-8' }: { inset?: string }) {
+  return (
+    <div aria-hidden="true" className={`pointer-events-none absolute top-0 z-20 ${inset}`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/35" />
+      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#38BDF8]/35 to-transparent dark:via-[#38BDF8]/25" />
+    </div>
+  );
+});
 
 /* ══════════════════════════════════════════════════════════════════════════
  * ENVIRONMENT, ACCESSIBILITY & SAFE LOCALIZATION HOOKS
@@ -97,11 +115,41 @@ function usePrefersReducedMotion(): boolean {
     }
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    mq.addEventListener?.('change', handler);
+    return () => mq.removeEventListener?.('change', handler);
   }, []);
 
   return reduced;
+}
+
+function useStableSound() {
+  const sound = usePremiumSound();
+  const ref = useRef(sound);
+  useEffect(() => {
+    ref.current = sound;
+  }, [sound]);
+  return ref;
+}
+
+function isInteractiveTargetOrModalOpen(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    el instanceof HTMLSelectElement ||
+    Boolean(el?.isContentEditable)
+  ) {
+    return true;
+  }
+  if (typeof document !== 'undefined') {
+    const openDialog = document.querySelector(
+      '[role="dialog"][data-state="open"], [role="dialog"]:not([aria-hidden="true"])',
+    );
+    if (openDialog && !openDialog.contains(el)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -140,38 +188,23 @@ function useViewportCssVar(): void {
 }
 
 /**
- * Synchronizes online network lifecycle with React Query caches.
- * When the device reconnects to the network, automatically invalidates stale queries
- * and resets errored queries so UI data springs back to life immediately without page reload.
- */
-function GlobalNetworkSync() {
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleOnline = () => {
-      void queryClient.invalidateQueries();
-      void queryClient.resetQueries({
-        predicate: (q) => q.state.status === 'error',
-      });
-    };
-
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, []);
-
-  return null;
-}
-
-/**
  * Root-safe translation hook that never throws even if rendered ABOVE <I18nProvider>.
  */
 function useSafeTranslate() {
-  const ctx = useSafeI18n();
+  let ctx: ReturnType<typeof useSafeI18n> | null = null;
+  try {
+    ctx = useSafeI18n();
+  } catch {
+    ctx = null;
+  }
+
   return useCallback(
     (key: string, fallback: string) => {
       try {
         const val = ctx?.t?.(key);
-        return val && val !== key ? val : fallback;
+        return typeof val === 'string' && val.trim().length > 0 && val !== key
+          ? val
+          : fallback;
       } catch {
         return fallback;
       }
@@ -265,9 +298,38 @@ function isChunkLoadError(error: unknown): boolean {
 }
 
 /**
+ * Awaits cache partition cleanup (bounded by a 600ms safety timeout) before reloading,
+ * ensuring the browser never aborts the cache deletion promise mid-flight.
+ */
+async function flushCachesAndReload(onlyBuildCaches = false): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    if ('caches' in window) {
+      const cleanupPromise = caches.keys().then((names) =>
+        Promise.allSettled(
+          names
+            .filter(
+              (name) =>
+                !onlyBuildCaches ||
+                name.includes('vite') ||
+                name.includes('workbox') ||
+                name.includes('precache'),
+            )
+            .map((name) => caches.delete(name)),
+        ),
+      );
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 600));
+      await Promise.race([cleanupPromise, timeoutPromise]);
+    }
+  } catch {
+    /* ignore cache deletion errors */
+  }
+  window.location.reload();
+}
+
+/**
  * Attempts a single automatic hard reload if a chunk fails to load,
  * guarded by a 15-second session cooldown to prevent infinite reload loops.
- * Flushes stale Vite/SW cache partitions to ensure fresh bundles.
  */
 function attemptSafeChunkAutoReload(): boolean {
   if (typeof window === 'undefined') return false;
@@ -276,26 +338,43 @@ function attemptSafeChunkAutoReload(): boolean {
     const lastAttempt = Number(sessionStorage.getItem(CHUNK_RELOAD_STORAGE_KEY) || 0);
     if (now - lastAttempt > CHUNK_RELOAD_COOLDOWN_MS) {
       sessionStorage.setItem(CHUNK_RELOAD_STORAGE_KEY, String(now));
-      if ('caches' in window) {
-        try {
-          caches.keys().then((names) => {
-            for (const name of names) {
-              if (name.includes('vite') || name.includes('workbox') || name.includes('precache')) {
-                void caches.delete(name);
-              }
-            }
-          }).catch(() => {});
-        } catch {
-          /* ignore cache deletion errors */
-        }
-      }
-      window.location.reload();
+      void flushCachesAndReload(true);
       return true;
     }
   } catch {
     /* Ignore storage security restrictions in private browsing */
   }
   return false;
+}
+
+/**
+ * Synchronizes online network lifecycle with React Query caches & listens for Vite preload mismatches.
+ */
+function GlobalNetworkSync() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOnline = () => {
+      void queryClient.invalidateQueries();
+      void queryClient.resetQueries({
+        predicate: (q) => q.state.status === 'error',
+      });
+    };
+
+    const handleVitePreloadError = (event: Event) => {
+      event.preventDefault();
+      attemptSafeChunkAutoReload();
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('vite:preloadError', handleVitePreloadError);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('vite:preloadError', handleVitePreloadError);
+    };
+  }, []);
+
+  return null;
 }
 
 function extractErrorStatus(error: unknown): number | undefined {
@@ -365,16 +444,15 @@ const Shimmer = memo(function Shimmer({
       aria-hidden="true"
       style={{ borderRadius: radius }}
       className={[
-        'relative overflow-hidden',
-        'border border-white/85 dark:border-white/[0.08]',
-        'bg-white/65 dark:bg-white/[0.035] backdrop-blur-xl',
-        'shadow-[0_1px_0_rgba(255,255,255,0.95)_inset,0_10px_28px_-8px_rgba(15,23,42,0.05)]',
-        'dark:shadow-[0_1px_0_rgba(255,255,255,0.08)_inset,0_10px_28px_-8px_rgba(0,0,0,0.45)]',
+        'relative isolate overflow-hidden',
+        'border border-white/85 dark:border-white/[0.09]',
+        'bg-white/70 dark:bg-white/[0.035] backdrop-blur-xl',
+        'shadow-[0_1.5px_0_rgba(255,255,255,0.95)_inset,0_10px_28px_-8px_rgba(15,23,42,0.05)]',
+        'dark:shadow-[0_1px_0_rgba(255,255,255,0.12)_inset,0_10px_28px_-8px_rgba(0,0,0,0.45)]',
         className,
       ].join(' ')}
     >
-      {/* Top Rim Light */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/20" />
+      <TopSpecular inset="inset-x-6" />
 
       {/* Base Ambient Tint */}
       <div className="pointer-events-none absolute inset-0 bg-[var(--skeleton-bg)] opacity-50" />
@@ -392,7 +470,7 @@ const Shimmer = memo(function Shimmer({
           className="pointer-events-none absolute inset-y-0 -left-1/2 z-20 w-1/2 -skew-x-12"
           style={{
             background:
-              'linear-gradient(90deg, transparent 0%, var(--skeleton-shine, rgba(255,255,255,0.72)) 50%, transparent 100%)',
+              'linear-gradient(90deg, transparent 0%, var(--skeleton-shine, rgba(255,255,255,0.75)) 50%, transparent 100%)',
           }}
           animate={{ x: ['-100%', '350%'] }}
           transition={{
@@ -440,7 +518,7 @@ export const PageFallback = memo(function PageFallback({
       initial={reduced ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.26, ease: EASE_APPLE }}
-      className="page-container space-y-5 select-none"
+      className="page-container select-none space-y-5"
       role="status"
       aria-live="polite"
       aria-busy="true"
@@ -453,7 +531,7 @@ export const PageFallback = memo(function PageFallback({
             <div className="h-12 w-12 shrink-0 rounded-2xl bg-slate-900/[0.075] shadow-inner dark:bg-white/[0.085]" />
             <div className="space-y-2.5">
               <Bone className="h-4 w-44 sm:w-60" />
-              <Bone className="h-2.5 w-28 sm:w-40 opacity-70" />
+              <Bone className="h-2.5 w-28 opacity-70 sm:w-40" />
             </div>
           </div>
           <div className="hidden items-center gap-2.5 sm:flex">
@@ -543,7 +621,7 @@ export const BrandedSplash = memo(function BrandedSplash({
 
   return (
     <div
-      className="relative flex min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh items-center justify-center overflow-hidden bg-[var(--bg-page)] px-4 select-none"
+      className="relative flex min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh select-none items-center justify-center overflow-hidden bg-[var(--bg-page)] px-4"
       role="status"
       aria-live="polite"
       aria-label={label}
@@ -574,7 +652,6 @@ export const BrandedSplash = memo(function BrandedSplash({
       >
         {/* ── 3D Liquid Glass Emblem ── */}
         <motion.div variants={cardVariants} className="relative h-24 w-24">
-          {/* Outer Spatial Pulse Rings */}
           {!reduced && (
             <>
               <motion.div
@@ -615,10 +692,9 @@ export const BrandedSplash = memo(function BrandedSplash({
             style={{
               background: 'var(--gradient-hero)',
               boxShadow:
-                'var(--shadow-brand-strong), inset 0 2px 2px rgba(255,255,255,0.6)',
+                'var(--shadow-brand-strong), inset 0 2px 2px rgba(255,255,255,0.65)',
             }}
           >
-            {/* Top Dome Reflection */}
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.55)_0%,rgba(255,255,255,0)_55%)]"
@@ -645,11 +721,11 @@ export const BrandedSplash = memo(function BrandedSplash({
         {/* ── Typography with Sparkle & Crystal Badge ── */}
         <motion.div variants={cardVariants} className="text-center">
           <div className="inline-flex items-center gap-2.5">
-            <h1 className="text-3xl font-black tracking-tight text-sparkle font-sans">
+            <h1 className="font-sans text-3xl font-black tracking-tight text-sparkle">
               M-EDU
             </h1>
-            <span className="jewel-pill jewel-blue font-extrabold tracking-widest text-[10px] uppercase shadow-2xs">
-              Studio v2
+            <span className="jewel-pill jewel-blue text-[10px] font-extrabold uppercase tracking-widest shadow-xs">
+              Studio v3
             </span>
           </div>
           <p className="mt-2 text-[13px] font-medium tracking-tight text-[var(--text-secondary)]">
@@ -664,7 +740,7 @@ export const BrandedSplash = memo(function BrandedSplash({
           aria-label={label}
           aria-valuemin={0}
           aria-valuemax={100}
-          className="relative h-1.5 w-56 overflow-hidden rounded-full border border-white/70 bg-white/50 p-[1px] backdrop-blur-md dark:border-white/10 dark:bg-white/[0.06]"
+          className="relative h-1.5 w-56 overflow-hidden rounded-full border border-white/75 bg-white/50 p-[1px] backdrop-blur-md dark:border-white/10 dark:bg-white/[0.06]"
         >
           <motion.div
             className="h-full rounded-full"
@@ -723,10 +799,17 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 }: PremiumErrorFallbackProps) {
   const reduced = usePrefersReducedMotion();
   const tr = useSafeTranslate();
-  const { playTick, playPop, playSuccess, playError } = usePremiumSound();
+  const soundRef = useStableSound();
 
   const [showDetails, setShowDetails] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const chunkMismatch = useMemo(() => isChunkLoadError(error), [error]);
   const finalTone: Tone = useMemo(
@@ -740,9 +823,9 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
     if (chunkMismatch) {
       attemptSafeChunkAutoReload();
     } else if (error) {
-      playError();
+      soundRef.current?.playError?.();
     }
-  }, [chunkMismatch, error, playError]);
+  }, [chunkMismatch, error, soundRef]);
 
   const resolvedTitle = chunkMismatch
     ? tr('error.updateAvailableTitle', 'Tizimning yangi versiyasi mavjud')
@@ -751,12 +834,12 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
   const resolvedMessage = chunkMismatch
     ? tr(
         'error.updateAvailableMessage',
-        "Platforma yangilandi. Eng so'nggi imkoniyatlardan foydalanish uchun sahifani yangilang.",
+        'Platforma yangilandi. Eng so‘nggi imkoniyatlardan foydalanish uchun sahifani yangilang.',
       )
     : message ||
       tr(
         'error.unexpectedMessage',
-        "Sahifani yuklashda muammo yuzaga keldi. Qayta urinib ko'ring yoki bosh sahifaga qayting.",
+        'Sahifani yuklashda muammo yuzaga keldi. Qayta urinib ko‘ring yoki bosh sahifaga qayting.',
       );
 
   const errorName = (error as Error)?.name || 'RuntimeException';
@@ -768,13 +851,13 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
   /* ── Primary Retry Handler ── */
   const handlePrimaryAction = useCallback(() => {
-    playTick();
+    soundRef.current?.playTick?.();
     if (chunkMismatch && typeof window !== 'undefined') {
-      window.location.reload();
+      void flushCachesAndReload(true);
       return;
     }
     onRetry?.();
-  }, [chunkMismatch, onRetry, playTick]);
+  }, [chunkMismatch, onRetry, soundRef]);
 
   /* ── Rich Telemetry Report Builder & Clipboard Copy ── */
   const handleCopyReport = useCallback(async () => {
@@ -786,7 +869,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
         : 'N/A';
 
     const payload = [
-      `=== M-EDU Studio v2 · Diagnostic Telemetry ===`,
+      '=== M-EDU Studio v3 · Diagnostic Telemetry ===',
       `Timestamp : ${new Date().toISOString()}`,
       `URL       : ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`,
       `Network   : ${isOnline ? 'Online' : 'Offline'}`,
@@ -800,21 +883,20 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
     try {
       await navigator.clipboard.writeText(payload);
-      playSuccess();
+      soundRef.current?.playSuccess?.();
       setCopied(true);
-      setTimeout(() => setCopied(false), 2200);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2200);
     } catch {
       /* Ignore clipboard permission errors */
     }
-  }, [statusCode, errorName, errorText, errorStack, playSuccess]);
+  }, [statusCode, errorName, errorText, errorStack, soundRef]);
 
   /* ── Keyboard Recovery Matrix (R = Retry, H = Home, D = Diagnostics, C = Copy) ── */
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
       if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target as HTMLElement)?.isContentEditable ||
+        isInteractiveTargetOrModalOpen(e.target) ||
         e.metaKey ||
         e.ctrlKey ||
         e.altKey
@@ -828,11 +910,11 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
         handlePrimaryAction();
       } else if (key === 'h' && onHome) {
         e.preventDefault();
-        playTick();
+        soundRef.current?.playTick?.();
         onHome();
       } else if (key === 'd' && Boolean(error)) {
         e.preventDefault();
-        playPop();
+        soundRef.current?.playPop?.();
         setShowDetails((prev) => !prev);
       } else if (key === 'c' && showDetails && Boolean(error)) {
         e.preventDefault();
@@ -842,14 +924,23 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handlePrimaryAction, handleCopyReport, onHome, onRetry, chunkMismatch, error, showDetails, playTick, playPop]);
+  }, [
+    handlePrimaryAction,
+    handleCopyReport,
+    onHome,
+    onRetry,
+    chunkMismatch,
+    error,
+    showDetails,
+    soundRef,
+  ]);
 
   return (
     <div
       role="alert"
       aria-live="assertive"
       className={[
-        'relative flex w-full items-center justify-center overflow-y-auto scrollbar-thin px-4 py-8',
+        'relative flex w-full items-center justify-center overflow-y-auto px-4 py-8 scrollbar-thin',
         fullScreen
           ? 'min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh bg-[var(--bg-page)]'
           : 'min-h-[70vh]',
@@ -873,26 +964,28 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
         <motion.div
           variants={cardVariants}
           className={[
-            'vision-card relative overflow-hidden rounded-3xl sm:rounded-[2.25rem] p-6 sm:p-8 backdrop-blur-2xl',
-            'border border-white/90 dark:border-white/[0.12]',
-            'bg-white/85 dark:bg-[#0F172A]/85',
-            'shadow-[0_1px_0_rgba(255,255,255,0.98)_inset,0_32px_80px_-16px_rgba(15,23,42,0.20)]',
-            'dark:shadow-[0_1px_0_rgba(255,255,255,0.12)_inset,0_32px_80px_-16px_rgba(0,0,0,0.75)]',
+            'vision-card relative isolate overflow-hidden rounded-3xl p-6 backdrop-blur-3xl sm:rounded-[2.25rem] sm:p-8',
+            'border border-white/90 dark:border-white/[0.14]',
+            'bg-white/85 dark:bg-[#0F172A]/88',
+            'shadow-[0_1.5px_0_rgba(255,255,255,0.98)_inset,0_32px_80px_-16px_rgba(15,23,42,0.20)]',
+            'dark:shadow-[0_1.5px_0_rgba(255,255,255,0.16)_inset,0_32px_80px_-16px_rgba(0,0,0,0.75)]',
           ].join(' ')}
         >
+          <TopSpecular inset="inset-x-10" />
+
           {/* Top Liquid Specular Highlight */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-white/60 to-transparent dark:from-white/[0.06]"
+            className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-28 bg-gradient-to-b from-white/60 to-transparent dark:from-white/[0.06]"
           />
 
           <div className="relative z-10 flex flex-col items-center text-center">
             {/* Status Telemetry Pill with Faceted Jewel Optics */}
             <span
-              className={`mb-3.5 jewel-pill ${c.jewelClass} uppercase tracking-widest text-[10.5px] shadow-2xs`}
+              className={`jewel-pill ${c.jewelClass} mb-3.5 text-[10.5px] uppercase tracking-widest shadow-xs`}
             >
               <span
-                className="h-1.5 w-1.5 rounded-full animate-pulse"
+                className="h-1.5 w-1.5 animate-pulse rounded-full"
                 style={{ backgroundColor: c.fg }}
               />
               {statusCode ? `HTTP ${statusCode} · ${c.badge}` : c.badge}
@@ -905,7 +998,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                 background: c.bg,
                 color: c.fg,
                 border: `1px solid ${c.border}`,
-                boxShadow: `inset 0 1px 1px rgba(255,255,255,0.7), 0 12px 28px -6px ${c.glow}`,
+                boxShadow: `inset 0 1.5px 1px rgba(255,255,255,0.75), 0 12px 28px -6px ${c.glow}`,
               }}
             >
               <StaticIcon
@@ -932,13 +1025,13 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                   type="button"
                   onClick={handlePrimaryAction}
                   whileHover={reduced ? undefined : { scale: 1.02 }}
-                  whileTap={reduced ? undefined : { scale: 0.97 }}
-                  transition={SPRING.snappy}
-                  className="btn-glow-primary inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] shadow-md"
+                  whileTap={reduced ? undefined : { scaleX: 1.05, scaleY: 0.92 }}
+                  transition={SPRING.gel}
+                  className="btn-glow-primary inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold text-white shadow-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                   style={{
                     background: 'var(--gradient-hero)',
                     boxShadow:
-                      'var(--shadow-brand), inset 0 1px 0 rgba(255,255,255,0.48)',
+                      'var(--shadow-brand), inset 0 1.5px 0 rgba(255,255,255,0.5)',
                   }}
                 >
                   <StaticIcon
@@ -961,12 +1054,12 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                 <motion.button
                   type="button"
                   onClick={() => {
-                    playTick();
+                    soundRef.current?.playTick?.();
                     onHome();
                   }}
                   whileHover={reduced ? undefined : { scale: 1.02 }}
-                  whileTap={reduced ? undefined : { scale: 0.97 }}
-                  transition={SPRING.snappy}
+                  whileTap={reduced ? undefined : { scaleX: 1.05, scaleY: 0.92 }}
+                  transition={SPRING.gel}
                   className={[
                     'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-bold',
                     'border border-white/85 bg-white/75 text-[var(--text-primary)] backdrop-blur-md',
@@ -981,7 +1074,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                     strokeWidth={2.1}
                   />
                   <span>{tr('common.home', 'Bosh sahifa')}</span>
-                  <kbd className="ml-1 hidden rounded border border-slate-400/30 bg-slate-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--text-tertiary)] uppercase sm:inline-block">
+                  <kbd className="ml-1 hidden rounded border border-slate-400/30 bg-slate-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-[var(--text-tertiary)] sm:inline-block">
                     H
                   </kbd>
                 </motion.button>
@@ -994,7 +1087,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                 <button
                   type="button"
                   onClick={() => {
-                    playPop();
+                    soundRef.current?.playPop?.();
                     setShowDetails((prev) => !prev);
                   }}
                   aria-expanded={showDetails}
@@ -1010,7 +1103,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                       ? tr('error.hideDetails', 'Texnik tafsilotlarni yashirish')
                       : tr('error.showDetails', 'Texnik tafsilotlar')}
                   </span>
-                  <kbd className="ml-1 hidden rounded border border-slate-400/25 bg-slate-500/10 px-1.5 py-0.2 font-mono text-[9.5px] uppercase sm:inline-block">
+                  <kbd className="ml-1 hidden rounded border border-slate-400/25 bg-slate-500/10 px-1.5 py-0.5 font-mono text-[9.5px] uppercase sm:inline-block">
                     D
                   </kbd>
                 </button>
@@ -1035,7 +1128,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                           <button
                             type="button"
                             onClick={handleCopyReport}
-                            className="inline-flex min-h-[28px] items-center gap-1.5 rounded-lg border border-white/60 bg-white/85 px-2.5 py-1 text-[10.5px] font-semibold text-[var(--text-primary)] shadow-2xs transition hover:bg-white active:scale-95 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/20"
+                            className="inline-flex min-h-[28px] items-center gap-1.5 rounded-lg border border-white/60 bg-white/85 px-2.5 py-1 text-[10.5px] font-semibold text-[var(--text-primary)] shadow-xs transition hover:bg-white active:scale-95 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/20"
                           >
                             <StaticIcon
                               paths={copied ? APP_ICONS.check : APP_ICONS.copy}
@@ -1057,7 +1150,7 @@ export const PremiumErrorFallback = memo(function PremiumErrorFallback({
                           tabIndex={0}
                           role="region"
                           aria-label="Diagnostic logs"
-                          className="mt-2 max-h-36 overflow-y-auto scrollbar-thin break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)] focus:outline-none"
+                          className="mt-2 max-h-36 overflow-y-auto break-words font-mono text-[11px] leading-relaxed text-[var(--text-secondary)] scrollbar-thin focus:outline-none"
                         >
                           <p className="font-semibold text-[var(--text-primary)]">
                             {errorText}
@@ -1161,7 +1254,7 @@ export function ErrorBoundaryWrapper({
             title={label ? `${label} yuklanmadi` : 'Sahifani yuklashda xatolik'}
             message={
               (error as Error)?.message ||
-              "Ushbu bo'limni chizishda kutilmagan xatolik yuz berdi."
+              'Ushbu bo‘limni chizishda kutilmagan xatolik yuz berdi.'
             }
             onRetry={() => handleRetry(reset)}
             onHome={() => handleHome(reset)}
@@ -1189,9 +1282,10 @@ export function ErrorBoundaryWrapper({
 
 const PwaUpdateNotification = memo(function PwaUpdateNotification() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const tr = useSafeTranslate();
   const reduced = usePrefersReducedMotion();
-  const { playTick } = usePremiumSound();
+  const soundRef = useStableSound();
 
   useEffect(() => {
     const handleUpdate = () => setUpdateAvailable(true);
@@ -1201,31 +1295,21 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
   }, []);
 
   const handleApplyUpdate = useCallback(() => {
-    playTick();
-    if ('caches' in window) {
-      try {
-        caches.keys().then((names) => {
-          for (const name of names) {
-            void caches.delete(name);
-          }
-        }).catch(() => {});
-      } catch {
-        /* ignore cache flush errors */
-      }
-    }
-    window.location.reload();
-  }, [playTick]);
+    if (isUpdating) return;
+    setIsUpdating(true);
+    soundRef.current?.playTick?.();
+    void flushCachesAndReload(false);
+  }, [isUpdating, soundRef]);
 
   useEffect(() => {
     if (!updateAvailable) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement ||
-        (e.target as HTMLElement)?.isContentEditable ||
+        isInteractiveTargetOrModalOpen(e.target) ||
         e.metaKey ||
-        e.ctrlKey
+        e.ctrlKey ||
+        e.altKey
       ) {
         return;
       }
@@ -1234,19 +1318,20 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
         handleApplyUpdate();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        playTick();
+        soundRef.current?.playTick?.();
         setUpdateAvailable(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [updateAvailable, handleApplyUpdate, playTick]);
+  }, [updateAvailable, handleApplyUpdate, soundRef]);
 
   return (
     <AnimatePresence>
       {updateAvailable && (
         <motion.div
+          key="pwa-dynamic-island"
           role="status"
           aria-live="polite"
           initial={reduced ? { opacity: 0 } : { opacity: 0, y: 36, scale: 0.94 }}
@@ -1254,13 +1339,15 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
           exit={reduced ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.95 }}
           transition={SPRING.island}
           className={[
-            'fixed bottom-4 left-4 right-4 z-50 mx-auto flex max-w-md items-center justify-between gap-3 sm:bottom-6',
-            'vision-card rounded-full border border-white/30 dark:border-white/15 bg-slate-900/90 py-2.5 pl-4 pr-2.5 text-white backdrop-blur-2xl',
-            'glow-sapphire shadow-[0_1px_0_rgba(255,255,255,0.28)_inset,0_20px_50px_-10px_rgba(0,0,0,0.65)]',
+            'fixed bottom-[5.5rem] left-4 right-4 z-[85] mx-auto flex max-w-md items-center justify-between gap-3 md:bottom-6',
+            'relative isolate overflow-hidden rounded-full border border-white/25 bg-[#0B0F1A]/90 py-2.5 pl-4 pr-2.5 text-white backdrop-blur-3xl backdrop-saturate-[210%]',
+            'glow-sapphire shadow-[0_1.5px_0_rgba(255,255,255,0.32)_inset,0_22px_54px_-10px_rgba(0,0,0,0.75)]',
           ].join(' ')}
         >
+          <TopSpecular inset="inset-x-8" />
+
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <span className="jewel-pill jewel-blue py-0.5 px-2 text-[9.5px] uppercase tracking-wider font-extrabold">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/35 bg-sky-500/20 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-sky-300">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-400" />
@@ -1268,25 +1355,32 @@ const PwaUpdateNotification = memo(function PwaUpdateNotification() {
               PWA
             </span>
             <p className="truncate text-xs font-semibold tracking-tight text-white/95">
-              {tr('pwa.updateAvailable', 'M-EDU Studio v2 yangilanishi tayyor')}
+              {tr('pwa.updateAvailable', 'M-EDU Studio yangilanishi tayyor')}
             </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
+            <motion.button
               type="button"
+              disabled={isUpdating}
+              whileTap={reduced ? undefined : { scaleX: 1.05, scaleY: 0.92 }}
+              transition={SPRING.gel}
               onClick={handleApplyUpdate}
-              className="btn-glow-primary min-h-[32px] rounded-full bg-sky-500 px-3.5 py-1 text-xs font-bold text-white shadow-sm transition hover:bg-sky-400 active:scale-95 flex items-center gap-1.5"
+              className="btn-glow-primary flex min-h-[32px] items-center gap-1.5 rounded-full bg-gradient-to-r from-[#007AFF] to-[#5856D6] px-3.5 py-1 text-xs font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition hover:brightness-110 disabled:opacity-50"
             >
-              <span>{tr('common.updateNow', 'Yangilash')}</span>
-              <kbd className="hidden rounded bg-black/25 px-1.5 py-0.2 font-mono text-[9px] uppercase opacity-85 sm:inline">
+              <span>
+                {isUpdating
+                  ? 'Yangilanmoqda…'
+                  : tr('common.updateNow', 'Yangilash')}
+              </span>
+              <kbd className="hidden rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px] uppercase opacity-85 sm:inline">
                 U
               </kbd>
-            </button>
+            </motion.button>
             <button
               type="button"
               onClick={() => {
-                playTick();
+                soundRef.current?.playTick?.();
                 setUpdateAvailable(false);
               }}
               aria-label={tr('common.close', 'Yopish')}
@@ -1326,52 +1420,54 @@ export default function App() {
   useViewportCssVar();
 
   return (
-    <ErrorBoundary
-      label="Root"
-      fallback={({ error, reset }) => (
-        <PremiumErrorFallback
-          fullScreen
-          title="Dasturni ishga tushirishda xatolik"
-          message={
-            (error as Error)?.message ||
-            "Kritik xatolik tufayli tizimni ishga tushirib bo'lmadi."
-          }
-          onRetry={() => {
-            queryClient.clear();
-            reset();
-          }}
-          onHome={() => {
-            window.location.href = '/';
-          }}
-          error={error}
-        />
-      )}
-    >
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter
-          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-        >
-          <I18nProvider>
-            <ThemeProvider>
-              {/* Global SVG Specular & Metallic Gradient Definitions */}
-              <IconDefsHost />
+    <>
+      {/* Root-level SVG Specular & Metallic Gradient Definitions (Survives Root ErrorBoundary) */}
+      <IconDefsHost />
 
-              <RoutedAuthProvider>
-                <ScrollToTop />
-                <DocumentTitleManager />
-                <UserSettingsSync />
-                <GlobalNetworkSync />
-                <AppRoutes />
-                <PwaUpdateNotification />
-                <OfflineIndicator />
-                <QuickPaymentModal />
-                <QuickAttendanceModal />
-                <ToastHost />
-              </RoutedAuthProvider>
-            </ThemeProvider>
-          </I18nProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ErrorBoundary>
+      <ErrorBoundary
+        label="Root"
+        fallback={({ error, reset }) => (
+          <PremiumErrorFallback
+            fullScreen
+            title="Dasturni ishga tushirishda xatolik"
+            message={
+              (error as Error)?.message ||
+              'Kritik xatolik tufayli tizimni ishga tushirib bo‘lmadi.'
+            }
+            onRetry={() => {
+              queryClient.clear();
+              reset();
+            }}
+            onHome={() => {
+              window.location.href = '/';
+            }}
+            error={error}
+          />
+        )}
+      >
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+          >
+            <I18nProvider>
+              <ThemeProvider>
+                <RoutedAuthProvider>
+                  <ScrollToTop />
+                  <DocumentTitleManager />
+                  <UserSettingsSync />
+                  <GlobalNetworkSync />
+                  <AppRoutes />
+                  <PwaUpdateNotification />
+                  <OfflineIndicator />
+                  <QuickPaymentModal />
+                  <QuickAttendanceModal />
+                  <ToastHost />
+                </RoutedAuthProvider>
+              </ThemeProvider>
+            </I18nProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </>
   );
 }

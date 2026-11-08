@@ -134,4 +134,39 @@ describe('MarkdownContent safety', () => {
     expect(container.querySelector('b')).toBeNull();
     expect(container.textContent).toContain('<!-- hidden -->');
   });
+
+  it('extracts <think> tags into an interactive thinking accordion and keeps main answer clean', async () => {
+    const { container } = render(
+      <MarkdownContent
+        content={
+          "<think>\n1. Foydalanuvchi fizika fanidan dars so'radi.\n2. Tegishli formulalarni tayyorlaymiz.\n</think>\nAssalomu alaykum! Mana siz so'ragan fizika darsi rejasi."
+        }
+      />
+    );
+
+    // Accordion should be rendered
+    const accordion = screen.getByTestId('ai-thinking-accordion');
+    expect(accordion).toBeInTheDocument();
+    expect(screen.getByText(/Fikrlash jarayoni \(Thinking Process\)/i)).toBeInTheDocument();
+
+    // Main answer should be rendered cleanly
+    expect(screen.getByText(/Assalomu alaykum! Mana siz so'ragan fizika darsi rejasi/i)).toBeInTheDocument();
+
+    // Raw <think> tags should not be leaked in text
+    expect(container.textContent).not.toContain('<think>');
+    expect(container.textContent).not.toContain('</think>');
+  });
+
+  it('handles streaming unclosed <think> tag gracefully', () => {
+    render(
+      <MarkdownContent
+        content={
+          "Salom!\n<think>\nO'quvchi ma'lumotlarini bazadan qidirish..."
+        }
+      />
+    );
+
+    expect(screen.getByText(/Fikrlash jarayoni \(Tahlil qilinmoqda\.\.\.\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/O'quvchi ma'lumotlarini bazadan qidirish\.\.\./i)).toBeInTheDocument();
+  });
 });

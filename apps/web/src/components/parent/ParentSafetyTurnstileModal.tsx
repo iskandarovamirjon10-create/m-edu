@@ -115,7 +115,11 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
     },
   });
 
-  const students: any[] = ((studentsData as any)?.items || []) as any[];
+  const students: any[] = (
+    (studentsData as any)?.items ||
+    (studentsData as any)?.data ||
+    (Array.isArray(studentsData) ? studentsData : [])
+  ) as any[];
   const presentStudents = presenceData?.studentsInside || [];
   const insideCount = presenceData?.currentlyInsideCount || 0;
 

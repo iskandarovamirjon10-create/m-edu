@@ -17,7 +17,7 @@
  * no HTML strings, therefore no script/style injection is possible.
  */
 
-import { useMemo, useState, useCallback, type ReactNode } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import {
   Check,
   Copy,
@@ -28,6 +28,7 @@ import {
   AlertOctagon,
   Sparkles,
   CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 
 /* ----------------------------- inline ----------------------------- */
@@ -515,13 +516,21 @@ function highlightCodeTokens(source: string): ReactNode[] {
 
 function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(code);
         setCopied(true);
-        setTimeout(() => setCopied(false), 1600);
+        if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = setTimeout(() => setCopied(false), 1600);
       }
     } catch {
       /* ignore */
@@ -805,13 +814,126 @@ function renderBlock(block: Block, index: number): ReactNode {
   }
 }
 
+export interface ParsedThought {
+  thoughtText: string | null;
+  isStreamingThought: boolean;
+  cleanContent: string;
+}
+
+export function extractThought(rawContent: string): ParsedThought {
+  if (!rawContent) {
+    return { thoughtText: null, isStreamingThought: false, cleanContent: '' };
+  }
+
+  // 1. Match all completed <think>...</think> or <thought>...</thought>
+  const thinkClosedRegex = /<(think|thought)>([\s\S]*?)<\/\1>/gi;
+  const thoughts: string[] = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = thinkClosedRegex.exec(rawContent)) !== null) {
+    const text = match[2].trim();
+    if (text) {
+      thoughts.push(text);
+    }
+  }
+
+  let cleanContent = rawContent.replace(thinkClosedRegex, '').trim();
+
+  // 2. Match unclosed <think> or <thought> (active streaming)
+  const openMatch = cleanContent.match(/<(think|thought)>([\s\S]*)$/i);
+  let isStreamingThought = false;
+  if (openMatch) {
+    isStreamingThought = true;
+    const partial = openMatch[2].trim();
+    if (partial) {
+      thoughts.push(partial);
+    }
+    cleanContent = cleanContent.slice(0, openMatch.index).trim();
+  }
+
+  const thoughtText = thoughts.length > 0 ? thoughts.join('\n\n') : null;
+  return {
+    thoughtText,
+    isStreamingThought,
+    cleanContent,
+  };
+}
+
+export interface AiThinkingAccordionProps {
+  thought: string;
+  isStreaming?: boolean;
+}
+
+export function AiThinkingAccordion({ thought, isStreaming = false }: AiThinkingAccordionProps) {
+  const [isOpen, setIsOpen] = useState(isStreaming);
+  const wordCount = useMemo(() => {
+    return thought.trim().split(/\s+/).filter(Boolean).length;
+  }, [thought]);
+
+  return (
+    <div
+      data-testid="ai-thinking-accordion"
+      className="mb-3.5 overflow-hidden rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/[0.05] via-purple-500/[0.02] to-transparent shadow-[0_4px_20px_-4px_rgba(139,92,246,0.12)] backdrop-blur-md transition-all duration-300 dark:border-violet-400/25 dark:from-violet-500/[0.10]"
+    >
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between px-3.5 py-2.5 text-left transition-colors hover:bg-violet-500/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50"
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-500 text-white shadow-sm">
+            <Sparkles className={`h-3.5 w-3.5 ${isStreaming ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+            {isStreaming && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500"></span>
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[13px] font-semibold tracking-tight text-violet-950 dark:text-violet-100">
+              {isStreaming ? "Fikrlash jarayoni (Tahlil qilinmoqda...)" : "Fikrlash jarayoni (Thinking Process)"}
+            </span>
+            <span className="hidden sm:inline-flex items-center rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+              {isStreaming ? "Jonli tahlil" : `${wordCount} ta so'z`}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-violet-600/70 dark:text-violet-400/70">
+          <span className="text-[11px] font-medium hidden sm:inline">
+            {isOpen ? "Yashirish" : "Ko'rish"}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-violet-500/10 px-4 py-3 text-[12.5px] leading-relaxed text-zinc-600 dark:text-zinc-300 font-mono select-text bg-black/[0.015] dark:bg-white/[0.015]">
+          <div className="whitespace-pre-wrap break-words opacity-90 max-h-[320px] overflow-y-auto pr-1">
+            {thought}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface MarkdownContentProps {
   content: string;
   className?: string;
 }
 
 export function MarkdownContent({ content, className = '' }: MarkdownContentProps) {
-  const blocks = useMemo(() => parseBlocks(content ?? ''), [content]);
+  const { thoughtText, isStreamingThought, cleanContent } = useMemo(
+    () => extractThought(content ?? ''),
+    [content],
+  );
+
+  const blocks = useMemo(() => parseBlocks(cleanContent), [cleanContent]);
 
   if (!content || !content.trim()) return null;
 
@@ -826,6 +948,12 @@ export function MarkdownContent({ content, className = '' }: MarkdownContentProp
         color: 'var(--ai-text-primary, #1D1D1F)',
       }}
     >
+      {thoughtText && (
+        <AiThinkingAccordion
+          thought={thoughtText}
+          isStreaming={isStreamingThought}
+        />
+      )}
       {blocks.map((block, index) => renderBlock(block, index))}
     </div>
   );

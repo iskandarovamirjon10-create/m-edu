@@ -17,8 +17,26 @@ function buildCatalog() {
   });
 }
 
+function buildFullCatalog() {
+  return createAiToolDefinitions({
+    students: stub,
+    teachers: stub,
+    attendance: stub,
+    schedule: stub,
+    invoices: stub,
+    groups: stub,
+    courses: stub,
+    prisma: stub,
+    leads: stub,
+    expenses: stub,
+    inventory: stub,
+    exams: stub,
+  });
+}
+
 describe('AI tool catalog', () => {
   const tools = buildCatalog();
+  const fullTools = buildFullCatalog();
 
   it('exposes every capability the Copilot UI renders', () => {
     const names = tools.map((tool) => tool.name).sort();
@@ -92,6 +110,32 @@ describe('AI tool catalog', () => {
     for (const tool of tools) {
       expect(tool.description.trim().length).toBeGreaterThan(20);
       expect(tool.inputSchema).toBeTruthy();
+    }
+  });
+
+  it('registers all 29 tools in full catalog with no name collisions', () => {
+    const names = fullTools.map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(fullTools.length).toBe(29);
+  });
+
+  it('ensures all full catalog mutating tools require confirmation and permissions', () => {
+    const writes = fullTools.filter((t) => t.requiresConfirmation);
+    expect(writes.map((t) => t.name).sort()).toEqual(
+      [
+        'courses.create',
+        'finance.record_expense',
+        'groups.create',
+        'leads.create',
+        'notifications.broadcast',
+        'schedule.create',
+        'students.create',
+        'teachers.create',
+      ].sort(),
+    );
+    for (const tool of writes) {
+      expect(tool.permission).toMatch(/:write$/);
+      expect(tool.riskLevel).toBeTruthy();
     }
   });
 });

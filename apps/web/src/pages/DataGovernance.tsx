@@ -323,16 +323,16 @@ function ExportLogTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]/40">
-                {items.map((item: { id: string; [key: string]: any }) => (
+                {items.map((item: ExportLog) => (
                   <tr
                     key={item.id}
                     tabIndex={0}
                     role="button"
-                    onClick={() => handleOpenExportSidecar(item as any)}
+                    onClick={() => handleOpenExportSidecar(item)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        handleOpenExportSidecar(item as any);
+                        handleOpenExportSidecar(item);
                       }
                     }}
                     className="hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-400/[0.04] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
@@ -356,7 +356,7 @@ function ExportLogTab() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenExportSidecar(item as any);
+                          handleOpenExportSidecar(item);
                         }}
                         className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1"
                         title="Inspect export in macOS Sidecar"
@@ -473,10 +473,10 @@ function AccessAuditTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]/40">
-                {items.map((item: { id: string; [key: string]: any }) => (
+                {items.map((item: DataAccessLog) => (
                   <tr
                     key={item.id}
-                    onClick={() => handleOpenAccessSidecar(item as any)}
+                    onClick={() => handleOpenAccessSidecar(item)}
                     className="hover:bg-indigo-500/[0.04] dark:hover:bg-indigo-400/[0.04] transition-colors cursor-pointer"
                   >
                     <td className="px-5 py-3.5">
@@ -497,7 +497,7 @@ function AccessAuditTab() {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenAccessSidecar(item as any);
+                          handleOpenAccessSidecar(item);
                         }}
                         className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1"
                         title="Inspect access log in macOS Sidecar"

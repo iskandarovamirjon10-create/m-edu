@@ -111,23 +111,20 @@ describe('AppLayout navigation by role', () => {
     renderLayout();
 
     // Student-visible
-    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Students' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Groups' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Attendance' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Face Recognition' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Payments' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Schedule' })[0]).toBeInTheDocument();
 
     // Hidden for students (must not exist in the DOM at all)
     for (const label of [
+      'Students',
+      'Groups',
       'Teachers',
       'Users',
       'Expenses',
       'Cameras',
       'Audit Log',
       'Settings',
-      'Homework',
       'Leads',
+      'Payments',
     ]) {
       expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument();
     }

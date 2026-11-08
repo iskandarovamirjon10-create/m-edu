@@ -12,13 +12,17 @@ import { useAuth } from '@/auth/AuthContext';
  */
 
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassPageHeader } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { GlassModal } from '@/components/ui/GlassModal';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useToast } from '@/components/ui/GlassToast';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { StudentSkillConstellationStudio } from '@/components/gamification/StudentSkillConstellationStudio';
@@ -150,8 +154,13 @@ interface RewardItem {
   title: string;
   description: string;
   costCoins: number;
+  type?: 'PRODUCT' | 'COUPON' | string;
   category: string;
   icon: string;
+  imageUrl?: string | null;
+  stock?: number | null;
+  couponCode?: string | null;
+  isActive?: boolean;
 }
 
 interface Achievement {
@@ -549,9 +558,21 @@ interface RewardCardProps {
   isPending: boolean;
   onClaim: () => void;
   index: number;
+  isAdmin?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCardProps) {
+function RewardCard({
+  reward,
+  canAfford,
+  isPending,
+  onClaim,
+  index,
+  isAdmin,
+  onEdit,
+  onDelete,
+}: RewardCardProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -589,40 +610,107 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
 
         <div className="flex flex-col justify-between h-full">
           <div>
-            <div className="flex items-start justify-between mb-3">
-              <motion.span
-                className="text-4xl"
-                animate={hovered ? { scale: 1.15, rotate: -8 } : { scale: 1, rotate: 0 }}
-                transition={SPRING.bouncy}
-              >
-                {reward.icon}
-              </motion.span>
-              <div className="flex items-center gap-1 rounded-xl border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-black text-amber-300">
-                <span className="text-[10px]">🪙</span>
-                {reward.costCoins}
+            {reward.imageUrl ? (
+              <div className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl mb-3 bg-slate-900/10 dark:bg-black/20 border border-slate-200/60 dark:border-white/10">
+                <img
+                  src={reward.imageUrl}
+                  alt={reward.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+                <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-md px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                  <span>{reward.icon || '🎁'}</span>
+                  <span>{reward.type === 'COUPON' ? 'Kupon' : 'Tovar'}</span>
+                </div>
+                <div className="absolute top-2.5 right-2.5 flex items-center gap-1 rounded-xl border border-amber-500/40 bg-black/75 backdrop-blur-md px-2.5 py-1 text-xs font-black text-amber-300 shadow-sm">
+                  <span className="text-[10px]">🪙</span>
+                  {reward.costCoins}
+                </div>
               </div>
+            ) : (
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <motion.span
+                    className="text-4xl"
+                    animate={hovered ? { scale: 1.15, rotate: -8 } : { scale: 1, rotate: 0 }}
+                    transition={SPRING.bouncy}
+                  >
+                    {reward.icon}
+                  </motion.span>
+                  <span className="rounded-full bg-black/[0.04] dark:bg-white/[0.08] px-2.5 py-0.5 text-[10.5px] font-bold text-[#64748B] dark:text-slate-300">
+                    {reward.type === 'COUPON' ? '🎟️ Kupon' : '📦 Tovar'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 rounded-xl border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-black text-amber-300">
+                  <span className="text-[10px]">🪙</span>
+                  {reward.costCoins}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start justify-between gap-2 mt-1">
+              <h5 className="font-bold text-[#1D1D1F] dark:text-white text-[15px] tracking-tight leading-snug">
+                {reward.title}
+              </h5>
+              {isAdmin && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit?.();
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 text-[12px] hover:border-indigo-400 hover:text-indigo-500 transition"
+                    title="Tahrirlash"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete?.();
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 text-[12px] hover:border-rose-400 hover:text-rose-500 transition"
+                    title="O'chirish"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
             </div>
-            <h5 className="font-bold text-[#1D1D1F] dark:text-white text-[15px] tracking-tight">{reward.title}</h5>
+
             <p className="text-[12px] text-[#64748B] dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
               {reward.description}
             </p>
+
+            {reward.stock !== null && reward.stock !== undefined && (
+              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-1.5 flex items-center gap-1">
+                <span>📦 Omborda:</span>
+                <span className="font-bold">{reward.stock > 0 ? `${reward.stock} dona` : 'Tugagan'}</span>
+              </p>
+            )}
           </div>
 
           <div className="pt-4 mt-4 border-t border-slate-200/80 dark:border-slate-800 dark:border-white/10">
             <motion.button
               type="button"
-              disabled={!canAfford || isPending}
+              disabled={!canAfford || isPending || (reward.stock !== null && reward.stock !== undefined && reward.stock <= 0)}
               onClick={onClaim}
               whileHover={canAfford && !isPending ? { scale: 1.02 } : {}}
               whileTap={canAfford && !isPending ? { scale: 0.98 } : {}}
               className={`relative w-full overflow-hidden rounded-xl py-2.5 text-[12px] font-bold transition-all ${
-                canAfford
+                reward.stock !== null && reward.stock !== undefined && reward.stock <= 0
+                  ? 'bg-black/[0.04] dark:bg-white/[0.05] text-[#64748B] dark:text-slate-500 cursor-not-allowed'
+                  : canAfford
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_15px_-4px_rgba(16,185,129,0.6)]'
                   : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#64748B] dark:text-slate-500 cursor-not-allowed'
               }`}
-              
-              
-              >
+            >
               {isPending ? (
                 <span className="flex items-center justify-center gap-2">
                   <motion.span
@@ -632,6 +720,8 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
                   />
                   Sotib olinmoqda…
                 </span>
+              ) : reward.stock !== null && reward.stock !== undefined && reward.stock <= 0 ? (
+                <span>Omborda tugagan</span>
               ) : canAfford ? (
                 <span className="flex items-center justify-center gap-1.5">
                   Xarid qilish
@@ -650,6 +740,322 @@ function RewardCard({ reward, canAfford, isPending, onClaim, index }: RewardCard
         </div>
       </LiquidGlass>
     </motion.div>
+  );
+}
+
+function RewardFormModal({
+  open,
+  onClose,
+  initialData,
+  onSave,
+  isSaving,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialData?: RewardItem | null;
+  onSave: (data: Partial<RewardItem>) => void;
+  isSaving?: boolean;
+}) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [costCoins, setCostCoins] = useState(100);
+  const [type, setType] = useState<'PRODUCT' | 'COUPON'>('PRODUCT');
+  const [category, setCategory] = useState('MERCH');
+  const [icon, setIcon] = useState('🎁');
+  const [imageUrl, setImageUrl] = useState('');
+  const [stock, setStock] = useState<string>('');
+  const [couponCode, setCouponCode] = useState('');
+
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title || '');
+      setDescription(initialData.description || '');
+      setCostCoins(initialData.costCoins || 100);
+      setType((initialData.type as 'PRODUCT' | 'COUPON') || 'PRODUCT');
+      setCategory(initialData.category || 'MERCH');
+      setIcon(initialData.icon || '🎁');
+      setImageUrl(initialData.imageUrl || '');
+      setStock(initialData.stock !== null && initialData.stock !== undefined ? String(initialData.stock) : '');
+      setCouponCode(initialData.couponCode || '');
+    } else {
+      setTitle('');
+      setDescription('');
+      setCostCoins(100);
+      setType('PRODUCT');
+      setCategory('MERCH');
+      setIcon('🎁');
+      setImageUrl('');
+      setStock('');
+      setCouponCode('');
+    }
+  }, [initialData, open]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    onSave({
+      title: title.trim(),
+      description: description.trim(),
+      costCoins: Number(costCoins) || 100,
+      type,
+      category,
+      icon,
+      imageUrl: imageUrl.trim() || null,
+      stock: stock.trim() === '' ? null : Number(stock),
+      couponCode: type === 'COUPON' ? couponCode.trim() : null,
+      isActive: true,
+    });
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result === 'string') {
+          setImageUrl(event.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const PRESET_ICONS = ['🎁', '👕', '☕', '📚', '🎒', '🎧', '🎟️', '⭐', '🥇', '💻'];
+
+  return (
+    <GlassModal
+      open={open}
+      onClose={onClose}
+      title={initialData ? 'Mukofotni tahrirlash' : 'Yangi Mukofot / Sovrin qo‘shish'}
+      description="O'quvchilar M-Coin yordamida ushbu tovar yoki kuponni xarid qilishlari mumkin bo'ladi."
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        {/* Sovrin turi tanlovi (Tovar vs Kupon) */}
+        <div>
+          <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+            Mukofot turi
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setType('PRODUCT');
+                if (icon === '🎟️') setIcon('🎁');
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-bold transition-all ${
+                type === 'PRODUCT'
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-500 dark:text-indigo-400'
+                  : 'border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5'
+              }`}
+            >
+              <span className="text-base">📦</span>
+              <span>Moddiy Tovar (Sovg‘a)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setType('COUPON');
+                if (icon === '🎁') setIcon('🎟️');
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-bold transition-all ${
+                type === 'COUPON'
+                  ? 'border-amber-500 bg-amber-500/10 text-amber-500 dark:text-amber-400'
+                  : 'border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5'
+              }`}
+            >
+              <span className="text-base">🎟️</span>
+              <span>Chegirma Kuponi</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sovrin nomi */}
+        <div>
+          <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Mukofot nomi *
+          </label>
+          <input
+            type="text"
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Masalan: M-EDU Brend Termos yoki 10% Chegirma"
+            className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] px-3.5 py-2 text-sm outline-none focus:border-indigo-400"
+          />
+        </div>
+
+        {/* Ball va Kategoriya */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Narxi (M-Coin) *
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min="1"
+                required
+                value={costCoins}
+                onChange={(e) => setCostCoins(Number(e.target.value))}
+                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] pl-9 pr-3.5 py-2 text-sm font-bold text-amber-600 dark:text-amber-400 outline-none focus:border-indigo-400"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm">🪙</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Kategoriya
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+            >
+              <option value="MERCH">Merch / Kiyim</option>
+              <option value="DISCOUNT">Chegirma / Vovcher</option>
+              <option value="BOOK">Kitob / Darslik</option>
+              <option value="PERK">Imtiyoz / Mentorlik</option>
+              <option value="OTHER">Boshqa</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Agar kupon bo'lsa: Kupon kodi */}
+        {type === 'COUPON' && (
+          <div>
+            <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Kupon / Promo-kod
+            </label>
+            <input
+              type="text"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+              placeholder="Masalan: CHEGIRMA15"
+              className="w-full rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 px-3.5 py-2 text-sm font-mono font-bold tracking-wider outline-none focus:border-amber-500"
+            />
+            <p className="text-[11px] text-[#64748B] mt-1">
+              Talaba sovrinni xarid qilishi bilan unga ushbu kod ko‘rsatiladi.
+            </p>
+          </div>
+        )}
+
+        {/* Ombor soni (stock) */}
+        <div>
+          <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Ombordagi soni (cheksiz bo'lsa bo'sh qoldiring)
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={stock}
+            onChange={(e) => setStock(e.target.value)}
+            placeholder="Cheksiz mavjud"
+            className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] px-3.5 py-2 text-sm outline-none focus:border-indigo-400"
+          />
+        </div>
+
+        {/* Emoji Icon tanlash */}
+        <div>
+          <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Belgi / Emoji
+          </label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PRESET_ICONS.map((ic) => (
+              <button
+                key={ic}
+                type="button"
+                onClick={() => setIcon(ic)}
+                className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg border transition ${
+                  icon === ic
+                    ? 'border-indigo-500 bg-indigo-500/15 scale-110 shadow-sm'
+                    : 'border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5'
+                }`}
+              >
+                {ic}
+              </button>
+            ))}
+            <input
+              type="text"
+              value={icon}
+              maxLength={4}
+              onChange={(e) => setIcon(e.target.value)}
+              className="w-14 rounded-xl border border-slate-200 dark:border-white/10 text-center py-1.5 text-base outline-none"
+              title="Boshqa emoji kiriting"
+            />
+          </div>
+        </div>
+
+        {/* Rasm URL yoki yuklash */}
+        <div>
+          <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Tovar / Kupon rasmi
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="Rasm havolasi (https://...)"
+              className="flex-1 rounded-xl border border-slate-200 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] px-3.5 py-2 text-sm outline-none focus:border-indigo-400"
+            />
+            <label className="cursor-pointer shrink-0 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5 px-3 py-2 text-xs font-bold hover:bg-slate-200 transition flex items-center gap-1">
+              <span>Fayl tanlash</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageFileChange}
+                className="hidden"
+              />
+            </label>
+          </div>
+          {imageUrl && (
+            <div className="mt-2 relative aspect-[16/8] w-full overflow-hidden rounded-xl border border-slate-200 dark:border-white/10">
+              <img src={imageUrl} alt="Ko'rinish" className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setImageUrl('')}
+                className="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white backdrop-blur"
+              >
+                ✕ Tozalash
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Tavsif */}
+        <div>
+          <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+            Qisqa tavsif
+          </label>
+          <textarea
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Sovrin haqida qo'shimcha ma'lumot..."
+            className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] px-3.5 py-2 text-sm outline-none focus:border-indigo-400"
+          />
+        </div>
+
+        {/* Tugmalar */}
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/80 dark:border-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2 text-xs font-bold text-[#64748B] hover:bg-slate-100 dark:hover:bg-white/5 transition"
+          >
+            Bekor qilish
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-50"
+          >
+            {isSaving ? 'Saqlanmoqda…' : initialData ? 'O‘zgarishlarni saqlash' : 'Sovrinni qo‘shish'}
+          </button>
+        </div>
+      </form>
+    </GlassModal>
   );
 }
 
@@ -766,6 +1172,7 @@ function AchievementBadge({ achievement, index }: { achievement: Achievement; in
  * ══════════════════════════════════════════════════════════════════ */
 
 export function GamificationHubPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useSafeI18n();
   usePageTitle('M-Coins & Gamifikatsiya');
@@ -778,6 +1185,8 @@ export function GamificationHubPage() {
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [rewardToDelete, setRewardToDelete] = useState<RewardItem | null>(null);
+  const [rewardToDelete, setRewardToDelete] = useState<RewardItem | null>(null);
 
   /* ── Queries ── */
   const { data: myStats, refetch: refetchMe } = useQuery<StudentStats>({
@@ -878,6 +1287,59 @@ export function GamificationHubPage() {
   }, [playTick, refetchMe, refetchLeaderboard, refetchRewards, push]);
 
   /* ── Claim mutation ── */
+  const isAdmin = Boolean(user && ['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER', 'PLATFORM_OWNER'].includes(user.role as string));
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingReward, setEditingReward] = useState<RewardItem | null>(null);
+
+  /* ── Admin Reward mutations ── */
+  const createRewardMutation = useMutation({
+    mutationFn: (data: any) =>
+      request('/gamification/rewards', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      push('success', 'Yangi sovrin muvaffaqiyatli qo‘shildi!');
+      queryClient.invalidateQueries({ queryKey: ['gamification-rewards'] });
+      setIsModalOpen(false);
+      setEditingReward(null);
+    },
+    onError: (err: any) => {
+      push('error', err?.message || 'Sovrin qo‘shishda xatolik yuz berdi');
+    },
+  });
+
+  const updateRewardMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      request(`/gamification/rewards/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      push('success', 'Sovrin o‘zgarishlari saqlandi!');
+      queryClient.invalidateQueries({ queryKey: ['gamification-rewards'] });
+      setIsModalOpen(false);
+      setEditingReward(null);
+    },
+    onError: (err: any) => {
+      push('error', err?.message || 'Sovrinni tahrirlashda xatolik');
+    },
+  });
+
+  const deleteRewardMutation = useMutation({
+    mutationFn: (id: string) =>
+      request(`/gamification/rewards/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      push('success', 'Sovrin muvaffaqiyatli o‘chirildi');
+      queryClient.invalidateQueries({ queryKey: ['gamification-rewards'] });
+    },
+    onError: (err: any) => {
+      push('error', err?.message || 'Sovrinni o‘chirishda xatolik');
+    },
+  });
+
   const claimMutation = useMutation({
     mutationFn: (rewardId: string) =>
       request(`/gamification/rewards/${rewardId}/claim`, { method: 'POST' }),
@@ -1107,6 +1569,16 @@ export function GamificationHubPage() {
           }}
           icon="⚡"
           label="Mahorat Shajarasi (Skill Tree)" />
+        <button
+          onClick={() => navigate('/arena')}
+          className="px-4 py-2 rounded-xl text-xs md:text-sm font-black flex items-center gap-2 bg-gradient-to-r from-cyan-500/20 via-sky-500/20 to-rose-500/20 border border-cyan-400/50 text-cyan-300 hover:text-white transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-105 active:scale-95"
+        >
+          <span>⚔️</span>
+          <span>Mind Arena (Aql Duellari)</span>
+          <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/30 text-rose-300 font-black animate-pulse">
+            3D
+          </span>
+        </button>
       </div>
 
       {/* ═══════════ TAB: LEADERBOARD ═══════════ */}
@@ -1422,7 +1894,7 @@ export function GamificationHubPage() {
                   className="w-full rounded-full border border-slate-200/80 dark:border-slate-800 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.05] py-2.5 pl-10 pr-4 text-[13px] outline-none placeholder:text-[#64748B] focus:border-indigo-400/40 focus:bg-white dark:focus:bg-white/[0.08]"
                 />
               </div>
-              <div className="flex gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
                 {categories.map((cat) => (
                   <button
                     key={cat}
@@ -1433,12 +1905,24 @@ export function GamificationHubPage() {
                         ? 'bg-[#1D1D1F] dark:bg-white text-white dark:text-[#1D1D1F] shadow-lg'
                         : 'bg-black/[0.04] dark:bg-white/[0.05] text-[#64748B] hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-white/[0.08]'
                     }`}
-                    
-                    
-                    >
+                  >
                     {cat === 'all' ? 'Hammasi' : cat}
                   </button>
                 ))}
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingReward(null);
+                      setIsModalOpen(true);
+                    }}
+                    className="shrink-0 flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-[12px] font-bold text-white shadow-md shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition ml-auto"
+                  >
+                    <span>➕</span>
+                    <span>Yangi Sovrin</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1461,6 +1945,12 @@ export function GamificationHubPage() {
                     isPending={claimMutation.isPending && claimMutation.variables === reward.id}
                     onClaim={() => claimMutation.mutate(reward.id)}
                     index={i}
+                    isAdmin={isAdmin}
+                    onEdit={() => {
+                      setEditingReward(reward);
+                      setIsModalOpen(true);
+                    }}
+                    onDelete={() => setRewardToDelete(reward)}
                   />
                 ))
               )}
@@ -1490,6 +1980,39 @@ export function GamificationHubPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <RewardFormModal
+        open={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingReward(null);
+        }}
+        initialData={editingReward}
+        isSaving={createRewardMutation.isPending || updateRewardMutation.isPending}
+        onSave={(data) => {
+          if (editingReward) {
+            updateRewardMutation.mutate({ id: editingReward.id, data });
+          } else {
+            createRewardMutation.mutate(data);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={rewardToDelete !== null}
+        onClose={() => setRewardToDelete(null)}
+        onConfirm={async () => {
+          if (!rewardToDelete) return;
+          await deleteRewardMutation.mutateAsync(rewardToDelete.id);
+          setRewardToDelete(null);
+        }}
+        title="Sovrinni o‘chirish"
+        description="Bu sovrin do‘kondan butunlay o‘chiriladi. Amalni qaytarib bo‘lmaydi."
+        itemName={rewardToDelete?.title}
+        confirmLabel="O‘chirish"
+        tone="danger"
+        loading={deleteRewardMutation.isPending}
+      />
     </div>
   );
 }

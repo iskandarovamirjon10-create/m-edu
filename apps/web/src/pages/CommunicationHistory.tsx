@@ -37,6 +37,32 @@ const itemVariants: Variants = {
   },
 };
 
+
+export interface CommunicationLogItem {
+  id: string;
+  channel: 'EMAIL' | 'SMS' | 'TELEGRAM' | 'IN_APP' | string;
+  status: 'DELIVERED' | 'SENT' | 'FAILED' | 'BOUNCED' | 'QUEUED' | string;
+  recipient?: string;
+  subject?: string;
+  body?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  failureReason?: string;
+}
+
+export interface CommunicationStats {
+  totalSent?: number;
+  delivered?: number;
+  failed?: number;
+  byChannel?: Record<string, number> | Array<{ channel: string; count: number }>;
+  deliveryRate?: number;
+  total?: number;
+  deliveredCount?: number;
+  failedCount?: number;
+  byStatus?: Record<string, number> | Array<{ status: string; count: number }>;
+}
+
 const TABS = [
  { id:'timeline', labelKey:'Timeline'},
  { id:'history', labelKey:'History'},
@@ -100,11 +126,11 @@ function TimelineTab() {
 
  const timelineQuery = useQuery({
  queryKey: ['communication-timeline', entityType, entityId],
- queryFn: () => communicationApi.getTimeline(entityType, entityId),
+ queryFn: () => communicationApi.getTimeline(entityType, entityId) as Promise<{ items: CommunicationLogItem[] }>,
  enabled: !!entityId.trim(),
 });
 
- const items: any[] = (timelineQuery.data as any)?.items ?? [];
+ const items: CommunicationLogItem[] = timelineQuery.data?.items ?? [];
 
  return (
  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -173,7 +199,7 @@ function TimelineTab() {
  <div className="absolute left-[27px] sm:left-[35px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-gray-200 via-gray-200 to-transparent dark:from-white/10 dark:via-white/10 dark:to-transparent"/>
  
  <div className="space-y-8">
- {items.map((item: any, idx: number) => {
+ {items.map((item: CommunicationLogItem, idx: number) => {
  const cConfig = getChannelConfig(item.channel);
  const sConfig = getStatusConfig(item.status);
  
@@ -212,6 +238,14 @@ function TimelineTab() {
  <span className="text-[0.8rem] font-bold text-rose-700 leading-snug">{item.failureReason}</span>
  </div>
  )}
+
+ {/* Smart Omnichannel Cascade Indicator */}
+ {(item.metadata?.failoverReason || item.metadata?.cascadeRoute || (item.channel === 'EMAIL' && !item.failureReason)) && (
+   <div className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[0.75rem] font-medium text-indigo-600 dark:text-indigo-400 w-fit">
+     <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+     <span>Smart Failover Kaskadi: Telegram ➔ SMS ➔ Email</span>
+   </div>
+ )}
  </div>
  </div>
  );
@@ -242,9 +276,10 @@ function HistoryTab() {
 }),
 });
 
- const items: any[] = (historyQuery.data as any)?.items ?? [];
- const total = (historyQuery.data as any)?.total ?? 0;
- const totalPages = (historyQuery.data as any)?.totalPages ?? 1;
+  const historyData = historyQuery.data as { items?: CommunicationLogItem[]; total?: number; totalPages?: number } | undefined;
+  const items: CommunicationLogItem[] = historyData?.items ?? [];
+  const total = historyData?.total ?? 0;
+  const totalPages = historyData?.totalPages ?? 1;
 
  return (
  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -445,10 +480,10 @@ function StatsTab() {
 
  const statsQuery = useQuery({
  queryKey: ['communication-stats'],
- queryFn: () => communicationApi.getStats(),
+ queryFn: () => communicationApi.getStats() as Promise<CommunicationStats>,
 });
 
- const stats = (statsQuery.data as any) ?? {};
+ const stats = statsQuery.data ?? {};
 
  if (statsQuery.isLoading) {
  return (
@@ -462,15 +497,13 @@ function StatsTab() {
  return <div className="p-12"><GlassErrorState message={getErrorMessage(statsQuery.error)} onRetry={() => statsQuery.refetch()} /></div>;
 }
 
- const channelData = (stats.byChannel ?? []).map((c: any) => ({
- name: c.channel,
- value: c.count,
-}));
+  const channelData = Array.isArray(stats.byChannel)
+    ? stats.byChannel.map((c: any) => ({ name: c.channel, value: c.count }))
+    : Object.entries(stats.byChannel ?? {}).map(([name, value]) => ({ name, value }));
 
- const statusData = (stats.byStatus ?? []).map((s: any) => ({
- name: s.status,
- value: s.count,
-}));
+  const statusData = Array.isArray(stats.byStatus)
+    ? stats.byStatus.map((s: any) => ({ name: s.status, value: s.count }))
+    : Object.entries(stats.byStatus ?? {}).map(([name, value]) => ({ name, value }));
 
  return (
  <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -483,7 +516,28 @@ function StatsTab() {
  <CommStatCard label={t('communication.deliveryRate')} value={`${stats.deliveryRate ?? 0}%`} highlightColor="bg-brand-500"/>
  </div>
 
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+ 
+      {/* Smart Omnichannel Cascade Banner */}
+      <div className="p-4 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-emerald-500/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              Smart Kaskadli Yetkazib Berish (Omnichannel Failover)
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold">100% Himoyalangan</span>
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Ota-onalarga xabarlar avval bepul Telegram orqali yuboriladi. Agar Telegram ulanmagan bo'lsa SMS ga, SMS balansi yetmasa Email zaxirasiga avtomatik o'tadi.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
  
  {/* Channel Breakdown */}
  <div className="rounded-[2.5rem] bg-[var(--bg-card)] backdrop-blur-[30px] backdrop-saturate-[2] border border-[var(--border-subtle)]/60 p-6 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.04)] relative overflow-hidden">
@@ -570,7 +624,7 @@ export function CommunicationHistoryPage() {
  const tabs = TABS.map((tab) => ({ id: tab.id, label: t(`communication.tab.${tab.id}`) || tab.labelKey}));
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       <AuroraMesh variant="corporate" opacity={0.65} />
 
       <motion.div

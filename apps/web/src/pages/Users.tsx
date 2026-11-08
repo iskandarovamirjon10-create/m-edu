@@ -26,6 +26,10 @@ import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { cn } from '@/lib/design';
+import { BulkProvisioningModal } from '@/components/iam/BulkProvisioningModal';
+import { AdminResetPasswordModal } from '@/components/iam/AdminResetPasswordModal';
+import { OnboardingSlipModal } from '@/components/iam/OnboardingSlipModal';
+import { IamSecurityRadarModal } from '@/components/iam/IamSecurityRadarModal';
 
 const SPRING = {
   snappy: { type: 'spring', stiffness: 500, damping: 30, mass: 0.7 },
@@ -43,6 +47,7 @@ const ALL_ROLES: UserRole[] = [
 ];
 
 interface UserFormState {
+  username: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -51,6 +56,7 @@ interface UserFormState {
 }
 
 const INITIAL_FORM: UserFormState = {
+  username: '',
   firstName: '',
   lastName: '',
   email: '',
@@ -167,6 +173,10 @@ export function UsersPage() {
   );
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [radarModalOpen, setRadarModalOpen] = useState(false);
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<User | null>(null);
+  const [slipTarget, setSlipTarget] = useState<User | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [cardUser, setCardUser] = useState<User | null>(null);
@@ -207,6 +217,7 @@ export function UsersPage() {
   const create = useMutation({
     mutationFn: () => {
       const payload = {
+        username: form.username.trim().toLowerCase() || undefined,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim(),
@@ -293,9 +304,10 @@ export function UsersPage() {
   const handleEdit = useCallback((user: User) => {
     setEditingId(user.id);
     setForm({
+      username: user.username || '',
       firstName: user.firstName,
       lastName: user.lastName,
-      email: user.email,
+      email: user.email || '',
       password: '',
       role: user.role,
     });
@@ -330,7 +342,7 @@ export function UsersPage() {
     };
     const sidecarData: QuickLookData = {
       title: formatUserName(user),
-      subtitle: user.email,
+      subtitle: user.email || (user.username ? `@${user.username}` : ''),
       badge: {
         text: t(roleKey(user.role)) || user.role,
         tone: roleColors[user.role] ?? 'slate',
@@ -346,11 +358,11 @@ export function UsersPage() {
       details: [
         { label: 'Foydalanuvchi ID', value: user.id, copyable: true },
         { label: t('common.name') || 'Ism familiya', value: formatUserName(user) },
-        { label: t('common.email') || 'Email', value: user.email, copyable: true },
+        { label: t('common.email') || 'Email', value: user.email || (user.username ? `@${user.username}` : '—'), copyable: Boolean(user.email) },
         { label: t('users.col.role') || 'Tizimdagi roli', value: user.role },
         { label: t('common.status') || 'Holati', value: user.isActive ? 'Faol akkaunt' : 'Nofaol akkaunt' },
-        { label: 'Tashkilot ID', value: (user as any).organizationId || '—', copyable: Boolean((user as any).organizationId) },
-        { label: 'Yaratilgan sana', value: (user as any).createdAt ? formatDate((user as any).createdAt) : '—' },
+        { label: 'Tashkilot ID', value: user.organizationId || '—', copyable: Boolean(user.organizationId) },
+        { label: 'Yaratilgan sana', value: user.createdAt ? formatDate(user.createdAt) : '—' },
       ],
       primaryAction: {
         label: t('common.edit') || 'Tahrirlash',
@@ -370,7 +382,7 @@ export function UsersPage() {
   /* ── Loading ── */
   if (users.isLoading && !data) {
     return (
-      <div className="relative min-h-screen">
+      <div className="relative min-h-full">
         <div className="page-container space-y-4">
           <GlassPageHeader title={t('users.title')} subtitle={t('users.pageSubtitle')} />
           <GlassSurface className="p-16">
@@ -386,7 +398,7 @@ export function UsersPage() {
   /* ── Error ── */
   if (users.isError) {
     return (
-      <div className="relative min-h-screen">
+      <div className="relative min-h-full">
         <div className="page-container space-y-4">
           <GlassPageHeader title={t('users.title')} subtitle={t('users.pageSubtitle')} />
           <GlassSurface className="p-12">
@@ -403,7 +415,7 @@ export function UsersPage() {
 
   /* ── Main ── */
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       <AuroraMesh variant="corporate" opacity={0.65} />
 
       <motion.div
@@ -416,15 +428,50 @@ export function UsersPage() {
           title={t('users.title')}
           subtitle={t('users.pageSubtitle')}
           actions={
-            <GlassButton type="button" variant="primary" onClick={handleOpenModal}
-              icon={
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              }
-            >
-              {t('users.add')}
-            </GlassButton>
+            currentUser?.role === 'PLATFORM_OWNER' || currentUser?.role === 'SUPER_ADMIN' ? (
+              <div className="flex items-center gap-2">
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => { playTick(); setRadarModalOpen(true); }}
+                  icon={
+                    <svg className="h-4 w-4 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                  }
+                >
+                  Xavfsizlik Radari
+                </GlassButton>
+                <GlassButton
+                  type="button"
+                  variant="secondary"
+                  onClick={() => { playTick(); setBulkModalOpen(true); }}
+                  icon={
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                  }
+                >
+                  Ommaviy import (Excel/CSV)
+                </GlassButton>
+                <GlassButton type="button" variant="primary" onClick={handleOpenModal}
+                  icon={
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  }
+                >
+                  {t('users.add')}
+                </GlassButton>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span>Hisob yaratish: Faqat Platform Owner vakolatida</span>
+              </div>
+            )
           }
         />
 
@@ -585,6 +632,11 @@ export function UsersPage() {
                                   </span>
                                 )}
                               </div>
+                              {user.username && (
+                                <p className="text-[11px] font-mono text-[var(--text-muted)]">
+                                  @{user.username}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -665,6 +717,39 @@ export function UsersPage() {
                                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                               </svg>
                             </button>
+
+                            {/* Reset Password (Platform Owner IAM) */}
+                            {(currentUser?.role === 'PLATFORM_OWNER' || currentUser?.role === 'SUPER_ADMIN') && (
+                              <button
+                                type="button"
+                                onClick={() => { playTick(); setResetPasswordTarget(user); }}
+                                title="Parolni yangilash (Platform Owner)"
+                                aria-label={`${formatUserName(user)} parolini yangilash`}
+                                className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:shadow-[0_4px_12px_-4px_rgba(245,158,11,0.4)] transition-all duration-300 active:scale-95"
+                              >
+                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                              </button>
+                            )}
+
+                            {/* Onboarding Slip (Platform Owner IAM) */}
+                            {(currentUser?.role === 'PLATFORM_OWNER' || currentUser?.role === 'SUPER_ADMIN') && (
+                              <button
+                                type="button"
+                                onClick={() => { playTick(); setSlipTarget(user); }}
+                                title="Hisob varaqasini chop etish (Onboarding Slip)"
+                                aria-label={`${formatUserName(user)} hisob varaqasini chop etish`}
+                                className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] transition-all duration-300 active:scale-95"
+                              >
+                                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="6 9 6 2 18 2 18 9" />
+                                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                  <rect width="12" height="8" x="6" y="14" />
+                                </svg>
+                              </button>
+                            )}
 
                             {/* Toggle active */}
                             <button
@@ -800,6 +885,15 @@ export function UsersPage() {
                 </h4>
               </div>
 
+              <GlassField label="Foydalanuvchi nomi (Username)" hint="Tizimga kirish uchun yagona login identifikatori">
+                <GlassInput
+                  value={form.username}
+                  onChange={handleFormChange('username')}
+                  placeholder="masalan: teacher_rustam"
+                  disabled={create.isPending}
+                />
+              </GlassField>
+
               <GlassField label={t('common.email')} required error={formErrors.email}>
                 <GlassInput
                   type="email"
@@ -890,13 +984,58 @@ export function UsersPage() {
                   email: cardUser.email || undefined,
                   phone: cardUser.phone || undefined,
                   status: cardUser.isActive ? 'Faol' : 'Nofaol',
-                  biometricVerified: Boolean((cardUser as any).faceEnrolled),
+                  biometricVerified: Boolean(cardUser.faceEnrolled),
                   nfcEnabled: false,
                 }}
               />
             </div>
           </GlassModal>
         )}
+
+        {/* ── Platform Owner IAM Bulk Provisioning Studio ── */}
+        <BulkProvisioningModal
+          open={bulkModalOpen}
+          onClose={() => setBulkModalOpen(false)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['users'] });
+          }}
+        />
+
+        {/* ── Platform Owner IAM Administrative Password Reset ── */}
+        <AdminResetPasswordModal
+          user={resetPasswordTarget}
+          open={Boolean(resetPasswordTarget)}
+          onClose={() => setResetPasswordTarget(null)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['users'] });
+          }}
+        />
+
+        {/* ── Platform Owner Onboarding Slip Modal ── */}
+        {slipTarget && (
+          <OnboardingSlipModal
+            open={Boolean(slipTarget)}
+            onClose={() => setSlipTarget(null)}
+            title={`Hisob Varaqasi — @${slipTarget.username || formatUserName(slipTarget)}`}
+            records={[
+              {
+                id: slipTarget.id,
+                fullName: formatUserName(slipTarget),
+                username: slipTarget.username || '',
+                temporaryPassword: '••••••••',
+                role: slipTarget.role,
+                organizationName: (slipTarget as any).organization?.name,
+                mustChangePassword: slipTarget.mustChangePassword,
+              },
+            ]}
+          />
+        )}
+
+        {/* ── Platform Owner IAM Security Radar Modal ── */}
+        <IamSecurityRadarModal
+          open={radarModalOpen}
+          onClose={() => setRadarModalOpen(false)}
+        />
 
         {toastNode}
       </motion.div>

@@ -386,7 +386,7 @@ export async function aiChat(
   return {
     type: 'message',
     message: { role: 'assistant', content: response?.content ?? '' },
-    conversationId: (response as any)?.conversationId,
+    conversationId: response?.conversationId,
   };
 }
 
@@ -526,16 +526,20 @@ export async function aiChatStream(
     }
   };
 
-  let done = false;
-  while (!done) {
-    const { value, done: readerDone } = await reader.read();
-    if (value) {
-      buffer += decoder.decode(value, { stream: true });
-      flushFrames(false);
+  try {
+    let done = false;
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        flushFrames(false);
+      }
+      done = readerDone;
     }
-    done = readerDone;
+    flushFrames(true);
+  } finally {
+    reader?.releaseLock?.();
   }
-  flushFrames(true);
 
   if (streamError && !fullContent.trim()) throw streamError;
 

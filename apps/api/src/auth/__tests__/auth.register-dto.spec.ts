@@ -103,49 +103,15 @@ describe('RegisterDto (ValidationPipe whitelist + forbidNonWhitelisted)', () => 
   });
 });
 
-describe('AuthService.register — password hashing contract', () => {
-  it('stores ONLY a bcrypt hash — the plaintext password never reaches the database layer', async () => {
-    const bcrypt = await import('bcryptjs');
-    const hashSpy = vi.spyOn(bcrypt.default, 'hash');
-    const storedArgs: Array<{ data: { passwordHash: string; role: string; organizationId: string } }> = [];
-    const prisma = {
-      user: { findFirst: vi.fn().mockResolvedValue(null) },
-      $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => {
-        const orgCreate = vi.fn().mockResolvedValue({ id: 'org-1' });
-        const userCreate = vi.fn().mockImplementation((args: { data: { passwordHash: string; role: string; organizationId: string } }) => {
-          storedArgs.push(args);
-          return {
-            id: 'u-1',
-            email: 'hash@b.com',
-            role: 'ORG_ADMIN',
-            organizationId: 'org-1',
-            organization: { id: 'org-1' },
-          };
-        });
-        return fn({ organization: { create: orgCreate }, user: { create: userCreate } });
-      }),
-      session: {
-        create: vi.fn().mockResolvedValue({ id: 's-1' }),
-        count: vi.fn().mockResolvedValue(1),
-        findMany: vi.fn().mockResolvedValue([]),
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-    } as unknown as PrismaService;
+describe('AuthService.register — Centralized IAM policy', () => {
+  it('strictly prohibits public registration and rejects with ForbiddenException', async () => {
+    const prisma = {} as unknown as PrismaService;
     const jwt = { sign: vi.fn(() => 'jwt') } as unknown as JwtService;
     const { AuthService } = await import('../auth.service');
     const svc = new AuthService(prisma, jwt);
 
-    await svc.register({ ...VALID, email: 'hash@b.com' });
-
-    expect(hashSpy).toHaveBeenCalledWith('Str0ngPass!x', 12);
-    expect(storedArgs).toHaveLength(1);
-    const data = storedArgs[0].data;
-    // Never plaintext:
-    expect(data.passwordHash).not.toBe('Str0ngPass!x');
-    expect(data.passwordHash).toMatch(/^\$2[aby]\$/);
-    // Correct canonical role + tenant in the SAME create call:
-    expect(data.role).toBe('ORG_ADMIN');
-    expect(data.organizationId).toBe('org-1');
-    hashSpy.mockRestore();
+    await expect(svc.register({ ...VALID, email: 'hash@b.com' })).rejects.toThrow(
+      'Public registration is disabled. Accounts can only be provisioned by the Platform Owner.',
+    );
   });
 });

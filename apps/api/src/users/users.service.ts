@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Logger, forwardRef, Inject, Optional } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { hashPassword } from '../auth/auth.config';
+import { normalizeUsername } from '../auth/username.utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma, Role } from '@prisma/client';
@@ -104,18 +105,21 @@ export class UsersService {
    * Creates a new user with proper RBAC permission checks.
    */
   async create(organizationId: string, data: CreateUserDto, actorRole?: string) {
+    if (actorRole !== 'PLATFORM_OWNER' && actorRole !== Role.PLATFORM_OWNER) {
+      throw new ForbiddenException('Only the Platform Owner can provision user accounts');
+    }
     if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
       throw new BadRequestException('Organization context is required');
     }
 
     // Only a platform SUPER_ADMIN may mint another SUPER_ADMIN
-    if (data.role === Role.SUPER_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+    if (data.role === Role.SUPER_ADMIN && (actorRole as string) !== Role.SUPER_ADMIN && (actorRole as string) !== 'PLATFORM_OWNER') {
       this.logger.error(`Attempt to mint SUPER_ADMIN by role ${actorRole}`);
       throw new ForbiddenException('Only a SUPER_ADMIN can assign the SUPER_ADMIN role');
     }
     
     // Only a SUPER_ADMIN may mint an ORG_ADMIN
-    if (data.role === Role.ORG_ADMIN && actorRole !== Role.SUPER_ADMIN) {
+    if (data.role === Role.ORG_ADMIN && (actorRole as string) !== Role.SUPER_ADMIN && (actorRole as string) !== 'PLATFORM_OWNER') {
       this.logger.warn(`Unauthorized attempt to mint ORG_ADMIN by role ${actorRole}`);
       throw new ForbiddenException('Only a SUPER_ADMIN can grant the ORG_ADMIN role');
     }
@@ -136,9 +140,12 @@ export class UsersService {
     const passwordHash = data.password ? await hashPassword(data.password) : null;
 
     try {
+      const normUsername = normalizeUsername((data as any).username || data.email.split('@')[0]);
       const user = await this.prisma.user.create({
         data: {
           organizationId,
+          username: normUsername,
+          mustChangePassword: true,
           email: data.email,
           passwordHash,
           firstName: data.firstName,
@@ -159,11 +166,29 @@ export class UsersService {
         isActive: true,
       },
     });
+      if (this.prisma.organizationMembership?.create) {
+        await this.prisma.organizationMembership.create({
+          data: {
+            userId: user.id,
+            organizationId,
+            role: data.role,
+            status: 'ACTIVE',
+          },
+        });
+      }
+      if (passwordHash && this.prisma.passwordHistory?.create) {
+        await this.prisma.passwordHistory.create({
+          data: {
+            userId: user.id,
+            passwordHash,
+          },
+        });
+      }
       this.logger.log(`User created: ${user.id} with role ${user.role}`);
       return user;
     } catch (error: unknown) {
       if ((error as { code?: string })?.code === 'P2002') {
-        throw new BadRequestException('This email is unavailable');
+        throw new BadRequestException('Username or email is already taken');
       }
       throw error;
     }
@@ -179,6 +204,9 @@ export class UsersService {
     actorRole?: string,
     actorUserId?: string,
   ) {
+    if ((data as any).password && actorRole !== 'PLATFORM_OWNER' && actorRole !== Role.PLATFORM_OWNER) {
+      throw new ForbiddenException('Organization administrator cannot reset another user password');
+    }
     const target = await this.findOne(organizationId, id);
 
     // 1. Only a SUPER_ADMIN may assign the SUPER_ADMIN role.

@@ -14,7 +14,7 @@ import {
 import { telegramApi, type TelegramAccountState } from '@/lib/api';
 import { GlassButton, useToasts } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 
 /**
@@ -22,7 +22,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
  * Apple Pro Edition with Haptic Web Audio, Liquid Glass styling, and 1-Click Connect.
  */
 export function TelegramIntegration() {
-  const { t, locale } = useI18n();
+  const { t, locale } = useSafeI18n();
   const { push } = useToasts();
   const qc = useQueryClient();
   const { playPop, playTick, playSuccess, playError } = usePremiumSound();

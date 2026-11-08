@@ -1,0 +1,113 @@
+{
+  "assetVersion": "1.0.0",
+  "avatarSlug": "binary-titan",
+  "geometry": {
+    "modelType": "ProceduralPbrVessel",
+    "silhouetteAnchor": "titan",
+    "primitiveCount": 14200,
+    "boundingVolume": {
+      "radius": 1,
+      "center": [
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "materials": [
+    {
+      "id": "liquid-glass-shell",
+      "type": "RefractiveGlass",
+      "transmission": 0.92,
+      "roughness": 0.08,
+      "ior": 1.52,
+      "clearcoat": 1,
+      "dispersion": 0.04
+    },
+    {
+      "id": "cyber-core",
+      "type": "PbrEmissive",
+      "baseColor": "#4B6CB7",
+      "secondaryColor": "#182848",
+      "emissiveIntensity": 3.5,
+      "roughness": 0.25,
+      "metalness": 0.85
+    },
+    {
+      "id": "holographic-crest",
+      "type": "VolumetricHologram",
+      "accentColor": "#00F2FE",
+      "flickerFrequencyHz": 0
+    }
+  ],
+  "lightingRig": {
+    "keyLight": {
+      "color": "#00F2FE",
+      "intensity": 2.2,
+      "position": [
+        2,
+        3,
+        4
+      ]
+    },
+    "fillLight": {
+      "color": "#4B6CB7",
+      "intensity": 1.4,
+      "position": [
+        -3,
+        1,
+        2
+      ]
+    },
+    "rimLight": {
+      "color": "#FFFFFF",
+      "intensity": 3,
+      "position": [
+        0,
+        4,
+        -4
+      ]
+    }
+  },
+  "cameraPresets": {
+    "hero": {
+      "fov": 35,
+      "position": [
+        0,
+        0,
+        3.2
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ]
+    },
+    "combat": {
+      "fov": 42,
+      "position": [
+        0.3,
+        -0.2,
+        2.8
+      ],
+      "target": [
+        0,
+        0.1,
+        0
+      ]
+    },
+    "portrait": {
+      "fov": 28,
+      "position": [
+        0,
+        0.1,
+        2.5
+      ],
+      "target": [
+        0,
+        0.15,
+        0
+      ]
+    }
+  }
+}

@@ -412,7 +412,7 @@ export function ForecastingPage() {
   /* ── Loading State ── */
   if (seriesQuery.isLoading && !series.length) {
     return (
-      <div className="relative min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      <div className="relative min-h-full px-4 py-8 sm:px-6 lg:px-8">
         <AuroraMesh />
         <div className="mx-auto max-w-7xl">
           <ForecastingSkeleton />
@@ -422,7 +422,7 @@ export function ForecastingPage() {
   }
 
   return (
-    <div className="relative min-h-screen px-4 py-6 sm:px-6 lg:px-8 pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full px-4 py-6 sm:px-6 lg:px-8 pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
 
       <motion.div

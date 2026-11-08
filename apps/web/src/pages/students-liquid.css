@@ -1,0 +1,254 @@
+/* ══════════════════════════════════════════════════════════════════════════
+ * M-EDU · Liquid Glass v2
+ * StudentsPage.tsx yonida turadi: import './students-liquid.css';
+ * Dark rejim: <html class="dark"> (Tailwind class strategy)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --lg-r: 26px;
+  --lg-blur: 26px;
+  --lg-fill-1: rgb(255 255 255 / 0.74);
+  --lg-fill-2: rgb(255 255 255 / 0.42);
+  --lg-fallback: rgb(248 250 252 / 0.96);
+  --lg-line: rgb(15 23 42 / 0.08);
+  --lg-edge: rgb(255 255 255 / 0.95);
+  --lg-edge-dim: rgb(255 255 255 / 0.35);
+  --lg-inner: rgb(255 255 255 / 0.55);
+  --lg-drop: rgb(15 23 42 / 0.22);
+  --lg-spot: 0.42;
+  --lg-rim: 1;
+  --lg-track: rgb(15 23 42 / 0.06);
+  --lg-accent: 0 122 255;
+}
+
+.dark {
+  --lg-fill-1: rgb(30 41 59 / 0.55);
+  --lg-fill-2: rgb(15 20 32 / 0.38);
+  --lg-fallback: rgb(15 20 32 / 0.96);
+  --lg-line: rgb(255 255 255 / 0.07);
+  --lg-edge: rgb(255 255 255 / 0.2);
+  --lg-edge-dim: rgb(255 255 255 / 0.05);
+  --lg-inner: rgb(255 255 255 / 0.05);
+  --lg-drop: rgb(0 0 0 / 0.65);
+  --lg-spot: 0.1;
+  --lg-rim: 0.55;
+  --lg-track: rgb(255 255 255 / 0.05);
+  --lg-accent: 56 189 248;
+}
+
+/* ── Surface: blur + saturate + specular rim + cursor light ───────────── */
+
+.lg-surface {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--lg-r);
+  background: linear-gradient(135deg, var(--lg-fill-1), var(--lg-fill-2));
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(1.9) brightness(1.03);
+  backdrop-filter: blur(var(--lg-blur)) saturate(1.9) brightness(1.03);
+  box-shadow:
+    0 0 0 0.5px var(--lg-line),
+    inset 0 1px 0 var(--lg-edge),
+    inset 0 -1px 0 var(--lg-edge-dim),
+    inset 0 0 28px -10px var(--lg-inner),
+    0 1px 2px rgb(15 23 42 / 0.05),
+    0 22px 44px -22px var(--lg-drop);
+}
+
+.lg-surface--subtle {
+  --lg-fill-1: rgb(255 255 255 / 0.58);
+  --lg-fill-2: rgb(255 255 255 / 0.3);
+}
+.dark .lg-surface--subtle {
+  --lg-fill-1: rgb(30 41 59 / 0.4);
+  --lg-fill-2: rgb(15 20 32 / 0.26);
+}
+
+/* Yorug'lik sinish qirrasi (specular rim) */
+.lg-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--lg-rim);
+  background: linear-gradient(
+    145deg,
+    rgb(255 255 255 / 0.95) 0%,
+    rgb(255 255 255 / 0) 26%,
+    rgb(255 255 255 / 0) 66%,
+    rgb(255 255 255 / 0.5) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+/* Kursor ortidan yuruvchi yorug'lik */
+.lg-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(
+    260px circle at var(--mx, 50%) var(--my, 0%),
+    rgb(255 255 255 / var(--lg-spot)),
+    transparent 65%
+  );
+}
+.lg-interactive:hover::after {
+  opacity: 1;
+}
+.lg-interactive {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+}
+
+/* Overlaylar: command palette, hover peek */
+.lg-float {
+  --lg-blur: 44px;
+  --lg-fill-1: rgb(255 255 255 / 0.88);
+  --lg-fill-2: rgb(255 255 255 / 0.72);
+  --lg-drop: rgb(15 23 42 / 0.5);
+}
+.dark .lg-float {
+  --lg-fill-1: rgb(30 41 59 / 0.82);
+  --lg-fill-2: rgb(15 20 32 / 0.74);
+  --lg-drop: rgb(0 0 0 / 0.85);
+}
+
+/* ── Recessed track + glass thumb (segmented control) ─────────────────── */
+
+.lg-track {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--lg-track);
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.1), inset 0 0 0 0.5px var(--lg-line);
+}
+.dark .lg-track {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.5), inset 0 0 0 0.5px rgb(255 255 255 / 0.06);
+}
+.lg-thumb {
+  position: absolute;
+  inset: 0;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.98), rgb(255 255 255 / 0.78));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255),
+    0 4px 10px -3px rgb(15 23 42 / 0.25),
+    0 0 0 0.5px rgb(15 23 42 / 0.08);
+}
+.dark .lg-thumb {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.1));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    0 4px 12px -4px rgb(0 0 0 / 0.6),
+    0 0 0 0.5px rgb(255 255 255 / 0.1);
+}
+
+/* ── Icon button ──────────────────────────────────────────────────────── */
+
+.lg-btn {
+  --t: 71 85 105;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 12px;
+  color: rgb(var(--t));
+  border: 1px solid var(--lg-line);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.8), rgb(255 255 255 / 0.4));
+  box-shadow: inset 0 1px 0 var(--lg-edge), 0 2px 6px -2px rgb(15 23 42 / 0.12);
+  outline: none;
+  user-select: none;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s, border-color 0.2s,
+    box-shadow 0.25s;
+}
+.dark .lg-btn {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.04));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+.lg-btn:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.06);
+  background: rgb(var(--t) / 0.13);
+  border-color: rgb(var(--t) / 0.34);
+  box-shadow: inset 0 1px 0 var(--lg-edge), 0 10px 18px -8px rgb(var(--t) / 0.55);
+}
+.lg-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.lg-btn:focus-visible {
+  box-shadow: 0 0 0 2px rgb(var(--t) / 0.65);
+}
+.lg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.lg-btn[data-tone='edit'] { --t: 0 122 255; }
+.lg-btn[data-tone='freeze'] { --t: 2 132 199; }
+.lg-btn[data-tone='delete'] { --t: 255 59 48; }
+.lg-btn[data-tone='celebrate'] { --t: 217 119 6; }
+.dark .lg-btn[data-tone='neutral'] { --t: 203 213 225; }
+.dark .lg-btn[data-tone='edit'],
+.dark .lg-btn[data-tone='freeze'] { --t: 56 189 248; }
+.dark .lg-btn[data-tone='delete'] { --t: 255 69 58; }
+.dark .lg-btn[data-tone='celebrate'] { --t: 251 191 36; }
+
+/* ── Table ────────────────────────────────────────────────────────────── */
+
+.lg-thead th {
+  background: linear-gradient(180deg, var(--lg-fill-1), var(--lg-fill-2));
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 -1px 0 var(--lg-line);
+}
+.lg-row {
+  position: relative;
+  transition: background 0.2s ease;
+}
+.lg-row:hover {
+  background: linear-gradient(90deg, rgb(var(--lg-accent) / 0.07), transparent 62%);
+}
+.lg-row[data-selected='true'] {
+  background: linear-gradient(90deg, rgb(var(--lg-accent) / 0.14), rgb(var(--lg-accent) / 0.03));
+}
+
+/* ── Aurora orbs ──────────────────────────────────────────────────────── */
+
+.lg-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  will-change: transform;
+  animation: lg-drift 16s ease-in-out infinite alternate;
+}
+.lg-orb--b { animation-duration: 21s; animation-delay: -6s; }
+.lg-orb--c { animation-duration: 26s; animation-delay: -11s; }
+
+@keyframes lg-drift {
+  0% { transform: translate3d(-4%, 0, 0) scale(1); }
+  100% { transform: translate3d(5%, 8%, 0) scale(1.12); }
+}
+
+/* ── Fallbacks ────────────────────────────────────────────────────────── */
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lg-surface,
+  .lg-thead th {
+    background: var(--lg-fallback);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-orb { animation: none; }
+  .lg-interactive,
+  .lg-btn,
+  .lg-surface::after { transition: none; }
+}

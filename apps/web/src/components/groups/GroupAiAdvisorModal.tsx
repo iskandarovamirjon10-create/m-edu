@@ -137,15 +137,23 @@ Matn chiroyli formatlangan, emojilar bilan va darhol yuborishga tayyor bo'lsin.`
     },
   });
 
-  // Auto trigger diagnosis on open if empty
+  // Reset & Auto trigger diagnosis when group changes or modal opens
   useEffect(() => {
-    if (isOpen && group && !diagnosisResult && !diagnoseMutation.isPending) {
+    if (!isOpen) {
+      setDiagnosisResult('');
+      setGeneratedAnnouncement('');
+      setExtraDetails('');
+    } else if (group) {
+      setDiagnosisResult('');
+      setGeneratedAnnouncement('');
       diagnoseMutation.mutate();
     }
   }, [isOpen, group?.id]);
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
     sound.playSuccess();
     haptics.light();
     push({

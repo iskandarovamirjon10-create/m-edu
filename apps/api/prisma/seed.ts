@@ -47,25 +47,9 @@ async function main() {
   });
 
   if (existingOrg) {
-    console.log(`Seed: organization "${orgName}" already exists — checking admin user.`);
-    const existingAdmin = await prisma.user.findFirst({
-      where: { organizationId: existingOrg.id, email },
-    });
-    if (!existingAdmin) {
-      const passwordHash = await bcrypt.hash(password, 10);
-      await prisma.user.create({
-        data: {
-          organizationId: existingOrg.id,
-          email,
-          passwordHash,
-          firstName: 'Admin',
-          lastName: 'M-EDU',
-          role: 'ORG_ADMIN',
-          settings: { create: {} },
-        },
-      });
-      console.log(`Created admin user "${email}" for existing organization.`);
-    }
+    console.log(`Seed: organization "${orgName}" already exists — ensuring all demo accounts.`);
+    await ensureAllDemoAccounts(prisma, existingOrg.id);
+    printSeedSummary(password);
     return;
   }
 
@@ -105,6 +89,8 @@ async function main() {
           firstName: 'Admin',
           lastName: 'M-EDU',
           role: 'ORG_ADMIN',
+          status: 'ACTIVE',
+          isActive: true,
           settings: {
             create: {
               language: 'uz',
@@ -126,58 +112,8 @@ async function main() {
         },
       });
 
-      // Optional Demo/Sandbox Seeding (Opt-in ONLY via SEED_DEMO_DATA=true)
-      if (withDemoData) {
-        console.log('Seeding sandbox demo data as requested by SEED_DEMO_DATA=true...');
-        const teacherPassword = resolveSecret('SEED_TEACHER_PASSWORD');
-        const studentPassword = resolveSecret('SEED_STUDENT_PASSWORD');
-
-        const math = await tx.course.create({
-          data: {
-            organizationId: org.id,
-            name: 'Matematika',
-            price: 500000,
-            duration: 6,
-            level: 'Intermediate',
-            description: 'Algebra va geometriya asoslari',
-          },
-        });
-
-        const teacher = await tx.teacher.create({
-          data: {
-            organization: { connect: { id: org.id } },
-            specializations: ['Matematika'],
-            hourlyRate: 150000,
-            experience: 5,
-            bio: 'Oliy toifali matematika ustozi',
-            user: {
-              create: {
-                organization: { connect: { id: org.id } },
-                email: 'teacher@medu.test',
-                passwordHash: await bcrypt.hash(teacherPassword, 10),
-                firstName: 'Olim',
-                lastName: 'Rahimov',
-                role: 'TEACHER',
-                settings: { create: {} },
-              },
-            },
-          },
-        });
-
-        const group = await tx.group.create({
-          data: {
-            organizationId: org.id,
-            name: 'Guruh M-1',
-            courseId: math.id,
-            teacherId: teacher.id,
-            capacity: 15,
-            room: '101-xona',
-            startDate: new Date(),
-          },
-        });
-
-        console.log(`Demo data seeded: Group ${group.name}, Teacher ${teacher.id}`);
-      }
+      // 5. Ensure all 4 Demo Accounts are ready for 1-click evaluation
+      await ensureAllDemoAccounts(tx, org.id, branch.id);
     },
     {
       maxWait: 10_000,
@@ -185,17 +121,358 @@ async function main() {
     },
   );
 
-  console.log('Seed complete:');
-  console.log(`  Organization: ${orgName}`);
-  console.log(`  Admin Email:  ${email}`);
-  if (isProd) {
-    if (process.env.SEED_ADMIN_PASSWORD) {
-      console.log('  Password:     [Configured via SEED_ADMIN_PASSWORD]');
-    } else {
-      console.log(`  Password:     ${password} (Generated production secret)`);
-    }
+  printSeedSummary(password);
+}
+
+async function ensureMembership(db: any, orgId: string, userId: string, role: string) {
+  if (db.organizationMembership?.upsert) {
+    await db.organizationMembership.upsert({
+      where: {
+        userId_organizationId: {
+          organizationId: orgId,
+          userId,
+        },
+      },
+      update: { role, status: 'ACTIVE' },
+      create: {
+        organizationId: orgId,
+        userId,
+        role,
+        status: 'ACTIVE',
+      },
+    });
+  }
+}
+
+function printSeedSummary(password: string) {
+  console.log('\n========================================================================');
+  console.log('🎓 M-EDU Platform Seed Complete — Ready for Immediate Evaluation');
+  console.log('========================================================================');
+  console.log(`Default Password: ${password}\n`);
+  console.log('Centralized IAM Demo Accounts (Username or Email Login):');
+  console.log('  1. Platform Egasi:  login="owner",      rol="PLATFORM_OWNER" (Xavfsizlik Radari & Kill-Switch)');
+  console.log('  2. Super Admin:     login="superadmin", rol="SUPER_ADMIN"');
+  console.log('  3. Administrator:   login="admin",      rol="ORG_ADMIN"');
+  console.log('  4. O\'qituvchi:      login="teacher",    rol="TEACHER"');
+  console.log('  5. O\'quvchi:        login="student",    rol="STUDENT"');
+  console.log('  6. Ota-ona:         login="parent@medu.test", rol="PARENT"');
+  console.log('========================================================================\n');
+}
+
+async function ensureAllDemoAccounts(
+  db: any,
+  orgId: string,
+  _branchId?: string,
+): Promise<void> {
+  const defaultPassword = 'Password123!';
+  const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+  // 1. Platform Owner (owner / owner@medu.uz)
+  const ownerEmail = 'owner@medu.uz';
+  let ownerUser = await db.user.findFirst({
+    where: { OR: [{ email: ownerEmail }, { username: 'owner' }] },
+  });
+  if (!ownerUser) {
+    ownerUser = await db.user.create({
+      data: {
+        organizationId: orgId,
+        username: 'owner',
+        email: ownerEmail,
+        passwordHash,
+        firstName: 'Platforma',
+        lastName: 'Egasi',
+        role: 'PLATFORM_OWNER',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+        settings: { create: { language: 'uz', theme: 'dark' } },
+      },
+    });
+    console.log(`Created platform owner: owner (${ownerEmail})`);
   } else {
-    console.log(`  Password:     ${password}`);
+    ownerUser = await db.user.update({
+      where: { id: ownerUser.id },
+      data: {
+        username: 'owner',
+        email: ownerEmail,
+        passwordHash,
+        role: 'PLATFORM_OWNER',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+  }
+  await ensureMembership(db, orgId, ownerUser.id, 'PLATFORM_OWNER');
+
+  // 2. Super Admin (superadmin / superadmin@medu.uz)
+  const superAdminEmail = 'superadmin@medu.uz';
+  let superAdminUser = await db.user.findFirst({
+    where: { OR: [{ email: superAdminEmail }, { username: 'superadmin' }] },
+  });
+  if (!superAdminUser) {
+    superAdminUser = await db.user.create({
+      data: {
+        organizationId: orgId,
+        username: 'superadmin',
+        email: superAdminEmail,
+        passwordHash,
+        firstName: 'Super',
+        lastName: 'Admin',
+        role: 'SUPER_ADMIN',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+        settings: { create: { language: 'uz', theme: 'dark' } },
+      },
+    });
+    console.log(`Created super admin: superadmin (${superAdminEmail})`);
+  } else {
+    superAdminUser = await db.user.update({
+      where: { id: superAdminUser.id },
+      data: {
+        username: 'superadmin',
+        email: superAdminEmail,
+        passwordHash,
+        role: 'SUPER_ADMIN',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+  }
+  await ensureMembership(db, orgId, superAdminUser.id, 'SUPER_ADMIN');
+
+  // 3. Organization Admin (admin / admin@medu.test)
+  const adminEmail = 'admin@medu.test';
+  let adminUser = await db.user.findFirst({
+    where: { OR: [{ email: adminEmail }, { username: 'admin' }] },
+  });
+  if (!adminUser) {
+    adminUser = await db.user.create({
+      data: {
+        organizationId: orgId,
+        username: 'admin',
+        email: adminEmail,
+        passwordHash,
+        firstName: 'Admin',
+        lastName: 'M-EDU',
+        role: 'ORG_ADMIN',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+        settings: { create: { language: 'uz', theme: 'light' } },
+      },
+    });
+    console.log(`Created admin: admin (${adminEmail})`);
+  } else {
+    adminUser = await db.user.update({
+      where: { id: adminUser.id },
+      data: {
+        username: 'admin',
+        passwordHash,
+        role: 'ORG_ADMIN',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+  }
+  await ensureMembership(db, orgId, adminUser.id, 'ORG_ADMIN');
+
+  // 4. Course & Group
+  let course = await db.course.findFirst({
+    where: { organizationId: orgId, name: 'Matematika' },
+  });
+  if (!course) {
+    course = await db.course.create({
+      data: {
+        organizationId: orgId,
+        name: 'Matematika',
+        price: 500000,
+        duration: 6,
+        level: 'Intermediate',
+        description: 'Algebra va geometriya asoslari',
+      },
+    });
+  }
+
+  // 5. Teacher account (teacher / teacher@medu.test)
+  const teacherEmail = 'teacher@medu.test';
+  let teacherUser = await db.user.findFirst({
+    where: { OR: [{ email: teacherEmail }, { username: 'teacher' }] },
+  });
+  if (!teacherUser) {
+    teacherUser = await db.user.create({
+      data: {
+        organizationId: orgId,
+        username: 'teacher',
+        email: teacherEmail,
+        passwordHash,
+        firstName: 'Olim',
+        lastName: 'Rahimov',
+        role: 'TEACHER',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+        settings: { create: {} },
+      },
+    });
+    console.log(`Created teacher: teacher (${teacherEmail})`);
+  } else {
+    teacherUser = await db.user.update({
+      where: { id: teacherUser.id },
+      data: {
+        username: 'teacher',
+        passwordHash,
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+  }
+  await ensureMembership(db, orgId, teacherUser.id, 'TEACHER');
+
+  let teacher = await db.teacher.findFirst({
+    where: { organizationId: orgId, userId: teacherUser.id },
+  });
+  if (!teacher) {
+    teacher = await db.teacher.create({
+      data: {
+        organizationId: orgId,
+        userId: teacherUser.id,
+        specializations: ['Matematika'],
+        hourlyRate: 150000,
+        experience: 5,
+        bio: 'Oliy toifali matematika ustozi',
+      },
+    });
+  }
+
+  let group = await db.group.findFirst({
+    where: { organizationId: orgId, name: 'Guruh M-1' },
+  });
+  if (!group) {
+    group = await db.group.create({
+      data: {
+        organizationId: orgId,
+        name: 'Guruh M-1',
+        courseId: course.id,
+        teacherId: teacher.id,
+        capacity: 15,
+        room: '101-xona',
+        startDate: new Date(),
+      },
+    });
+  }
+
+  // 6. Student account (student / student@medu.test)
+  const studentEmail = 'student@medu.test';
+  let studentUser = await db.user.findFirst({
+    where: { OR: [{ email: studentEmail }, { username: 'student' }] },
+  });
+  if (!studentUser) {
+    studentUser = await db.user.create({
+      data: {
+        organizationId: orgId,
+        username: 'student',
+        email: studentEmail,
+        passwordHash,
+        firstName: 'Jasur',
+        lastName: 'Aliyev',
+        role: 'STUDENT',
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+        settings: { create: {} },
+      },
+    });
+    console.log(`Created student: student (${studentEmail})`);
+  } else {
+    studentUser = await db.user.update({
+      where: { id: studentUser.id },
+      data: {
+        username: 'student',
+        passwordHash,
+        status: 'ACTIVE',
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+  }
+  await ensureMembership(db, orgId, studentUser.id, 'STUDENT');
+
+  let student = await db.student.findFirst({
+    where: { organizationId: orgId, userId: studentUser.id },
+  });
+  if (!student) {
+    student = await db.student.create({
+      data: {
+        organizationId: orgId,
+        userId: studentUser.id,
+        status: 'ACTIVE',
+      },
+    });
+  }
+
+  // Enroll student in group
+  const existingEnrollment = await db.studentGroup.findFirst({
+    where: {
+      studentId: student.id,
+      groupId: group.id,
+    },
+  });
+  if (!existingEnrollment) {
+    await db.studentGroup.create({
+      data: {
+        organizationId: orgId,
+        studentId: student.id,
+        groupId: group.id,
+        isActive: true,
+      },
+    });
+  }
+
+  // 7. Parent account (parent@medu.test)
+  const parentEmail = 'parent@medu.test';
+  let parent = await db.parentAccount.findFirst({
+    where: { email: parentEmail },
+  });
+  if (!parent) {
+    parent = await db.parentAccount.create({
+      data: {
+        organizationId: orgId,
+        email: parentEmail,
+        passwordHash,
+        firstName: 'Baxtiyor',
+        lastName: 'Aliyev',
+        phone: '+998901234568',
+        isActive: true,
+      },
+    });
+    console.log(`Created parent: ${parentEmail}`);
+  } else {
+    await db.parentAccount.update({
+      where: { id: parent.id },
+      data: { passwordHash, isActive: true },
+    });
+  }
+
+  // Link parent to student
+  const existingParentStudent = await db.parentStudent.findFirst({
+    where: {
+      parentId: parent.id,
+      studentId: student.id,
+    },
+  });
+  if (!existingParentStudent) {
+    await db.parentStudent.create({
+      data: {
+        parentId: parent.id,
+        studentId: student.id,
+        relationship: 'father',
+      },
+    });
   }
 }
 

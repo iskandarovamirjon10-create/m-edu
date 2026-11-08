@@ -82,7 +82,7 @@ describe('AiComposer slash command interaction', () => {
     // Press Enter to execute first command (/davomat)
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' });
 
-    expect(onSend).toHaveBeenCalledWith('Bugungi umumiy davomat tahlilini koʻrsat');
+    expect(onSend).toHaveBeenCalledWith('Bugungi umumiy davomat tahlilini ko‘rsat');
   });
 
   it('navigates slash menu with arrow keys', () => {
@@ -99,7 +99,7 @@ describe('AiComposer slash command interaction', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' });
 
     expect(onSend).toHaveBeenCalledWith(
-      'Muddati oʻtgan toʻlovlar va qarzdorlar roʻyxatini koʻrsat'
+      'Muddati o‘tgan to‘lovlar va qarzdorlar ro‘yxatini ko‘rsat'
     );
   });
 

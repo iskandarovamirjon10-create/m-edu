@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { hashPassword } from '../auth/auth.config';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,15 +13,24 @@ import { userPublicSelect } from '../common/selects/user.select';
 export class StudentsService {
   constructor(private readonly prisma: PrismaService, @Optional() private readonly security?: SecurityEventService) {}
 
-  async findAll(organizationId: string, query: StudentQuery) {
+  async findAll(organizationId: string, query: StudentQuery, currentUser?: { id?: string; role?: string }) {
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.StudentWhereInput = { organizationId };
 
     if (query.search) {
-      const trimmedSearch = query.search.trim();
+      let trimmedSearch = query.search.trim();
+
+      // Support direct Telegram WebApp Digital Pass URL (medu://pass/<id>?org=...&t=...)
+      if (trimmedSearch.startsWith('medu://pass/')) {
+        const passMatch = trimmedSearch.match(/^medu:\/\/pass\/([^?&/]+)/);
+        if (passMatch) {
+          trimmedSearch = passMatch[1].trim();
+        }
+      }
+
       const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(trimmedSearch);
       where.OR = [
-        ...(isUuid ? [{ id: trimmedSearch }] : []),
+        ...(isUuid ? [{ id: trimmedSearch }, { userId: trimmedSearch }] : []),
         { user: { firstName: { contains: trimmedSearch, mode: 'insensitive' } } },
         { user: { lastName: { contains: trimmedSearch, mode: 'insensitive' } } },
         { user: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
@@ -30,7 +39,28 @@ export class StudentsService {
         { parentPhone: { contains: trimmedSearch, mode: 'insensitive' } },
       ];
     }
-    if (query.groupId || query.teacherId) {
+
+    // Object-level authorization: Teachers, students, and parents only view their own students
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id, organizationId },
+        select: { id: true },
+      });
+      const teacherId = teacher?.id || '00000000-0000-0000-0000-000000000000';
+      where.groups = {
+        some: {
+          isActive: true,
+          organizationId,
+          group: { teacherId },
+        },
+      };
+    } else if (currentUser?.role === 'STUDENT') {
+      where.userId = currentUser.id;
+    } else if (currentUser?.role === 'PARENT') {
+      where.parentStudents = {
+        some: { parentId: currentUser.id },
+      };
+    } else if (query.groupId || query.teacherId) {
       // The membership filter is scoped by tenant as well: a membership row is
       // only valid if the student, group and membership share one
       // organization, so filtering on (groupId|teacherId + organizationId) is
@@ -67,12 +97,13 @@ export class StudentsService {
     return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
-  async findOne(organizationId: string, id: string) {
+  async findOne(organizationId: string, id: string, currentUser?: { id?: string; role?: string }) {
     const student = await this.prisma.student.findFirst({
       where: { id, organizationId },
       include: {
         user: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, isActive: true } },
-        groups: { where: { isActive: true }, include: { group: { select: { id: true, name: true, room: true } } } },
+        groups: { where: { isActive: true }, include: { group: { select: { id: true, name: true, room: true, teacherId: true } } } },
+        parentStudents: { select: { id: true, parentId: true } },
         payments: { orderBy: { createdAt: 'desc' }, take: 10 },
         attendance: { orderBy: { date: 'desc' }, take: 10 },
       },
@@ -84,6 +115,33 @@ export class StudentsService {
       }
       throw new NotFoundException('Student not found');
     }
+
+    // Object-level authorization: Teachers can only view students enrolled in their assigned groups
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id, organizationId },
+        select: { id: true },
+      });
+      const teacherId = teacher?.id || '00000000-0000-0000-0000-000000000000';
+      const isEnrolled = student.groups?.some(
+        (eg: any) => eg.group?.teacherId === teacherId,
+      );
+      if (!isEnrolled) {
+        throw new ForbiddenException('Siz faqat o‘zingiz dars beradigan guruhlardagi o‘quvchilarni ko‘ra olasiz');
+      }
+    } else if (currentUser?.role === 'STUDENT') {
+      if (student.userId !== currentUser.id && student.user?.id !== currentUser.id) {
+        throw new ForbiddenException('Siz faqat o‘z ma’lumotlaringizni ko‘ra olasiz');
+      }
+    } else if (currentUser?.role === 'PARENT') {
+      const isMyChild = student.parentStudents?.some(
+        (ps: any) => ps.parentId === currentUser.id,
+      );
+      if (!isMyChild) {
+        throw new ForbiddenException('Siz faqat o‘z farzandingiz ma’lumotlarini ko‘ra olasiz');
+      }
+    }
+
     return student;
   }
 

@@ -1,7 +1,7 @@
 /**
  * GlassAvatar — Apple-premium
  */
-import { useState, useMemo, memo, type HTMLAttributes } from 'react';
+import { useState, useMemo, useEffect, memo, type HTMLAttributes } from 'react';
 import { cn, getInitials as getInit, avatarGradient } from '@/lib/design';
 
 export type GlassAvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
@@ -47,6 +47,10 @@ export const GlassAvatar = memo(function GlassAvatar({
   ...rest
 }: GlassAvatarProps) {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [src]);
   const resolvedInitials = useMemo(() => getInitials(name, initials), [name, initials]);
   const gradient = useMemo(() => avatarGradient(name || initials || ''), [name, initials]);
   const showImage = Boolean(src) && !imgError;

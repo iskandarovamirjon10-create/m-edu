@@ -30,7 +30,7 @@ export class AttendanceService {
     @Optional() private readonly notificationEvents?: NotificationEventService,
   ) {}
 
-  async markAttendance(organizationId: string, data: MarkAttendanceDto) {
+  async markAttendance(organizationId: string, data: MarkAttendanceDto, currentUser?: RequestUser) {
     const group = await this.prisma.group.findFirst({
       where: { id: data.groupId, organizationId },
     });
@@ -39,6 +39,17 @@ export class AttendanceService {
     // rule the face/camera pipeline enforces, so both paths agree.
     if (group.isActive === false) {
       throw new BadRequestException('Group is inactive and cannot receive attendance');
+    }
+
+    // Object-level authorization: Teachers can only mark attendance for their assigned groups
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: (currentUser as any).id || (currentUser as any).sub, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || group.teacherId !== teacher.id) {
+        throw new ForbiddenException('Siz faqat o‘zingizga biriktirilgan guruhlarga davomat belgilay olasiz');
+      }
     }
 
     if (!data.records || data.records.length === 0) {
@@ -497,7 +508,7 @@ export class AttendanceService {
     return { deleted: true, id };
   }
 
-  async findAll(organizationId: string, query: AttendanceQuery) {
+  async findAll(organizationId: string, query: AttendanceQuery, currentUser?: RequestUser) {
     const { page, limit, skip } = parsePagination(query, { limit: 50 });
     const where: Prisma.AttendanceWhereInput = { organizationId };
 
@@ -507,8 +518,15 @@ export class AttendanceService {
     // already authorized; the filter itself is tenant-scoped by organizationId
     // above, so a foreign id can never widen the result set.
     if (query.studentId) where.studentId = query.studentId;
-    // Teacher scoping: attendance rows of the groups this teacher owns (by teacherId or teacher.userId).
-    if (query.teacherId) {
+    // Object-level authorization for teachers
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: (currentUser as any).id || (currentUser as any).sub, organizationId },
+        select: { id: true },
+      });
+      const teacherId = teacher?.id || '00000000-0000-0000-0000-000000000000';
+      where.group = { teacherId };
+    } else if (query.teacherId) {
       where.group = {
         OR: [
           { teacherId: query.teacherId },
@@ -581,11 +599,19 @@ export class AttendanceService {
     return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
-  async getAnalytics(organizationId: string, query: AttendanceQuery) {
+  async getAnalytics(organizationId: string, query: AttendanceQuery, currentUser?: RequestUser) {
     const where: Prisma.AttendanceWhereInput = { organizationId };
     if (query.groupId) where.groupId = query.groupId;
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
-    if (query.teacherId) {
+    let teacherFilterId: string | undefined;
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: (currentUser as any).id || (currentUser as any).sub, organizationId },
+        select: { id: true },
+      });
+      teacherFilterId = teacher?.id || '00000000-0000-0000-0000-000000000000';
+      where.group = { teacherId: teacherFilterId };
+    } else if (query.teacherId) {
       where.group = {
         OR: [
           { teacherId: query.teacherId },
@@ -611,7 +637,7 @@ export class AttendanceService {
     const [statusCounts, groupStats, dailyStats] = await Promise.all([
       this.prisma.attendance.groupBy({ by: ['status'], where, _count: { status: true } }),
       this.prisma.attendance.groupBy({ by: ['groupId'], where, _count: { status: true } }),
-      this.getDailyStats(organizationId, query),
+      this.getDailyStats(organizationId, query, teacherFilterId),
     ]);
 
     const total = statusCounts.reduce((sum, s) => sum + s._count.status, 0);
@@ -635,9 +661,12 @@ export class AttendanceService {
     };
   }
 
-  private async getDailyStats(organizationId: string, query: AttendanceQuery) {
+  private async getDailyStats(organizationId: string, query: AttendanceQuery, teacherId?: string) {
     const conditions: Prisma.Sql[] = [Prisma.sql`"organizationId" = ${organizationId}::uuid`];
 
+    if (teacherId) {
+      conditions.push(Prisma.sql`"groupId" IN (SELECT id FROM "Group" WHERE "teacherId" = ${teacherId}::uuid AND "organizationId" = ${organizationId}::uuid)`);
+    }
     if (query.groupId) {
       conditions.push(Prisma.sql`"groupId" = ${query.groupId}::uuid`);
     }

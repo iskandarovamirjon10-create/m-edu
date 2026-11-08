@@ -166,7 +166,7 @@ describe('CurriculumPage (Apple 10/10 visionOS Edition)', () => {
     it('renders hero title, badges and stat tiles', async () => {
       renderWithClient();
 
-      expect(await screen.findByText("O'quv rejalari va sillabus")).toBeInTheDocument();
+      expect(await screen.findByText(/O[‘']quv rejalari va sillabus/i)).toBeInTheDocument();
       expect(screen.getByText("Jami rejalar")).toBeInTheDocument();
       expect(screen.getByText("Nashr etilgan")).toBeInTheDocument();
       expect(screen.getByText("Qoralamalar")).toBeInTheDocument();
@@ -200,7 +200,7 @@ describe('CurriculumPage (Apple 10/10 visionOS Edition)', () => {
 
       expect(await screen.findByText('General English B2')).toBeInTheDocument();
 
-      const filterSelect = screen.getByLabelText("Fan bo'yicha filtrlash");
+      const filterSelect = screen.getByLabelText(/Fan bo[‘']yicha filtrlash/i);
       fireEvent.change(filterSelect, { target: { value: 'sub-1' } });
 
       await waitFor(() => {
@@ -265,7 +265,7 @@ describe('CurriculumPage (Apple 10/10 visionOS Edition)', () => {
       fireEvent.click(openBtn);
 
       // Verify modal opened
-      expect(screen.getByText("Yangi o'quv rejasiga nom bering va uni tegishli fanga biriktiring.")).toBeInTheDocument();
+      expect(screen.getByText(/Yangi o[‘']quv rejasiga nom bering/i)).toBeInTheDocument();
 
       // Submit empty to test validation
       const submitBtn = screen.getByRole('button', { name: 'Yaratish' });
@@ -304,7 +304,7 @@ describe('CurriculumPage (Apple 10/10 visionOS Edition)', () => {
       fireEvent.click(cancelBtn);
 
       await waitFor(() => {
-        expect(screen.queryByText("Yangi o'quv rejasiga nom bering va uni tegishli fanga biriktiring.")).not.toBeInTheDocument();
+        expect(screen.queryByText(/Yangi o[‘']quv rejasiga nom bering/i)).not.toBeInTheDocument();
       });
     });
   });
@@ -318,7 +318,7 @@ describe('CurriculumPage (Apple 10/10 visionOS Edition)', () => {
 
       renderWithClient();
 
-      expect(await screen.findByText("Hozircha o'quv rejalari mavjud emas")).toBeInTheDocument();
+      expect(await screen.findByText(/Hozircha o[‘']quv rejalari mavjud emas/i)).toBeInTheDocument();
     });
 
     it('renders error state and refetches on click', async () => {
@@ -326,7 +326,7 @@ describe('CurriculumPage (Apple 10/10 visionOS Edition)', () => {
 
       renderWithClient();
 
-      expect(await screen.findByText(/O'quv rejalarini yuklab bo'lmadi/i)).toBeInTheDocument();
+      expect(await screen.findByText(/O[‘']quv rejalarini yuklab bo[‘']lmadi/i)).toBeInTheDocument();
       expect(screen.getByText('Network failure')).toBeInTheDocument();
 
       const retryBtn = screen.getByRole('button', { name: 'Qayta urinish' });

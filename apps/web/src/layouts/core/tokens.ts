@@ -13,6 +13,7 @@ export const Z_INDEX = {
   content: 10,
   topbar: 30,
   sidebar: 35,
+  mobileTopBar: 40,
   mobileBottomNav: 40,
   floatingTools: 45, // Copilot, Calculator triggers
   dropdown: 50,
@@ -20,6 +21,26 @@ export const Z_INDEX = {
   modal: 70, // Shortcuts, mobile search sheet
   toast: 80,
   skipLink: 100,
+} as const;
+
+/* ── SHELL GEOMETRY (single source of truth) ──
+ * Both the sidebar width and the content offset animate from these values,
+ * so the two can never drift apart during a collapse/expand. */
+export const SHELL = {
+  sidebarWidth: 268,
+  sidebarCollapsed: 84,
+  mobileTopBarHeight: 60,
+  mobileTopBarGutter: 8,
+  mobileDockHeight: 64,
+} as const;
+
+/** One spring for every shell transition — sidebar and content stay in sync. */
+export const SHELL_SPRING = {
+  type: 'spring' as const,
+  stiffness: 420,
+  damping: 44,
+  mass: 0.9,
+  restDelta: 0.4,
 } as const;
 
 /* ── MOTION SPRINGS & EASING ── */

@@ -22,15 +22,20 @@ const {
   pushMock: vi.fn(),
 }));
 
-vi.mock('@/lib/api', () => ({
-  telegramApi: {
-    status: statusMock,
-    createLink: createLinkMock,
-    unlink: unlinkMock,
-    testNotification: testMock,
-    adminOverview: adminOverviewMock,
-  },
-}));
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    telegramApi: {
+      ...actual.telegramApi,
+      status: statusMock,
+      createLink: createLinkMock,
+      unlink: unlinkMock,
+      testNotification: testMock,
+      adminOverview: adminOverviewMock,
+    },
+  };
+});
 
 const mockUser: any = {
   id: 'user-1',
@@ -159,25 +164,24 @@ describe('TelegramPage (Standalone Telegram Hub Screen)', () => {
 
   it('renders the Telegram Hub title, official bot badge, and navigation tabs', async () => {
     renderPage();
-    expect(await screen.findByText('Telegram Integration')).toBeInTheDocument();
-    expect(screen.getByText('Integration')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /My Connection/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Bot Features/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Admin Overview/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Telegram Integration|Telegram Integratsiya/i)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /My Connection|Mening ulanishim/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Bot Features|Bot imkoniyatlari/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Admin Overview|Admin sharhi/i })).toBeInTheDocument();
   });
 
   it('generates a one-time deep-link and displays container on connect click', async () => {
     const user = userEvent.setup();
     renderPage();
 
-    const connectBtn = await screen.findByRole('button', { name: /Generate Link/i });
+    const connectBtn = await screen.findByRole('button', { name: /Generate Link|Ulanish havolasi/i });
     await user.click(connectBtn);
 
     expect(createLinkMock).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('https://t.me/medu_education_bot?start=test-token')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Open in Telegram/i })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: /Open in Telegram|Telegramda Ochish/i })).toHaveAttribute(
         'href',
         'https://t.me/medu_education_bot?start=test-token',
       );
@@ -188,10 +192,10 @@ describe('TelegramPage (Standalone Telegram Hub Screen)', () => {
     const user = userEvent.setup();
     renderPage();
 
-    const connectBtn = await screen.findByRole('button', { name: /Generate Link/i });
+    const connectBtn = await screen.findByRole('button', { name: /Generate Link|Ulanish havolasi/i });
     await user.click(connectBtn);
 
-    const copyBtn = await screen.findByRole('button', { name: /Copy link/i });
+    const copyBtn = await screen.findByRole('button', { name: /Copy link|Havolani nusxalash/i });
     await user.click(copyBtn);
 
     await waitFor(() => {
@@ -206,10 +210,10 @@ describe('TelegramPage (Standalone Telegram Hub Screen)', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('@amirjon_tg').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText(/Connected to Telegram/i)).toBeInTheDocument();
+      expect(screen.getByText(/Telegram is connected|Connected to Telegram|Telegram hisobingiz ulangan/i)).toBeInTheDocument();
     });
 
-    const testBtn = screen.getByRole('button', { name: /Test Notification/i });
+    const testBtn = screen.getByRole('button', { name: /Test Notification|Sinov xabarini/i });
     await user.click(testBtn);
 
     expect(testMock).toHaveBeenCalledTimes(1);
@@ -223,10 +227,10 @@ describe('TelegramPage (Standalone Telegram Hub Screen)', () => {
     const user = userEvent.setup();
     renderPage();
 
-    const unlinkBtn = await screen.findByRole('button', { name: /Disconnect/i });
+    const unlinkBtn = await screen.findByRole('button', { name: /Disconnect|Aloqani uzish/i });
     await user.click(unlinkBtn);
 
-    const confirmBtn = await screen.findByRole('button', { name: /Delete/i });
+    const confirmBtn = await screen.findByRole('button', { name: /Delete|Confirm|Tasdiqlash/i });
     await user.click(confirmBtn);
 
     expect(unlinkMock).toHaveBeenCalledTimes(1);

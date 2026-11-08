@@ -75,6 +75,8 @@ export interface LoginOptions {
 /** Auth API responses — narrow from `unknown` */
 interface AuthResponse {
   user: User;
+  accessToken?: string;
+  mustChangePassword?: boolean;
   pendingApproval?: boolean;
   message?: string;
 }
@@ -336,7 +338,7 @@ function safeReturnTo(raw: string | null | undefined, loginPath: string): string
 }
 
 /** Cast a raw response to AuthResponse safely. */
-function asAuthResponse(raw: unknown): AuthResponse {
+function asAuthResponse(raw: unknown): AuthResponse & { pendingApproval?: boolean; message?: string } {
   if (!raw || typeof raw !== 'object') {
     throw new AuthError('UNKNOWN', 'Invalid auth response');
   }
@@ -344,8 +346,14 @@ function asAuthResponse(raw: unknown): AuthResponse {
   if (!r.user || typeof r.user !== 'object') {
     throw new AuthError('UNKNOWN', 'Missing user in auth response');
   }
+  const user = r.user as User;
+  if (r.mustChangePassword !== undefined) {
+    user.mustChangePassword = Boolean(r.mustChangePassword);
+  }
   return {
-    user: r.user as User,
+    accessToken: (r.accessToken as string) || '',
+    user,
+    mustChangePassword: Boolean(r.mustChangePassword || user.mustChangePassword),
     pendingApproval: Boolean(r.pendingApproval),
     message: typeof r.message === 'string' ? r.message : undefined,
   };
@@ -406,10 +414,7 @@ function useOnlineStatus(): boolean {
  * Simple tab-leader election.
  * Returns true if this tab is the current leader (or if sync is disabled).
  */
-function useTabLeader(
-  channelRef: MutableRefObject<BroadcastChannel | null>,
-  enabled: boolean,
-): boolean {
+function useTabLeader(enabled: boolean): boolean {
   const [isLeader, setIsLeader] = useState(true);
   const tabIdRef = useRef<string>(
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -425,20 +430,25 @@ function useTabLeader(
       return;
     }
 
-    const ch = channelRef.current;
+    let ch: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        ch = new BroadcastChannel('auth:leader_election');
+      } catch {
+        /* noop */
+      }
+    }
 
-    const handleMessage = (e: MessageEvent<SyncMessage>) => {
+    const handleMessage = (e: MessageEvent<{ type?: string; tabId?: string }>) => {
       if (e.data?.type !== 'LEADER_HEARTBEAT') return;
-      const { tabId } = e.data;
-      if (tabId === tabIdRef.current) return;
+      const tabId = e.data.tabId;
+      if (!tabId || tabId === tabIdRef.current) return;
       lastLeaderHeartbeatRef.current = Date.now();
       leaderIdRef.current = tabId;
       setIsLeader(false);
     };
 
-    if (ch) {
-      ch.addEventListener('message', handleMessage);
-    }
+    ch?.addEventListener('message', handleMessage);
 
     const heartbeat = window.setInterval(() => {
       const now = Date.now();
@@ -453,7 +463,6 @@ function useTabLeader(
         setIsLeader(true);
         try {
           ch?.postMessage({
-            v: SYNC_VERSION,
             type: 'LEADER_HEARTBEAT',
             tabId: tabIdRef.current,
           });
@@ -467,9 +476,10 @@ function useTabLeader(
       clearInterval(heartbeat);
       if (ch) {
         ch.removeEventListener('message', handleMessage);
+        ch.close();
       }
     };
-  }, [channelRef, enabled]);
+  }, [enabled]);
 
   return isLeader;
 }
@@ -490,8 +500,10 @@ export interface AuthStateValue extends AuthState {
 }
 
 export interface AuthActionsValue {
-  login: (email: string, password: string, opts?: LoginOptions) => Promise<User>;
-  parentLogin: (email: string, password: string, opts?: LoginOptions) => Promise<User>;
+  login: (username: string, password: string, opts?: LoginOptions) => Promise<User>;
+  parentLogin: (username: string, password: string, opts?: LoginOptions) => Promise<User>;
+  changePassword: (data: { currentPassword: string; newPassword: string }) => Promise<{ message: string }>;
+  switchOrganization: (organizationId: string) => Promise<User>;
   register: (data: RegisterPayload, opts?: LoginOptions) => Promise<User>;
   logout: (opts?: { redirect?: boolean; reason?: LogoutReason }) => Promise<void>;
   refresh: () => Promise<User | null>;
@@ -651,6 +663,7 @@ export function AuthProvider({
 
       if (target) go(target);
       else if (fallbackPath) go(fallbackPath);
+      else go('/');
 
       try {
         sessionStorage.removeItem(DEEPLINK_STORAGE_KEY);
@@ -714,6 +727,7 @@ export function AuthProvider({
     const ac = new AbortController();
     abortRef.current = ac;
 
+    let promise: Promise<User | null>;
     const execute = async (): Promise<User | null> => {
       try {
         const me = await runMiddleware('verify', () =>
@@ -744,7 +758,7 @@ export function AuthProvider({
       }
     };
 
-    const promise = execute();
+    promise = execute();
     inflightRef.current = promise;
     return promise;
   }, [persist, signOutLocally, broadcast, stateRef, runMiddleware, retryRef]);
@@ -853,7 +867,7 @@ export function AuthProvider({
 
   /* ── Tab leader ─────────────────────────────────────────────── */
 
-  const isLeader = useTabLeader(channelRef, syncTabs);
+  const isLeader = useTabLeader(syncTabs);
 
   /* ── Stale-while-revalidate ─────────────────────────────────── */
 
@@ -886,11 +900,11 @@ export function AuthProvider({
   /* ── Public actions ─────────────────────────────────────────── */
 
   const login = useCallback<AuthActionsValue['login']>(
-    async (email, password, opts) => {
+    async (username, password, opts) => {
       dispatch({ type: 'PENDING', pending: 'login' });
       try {
         const raw = await runMiddleware('login', async () =>
-          authApi.login(email.trim().toLowerCase(), password),
+          authApi.login(username.trim().toLowerCase(), password),
         );
         const { user } = asAuthResponse(raw);
         adopt(user, 'login');
@@ -907,11 +921,11 @@ export function AuthProvider({
   );
 
   const parentLogin = useCallback<AuthActionsValue['parentLogin']>(
-    async (email, password, opts) => {
+    async (username, password, opts) => {
       dispatch({ type: 'PENDING', pending: 'login' });
       try {
         const raw = await runMiddleware('login', async () =>
-          authApi.parentLogin(email.trim().toLowerCase(), password),
+          authApi.parentLogin(username.trim().toLowerCase(), password),
         );
         const { user } = asAuthResponse(raw);
         adopt(user, 'parent-login');
@@ -925,6 +939,28 @@ export function AuthProvider({
       }
     },
     [adopt, navigateAfterAuth, runMiddleware],
+  );
+
+  const changePassword = useCallback<AuthActionsValue['changePassword']>(
+    async (data) => {
+      const res = await authApi.changePassword(data);
+      if (stateRef.current.user) {
+        const updated = { ...stateRef.current.user, mustChangePassword: false };
+        adopt(updated, 'login');
+      }
+      return res;
+    },
+    [adopt, stateRef],
+  );
+
+  const switchOrganization = useCallback<AuthActionsValue['switchOrganization']>(
+    async (organizationId: string) => {
+      const res = await authApi.switchOrganization(organizationId);
+      const { user } = asAuthResponse(res);
+      adopt(user, 'login');
+      return user;
+    },
+    [adopt],
   );
 
   const register = useCallback<AuthActionsValue['register']>(
@@ -1054,6 +1090,8 @@ export function AuthProvider({
     () => ({
       login,
       parentLogin,
+      changePassword,
+      switchOrganization,
       register,
       logout,
       refresh,
@@ -1063,7 +1101,7 @@ export function AuthProvider({
       gotoLogin,
       on,
     }),
-    [login, parentLogin, register, logout, refresh, updateUser, setUser, clearError, gotoLogin, on],
+    [login, parentLogin, changePassword, switchOrganization, register, logout, refresh, updateUser, setUser, clearError, gotoLogin, on],
   );
 
   const storeValue = useMemo<AuthStoreContextValue>(
@@ -1124,20 +1162,22 @@ export function useAuthSelector<T>(
 ): T {
   const ctx = assertCtx(useContext(AuthStoreContext), 'useAuthSelector');
   const cacheRef = useRef<{ value: T; state: AuthState } | null>(null);
+  const selectorRef = useLatest(selector);
+  const isEqualRef = useLatest(isEqual);
 
   const getSnapshot = useCallback((): T => {
     const state = ctx.store.getState();
     const prev = cacheRef.current;
     if (prev && prev.state === state) return prev.value;
 
-    const next = selector(state);
-    if (prev && isEqual(prev.value, next)) {
+    const next = selectorRef.current(state);
+    if (prev && isEqualRef.current(prev.value, next)) {
       cacheRef.current = { value: prev.value, state };
       return prev.value;
     }
     cacheRef.current = { value: next, state };
     return next;
-  }, [ctx.store, selector, isEqual]);
+  }, [ctx.store, selectorRef, isEqualRef]);
 
   return useSyncExternalStore(ctx.store.subscribe, getSnapshot, getSnapshot);
 }
@@ -1146,14 +1186,13 @@ export function useAuthSelector<T>(
 export function useAuthEvent<K extends AuthEventName>(
   event: K,
   listener: AuthEventListener<K>,
-  deps: readonly unknown[] = [],
 ): void {
   const ctx = useContext(AuthStoreContext);
   const listenerRef = useLatest(listener);
   useEffect(() => {
     if (!ctx) return;
     return ctx.eventBus.on(event, (payload) => listenerRef.current(payload));
-  }, [ctx, event, ...deps]);
+  }, [ctx, event, listenerRef]);
 }
 
 /** Online/offline status. */

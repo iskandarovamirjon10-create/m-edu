@@ -65,7 +65,11 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
     playTick();
     setActiveAccent(accent);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('m_edu_accent', accent);
+      try {
+        localStorage.setItem('m_edu_accent', accent);
+      } catch {
+        // quota safety
+      }
       document.documentElement.setAttribute('data-accent', accent);
     }
   }, [playTick]);
@@ -74,7 +78,11 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
     playTick();
     setActiveTheme(theme);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('m_edu_display_theme', theme);
+      try {
+        localStorage.setItem('m_edu_display_theme', theme);
+      } catch {
+        // quota safety
+      }
       if (theme === 'light') {
         document.documentElement.classList.remove('dark', 'oled-midnight');
       } else if (theme === 'dark') {
@@ -90,7 +98,11 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
     playTick();
     setGlassDensity(density);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('m_edu_glass_level', density);
+      try {
+        localStorage.setItem('m_edu_glass_level', density);
+      } catch {
+        // quota safety
+      }
       document.documentElement.setAttribute('data-glass', density);
     }
   }, [playTick]);
@@ -101,14 +113,13 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
     onClose();
   }, [playSuccess, push, onClose]);
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
-        onClick={onClose}
-      >
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+          onClick={onClose}
+        >
         <motion.div
           initial={{ opacity: 0, scale: 0.94 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -254,6 +265,7 @@ export const ThemeAccentStudio = memo(function ThemeAccentStudio({
           </button>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 });

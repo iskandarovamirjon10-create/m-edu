@@ -141,7 +141,7 @@ export function GlassModal({
     };
   }, [open, persistent]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
     <div

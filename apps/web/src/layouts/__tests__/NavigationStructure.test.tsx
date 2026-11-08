@@ -140,11 +140,46 @@ describe('4-Pillar Navigation Structure Contracts', () => {
     }
 
     // Student accessible routes must be present
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Students' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Attendance' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Payments' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Grades' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Homework' })).toBeInTheDocument();
+
+    // Staff/Admin only routes MUST NOT be visible for student
+    expect(screen.queryByRole('link', { name: 'Students' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Payments' })).not.toBeInTheDocument();
+  });
+
+  it('strictly hides financial, executive, and admin routes for TEACHER while preserving pedagogical routes', () => {
+    renderNavItems('TEACHER');
+
+    // Forbidden school-level routes MUST NOT be visible in Teacher's navigation
+    expect(screen.queryByRole('link', { name: 'Finance' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Expenses' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Payments' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Invoices' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Payroll Runs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Cameras' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Audit Log' })).not.toBeInTheDocument();
+
+    // Pedagogical routes MUST be available
+    expect(screen.getByRole('link', { name: 'Teacher Cockpit' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Attendance' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Schedule' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Grades' })).toBeInTheDocument();
+  });
+
+  it('strictly isolates PARENT navigation to Parent Portal and communication', () => {
+    renderNavItems('PARENT');
+
+    expect(screen.queryByRole('link', { name: 'Expenses' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Payments' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Cameras' })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'Parent Portal' })).toBeInTheDocument();
   });
 
   it('renders 4 pillar mobile tabs for staff, student, and parent', () => {

@@ -73,13 +73,16 @@ export const BulkTeacherActionsModals = memo(function BulkTeacherActionsModals({
   });
 
   const salaryMutation = useMutation({
-    mutationFn: () =>
-      teachersApi.bulkSalary({
+    mutationFn: () => {
+      const parsedHourly = hourlyRate ? parseFloat(hourlyRate) : undefined;
+      const parsedLesson = lessonRate ? parseFloat(lessonRate) : undefined;
+      return teachersApi.bulkSalary({
         teacherIds: selectedIds,
         salaryType,
-        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : undefined,
-        lessonRate: lessonRate ? parseFloat(lessonRate) : undefined,
-      }),
+        hourlyRate: parsedHourly !== undefined && !isNaN(parsedHourly) ? parsedHourly : undefined,
+        lessonRate: parsedLesson !== undefined && !isNaN(parsedLesson) ? parsedLesson : undefined,
+      });
+    },
     onSuccess: () => {
       sound.playSuccess?.();
       haptics.success();

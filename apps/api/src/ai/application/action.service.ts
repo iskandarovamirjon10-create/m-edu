@@ -86,7 +86,7 @@ export class AiActionService {
     const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit ?? '20', 10) || 20));
     const skip = (page - 1) * limit;
 
-    const isAdmin = ['SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(
+    const isAdmin = ['PLATFORM_OWNER', 'SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(
       (context.role || '').toUpperCase(),
     );
 
@@ -121,7 +121,7 @@ export class AiActionService {
     const now = new Date();
 
     if (row.expiresAt.getTime() <= now.getTime()) {
-      await this.markStatus(id, AiActionStatus.EXPIRED);
+      await this.markStatus(context, id, AiActionStatus.EXPIRED);
       await this.safeAudit(context, 'AI_ACTION_EXPIRED', id, { toolName: row.toolName });
       throw new AiException(AiErrorCode.AI_ACTION_EXPIRED, 'This action has expired');
     }
@@ -155,7 +155,11 @@ export class AiActionService {
     // Atomic execution gate: only one caller can move PENDING_CONFIRMATION →
     // EXECUTING. Losers (double-click, retry, replay) get ALREADY_RESOLVED.
     const claimed = await this.prisma.aiAction.updateMany({
-      where: { id, status: AiActionStatus.PENDING_CONFIRMATION },
+      where: {
+        id,
+        organizationId: context.organizationId,
+        status: AiActionStatus.PENDING_CONFIRMATION,
+      },
       data: { status: AiActionStatus.CONFIRMED },
     });
     if (claimed.count !== 1) {
@@ -207,7 +211,11 @@ export class AiActionService {
   async reject(context: AiContext, id: string, reason?: string): Promise<AiAction> {
     await this.findOwned(context, id);
     const rejected = await this.prisma.aiAction.updateMany({
-      where: { id, status: AiActionStatus.PENDING_CONFIRMATION },
+      where: {
+        id,
+        organizationId: context.organizationId,
+        status: AiActionStatus.PENDING_CONFIRMATION,
+      },
       data: { status: AiActionStatus.REJECTED },
     });
     if (rejected.count !== 1) {
@@ -222,7 +230,7 @@ export class AiActionService {
   }
 
   private async findOwned(context: AiContext, id: string) {
-    const isAdmin = ['SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(
+    const isAdmin = ['PLATFORM_OWNER', 'SUPER_ADMIN', 'ORG_ADMIN', 'ADMIN'].includes(
       (context.role || '').toUpperCase(),
     );
     const row = await this.prisma.aiAction.findFirst({
@@ -238,8 +246,11 @@ export class AiActionService {
     return row;
   }
 
-  private async markStatus(id: string, status: AiActionStatus): Promise<void> {
-    await this.prisma.aiAction.updateMany({ where: { id }, data: { status } });
+  private async markStatus(context: AiContext, id: string, status: AiActionStatus): Promise<void> {
+    await this.prisma.aiAction.updateMany({
+      where: { id, organizationId: context.organizationId },
+      data: { status },
+    });
   }
 
   private async safeAudit(

@@ -1,12 +1,18 @@
 /**
  * M-EDU - Apple Premium Design System (iOS 27 & macOS Sequoia Liquid Glass)
+ * V4.0 — Calculated Token Bridge
  *
- * One restrained system:
- *  - Apple system colors (blue #007AFF, green #34C759, orange #FF9500, red #FF3B30)
- *  - Hairline borders, multi-stop ambient shadows, no candy/neon glows
- *  - SF Pro typography with tight optical tracking
- *  - Apple spring easing (cubic-bezier(0.32, 0.72, 0, 1))
- *  - Unified 3-Tier Liquid Glass optics (subtle, card, floating)
+ * This configuration bridges Tailwind CSS directly to the mathematical
+ * OKLCH tokens in design-tokens.css (V4) and globals.css (V4).
+ *
+ * Core Principles:
+ *   1. Zero Hardcoded Color Drift: colors, shadows, blurs, and radii reference
+ *      CSS variables. Changing a theme (light, dark, oled, sepia) or toggling
+ *      --solid immediately propagates across all Tailwind utility classes.
+ *   2. Backward Compatibility: preserves legacy steps (brand, surface-50..950,
+ *      spacing, keyframes) so zero existing pages or components break.
+ *   3. 120 Hz Motion: spring timing functions utilize physically calculated
+ *      settle curves from V4 design tokens.
  */
 
 /** @type {import('tailwindcss').Config} */
@@ -19,120 +25,207 @@ export default {
         xs: '480px',
       },
       colors: {
-        brand: {
-          50: '#EAF3FF',
-          100: '#D6E8FF',
-          200: '#ADCCFF',
-          300: '#7FB3FF',
-          400: '#4A9AFF',
-          500: '#007AFF',
-          600: '#0066D6',
-          700: '#0052B3',
-          800: '#003D80',
-          900: '#002B5C',
-          950: '#001C3D',
-        },
-        accent: {
-          50: '#EFEEFF',
-          100: '#E0DFFE',
-          200: '#C3C0FD',
-          500: '#5856D6',
-          600: '#4744C4',
-          700: '#3633A8',
-        },
-        apple: {
-          blue: '#007AFF',
-          green: '#34C759',
-          indigo: '#5856D6',
-          orange: '#FF9500',
-          pink: '#FF2D55',
-          purple: '#AF52DE',
-          red: '#FF3B30',
-          teal: '#5AC8FA',
-          yellow: '#FFCC00',
-          gray: '#8E8E93',
-        },
+        // ── Canvas & Surfaces (100% Synced with V4 tokens) ───────────────
+        page: 'var(--bg-page)',
         surface: {
-          50: '#FFFFFF',
-          100: '#F5F5F7',
-          200: '#E8E8ED',
-          300: '#D2D2D7',
-          400: '#C7C7CC',
-          500: '#8E8E93',
-          600: '#636366',
-          700: '#48484A',
-          800: '#2C2C2E',
-          900: '#1C1C1E',
-          950: '#000000',
+          DEFAULT: 'var(--bg-surface)',
+          elevated: 'var(--bg-elevated)',
+          sunken: 'var(--bg-sunken)',
+          input: 'var(--bg-input)',
+          card: 'var(--bg-card)',
+          // Numeric steps mapped dynamically for backward compatibility
+          50: 'var(--bg-surface)',
+          100: 'color-mix(in srgb, var(--bg-surface) 96%, var(--text-primary))',
+          200: 'color-mix(in srgb, var(--bg-surface) 90%, var(--text-primary))',
+          300: 'color-mix(in srgb, var(--bg-surface) 82%, var(--text-primary))',
+          400: 'color-mix(in srgb, var(--bg-surface) 74%, var(--text-primary))',
+          500: 'var(--text-muted)',
+          600: 'var(--text-tertiary)',
+          700: 'var(--text-secondary)',
+          800: 'var(--bg-elevated)',
+          900: 'var(--bg-surface)',
+          950: 'var(--bg-page)',
+          // Direct tier steps
+          1: 'var(--bg-page)',
+          2: 'var(--bg-surface)',
+          3: 'var(--bg-elevated)',
         },
+
+        // ── Typography Semantic Tokens ────────────────────────────────────
+        content: {
+          primary: 'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
+          muted: 'var(--text-muted)',
+          placeholder: 'var(--text-placeholder)',
+          inverse: 'var(--text-inverse)',
+        },
+
+        // ── Hairline & Structural Borders ─────────────────────────────────
+        border: {
+          DEFAULT: 'var(--border-medium)',
+          subtle: 'var(--border-subtle)',
+          medium: 'var(--border-medium)',
+          strong: 'var(--border-strong)',
+          focus: 'var(--border-focus)',
+          glass: 'var(--glass-border)',
+        },
+
+        // ── Apple Core Spectrum (OKLCH Tokens) ────────────────────────────
+        apple: {
+          blue: 'var(--c-blue)',
+          green: 'var(--c-green)',
+          indigo: 'var(--c-indigo)',
+          orange: 'var(--c-orange)',
+          pink: 'var(--c-red)',
+          purple: 'var(--c-purple)',
+          red: 'var(--c-red)',
+          teal: 'var(--c-teal)',
+          yellow: 'var(--c-orange)',
+          gray: 'rgb(var(--line-rgb))',
+        },
+
+        // ── Brand Spectrum (Rooted in Apple Blue / Primary) ───────────────
+        brand: {
+          50: 'color-mix(in srgb, var(--c-blue) 8%, var(--bg-page))',
+          100: 'color-mix(in srgb, var(--c-blue) 16%, var(--bg-page))',
+          200: 'color-mix(in srgb, var(--c-blue) 32%, var(--bg-page))',
+          300: 'color-mix(in srgb, var(--c-blue) 52%, var(--bg-page))',
+          400: 'color-mix(in srgb, var(--c-blue) 76%, var(--bg-page))',
+          500: 'var(--primary)',
+          600: 'var(--primary-hover)',
+          700: 'var(--primary-active)',
+          800: 'color-mix(in srgb, var(--primary) 75%, black)',
+          900: 'color-mix(in srgb, var(--primary) 50%, black)',
+          950: 'color-mix(in srgb, var(--primary) 30%, black)',
+        },
+
+        // ── Accent Spectrum (Rooted in Indigo / Purple) ───────────────────
+        accent: {
+          50: 'color-mix(in srgb, var(--c-indigo) 8%, var(--bg-page))',
+          100: 'color-mix(in srgb, var(--c-indigo) 16%, var(--bg-page))',
+          200: 'color-mix(in srgb, var(--c-indigo) 32%, var(--bg-page))',
+          500: 'var(--c-indigo)',
+          600: 'var(--c-indigo-hover)',
+          700: 'color-mix(in srgb, var(--c-indigo) 75%, black)',
+        },
+
+        // ── Liquid Glass Optical Tiers ───────────────────────────────────
         glass: {
-          light: 'rgba(255,255,255,0.78)',
-          lighter: 'rgba(255,255,255,0.88)',
-          dark: 'rgba(22,27,38,0.74)',
-          subtle: 'rgba(255,255,255,0.70)',
-          card: 'rgba(255,255,255,0.80)',
-          floating: 'rgba(255,255,255,0.88)',
+          light: 'var(--mat-bg-2)',
+          lighter: 'var(--mat-bg-1)',
+          dark: 'var(--mat-bg-4)',
+          subtle: 'var(--mat-bg-2)',
+          card: 'var(--mat-bg-3)',
+          floating: 'var(--mat-bg-4)',
         },
       },
+
+      textColor: {
+        primary: 'var(--text-primary)',
+        secondary: 'var(--text-secondary)',
+        tertiary: 'var(--text-tertiary)',
+        muted: 'var(--text-muted)',
+        placeholder: 'var(--text-placeholder)',
+        inverse: 'var(--text-inverse)',
+      },
+
+      backgroundColor: {
+        page: 'var(--bg-page)',
+        surface: 'var(--bg-surface)',
+        elevated: 'var(--bg-elevated)',
+        sunken: 'var(--bg-sunken)',
+        card: 'var(--bg-card)',
+      },
+
+      borderColor: {
+        DEFAULT: 'var(--border-medium)',
+        subtle: 'var(--border-subtle)',
+        medium: 'var(--border-medium)',
+        strong: 'var(--border-strong)',
+        focus: 'var(--border-focus)',
+        glass: 'var(--glass-border)',
+      },
+
       fontFamily: {
-        sans: ['-apple-system','BlinkMacSystemFont','"SF Pro Display"','"SF Pro Text"','"SF Pro"','system-ui','Inter','sans-serif'],
-        display: ['-apple-system','BlinkMacSystemFont','"SF Pro Display"','"SF Pro"','system-ui','Inter','sans-serif'],
-        mono: ['"SF Mono"','ui-monospace','"JetBrains Mono"','Menlo','Monaco','Consolas','monospace'],
-        serif: ['"New York"','ui-serif','Georgia','Cambria','serif'],
+        sans: ['var(--font-body)', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', '"SF Pro"', 'system-ui', 'Inter', 'sans-serif'],
+        display: ['var(--font-heading)', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro"', 'system-ui', 'Inter', 'sans-serif'],
+        mono: ['var(--font-mono)', '"SF Mono"', 'ui-monospace', '"JetBrains Mono"', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        serif: ['"New York"', 'ui-serif', 'Georgia', 'Cambria', 'serif'],
       },
+
       borderRadius: {
-        '3xl': '20px',
-        '4xl': '24px',
-        '5xl': '28px',
+        'xs': 'var(--radius-xs)',
+        'sm': 'var(--radius-sm)',
+        'md': 'var(--radius-md)',
+        'lg': 'var(--radius-lg)',
+        'xl': 'var(--radius-xl)',
+        '2xl': 'var(--radius-2xl)',
+        '3xl': 'var(--radius-3xl)',
+        '4xl': 'calc(var(--radius-3xl) * 1.25)',
+        '5xl': 'calc(var(--radius-3xl) * 1.5)',
+        'pill': 'var(--radius-pill)',
       },
+
       boxShadow: {
-        'xs': '0 1px 1px rgba(0,0,0,0.04)',
-        '2xs': '0 0.5px 1px rgba(0,0,0,0.05)',
-        'subtle': '0 1px 2px rgba(0,0,0,0.04)',
-        'card': '0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.02)',
-        'card-hover': '0 4px 12px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        'raised': '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
-        'dropdown': '0 12px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
-        'modal': '0 24px 64px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)',
-        'float': '0 32px 80px rgba(0,0,0,0.22), 0 8px 24px rgba(0,0,0,0.10)',
-        'royal': '0 4px 14px rgba(0,122,255,0.24)',
-        'glass': '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
-        'glass-lg': '0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)',
-        'glass-subtle': 'inset 0 1px 0 0 rgba(255,255,255,0.8), 0 2px 8px -2px rgba(0,0,0,0.04)',
-        'glass-card': 'inset 0 1px 0 0 rgba(255,255,255,0.85), inset 1px 0 0 0 rgba(255,255,255,0.35), 0 8px 24px -4px rgba(0,0,0,0.05)',
-        'glass-floating': 'inset 0 1px 0 0 rgba(255,255,255,0.9), 0 24px 64px -8px rgba(0,0,0,0.10)',
-        'apple-card': '0 1px 3px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.06)',
-        'apple-float': '0 12px 32px -8px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)',
-        'glow-cyan': '0 0 20px rgba(90,200,250,0.16)',
-        'glow-vivid': '0 2px 12px rgba(0,122,255,0.18)',
+        'xs': 'var(--shadow-1)',
+        '2xs': 'var(--shadow-1)',
+        'subtle': 'var(--shadow-1)',
+        'card': 'var(--shadow-2)',
+        'card-hover': 'var(--shadow-3)',
+        'raised': 'var(--shadow-3)',
+        'dropdown': 'var(--shadow-4)',
+        'modal': 'var(--shadow-5)',
+        'float': 'var(--shadow-6)',
+        'royal': '0 4px 14px color-mix(in srgb, var(--c-blue) 24%, transparent)',
+        'glass': 'var(--shadow-2)',
+        'glass-lg': 'var(--shadow-4)',
+        'glass-subtle': 'var(--inset-top-light), var(--shadow-2)',
+        'glass-card': 'var(--inset-top-strong), var(--shadow-3)',
+        'glass-floating': 'var(--inset-top-strong), var(--shadow-6)',
+        'apple-card': 'var(--inset-top-light), var(--shadow-2)',
+        'apple-float': 'var(--inset-top-strong), var(--shadow-5)',
+        'glow-cyan': '0 0 20px color-mix(in srgb, var(--c-teal) 22%, transparent)',
+        'glow-vivid': '0 2px 14px color-mix(in srgb, var(--c-blue) 28%, transparent)',
       },
+
       backdropBlur: {
-        'glass-xs': '8px',
-        'glass-sm': '12px',
-        'glass': '20px',
-        'glass-lg': '28px',
-        'glass-xl': '36px',
-        'glass-2xl': '48px',
+        'glass-xs': 'var(--blur-1)',
+        'glass-sm': 'var(--blur-1)',
+        'glass': 'var(--blur-2)',
+        'glass-lg': 'var(--blur-3)',
+        'glass-xl': 'var(--blur-4)',
+        'glass-2xl': 'var(--blur-5)',
       },
+
       transitionTimingFunction: {
-        'apple-spring': 'cubic-bezier(0.32, 0.72, 0, 1)',
-        'apple-bounce': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'apple-glide': 'cubic-bezier(0.16, 1, 0.3, 1)',
-        'apple-snappy': 'cubic-bezier(0.2, 0.9, 0.2, 1)',
-        'apple-out': 'cubic-bezier(0.22, 1, 0.36, 1)',
+        'apple-spring': 'var(--spring-snappy)',
+        'apple-bounce': 'var(--spring-bouncy)',
+        'apple-glide': 'var(--ease-glide)',
+        'apple-snappy': 'var(--ease-apple-snappy)',
+        'apple-out': 'var(--ease-standard)',
       },
+
+      transitionDuration: {
+        'instant': 'var(--dur-instant)',
+        'fast': 'var(--dur-fast)',
+        'normal': 'var(--dur-normal)',
+        'slow': 'var(--dur-slow)',
+      },
+
       keyframes: {
         'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-        'slide-up': { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        'slide-up': { '0%': { opacity: '0', transform: 'translate3d(0, 8px, 0)' }, '100%': { opacity: '1', transform: 'translate3d(0, 0, 0)' } },
         'scale-in': { '0%': { opacity: '0', transform: 'scale(0.97)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
         'overlay-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-        'modal-in': { '0%': { opacity: '0', transform: 'scale(0.96) translateY(8px)' }, '100%': { opacity: '1', transform: 'scale(1) translateY(0)' } },
+        'modal-in': { '0%': { opacity: '0', transform: 'scale(0.96) translate3d(0, 8px, 0)' }, '100%': { opacity: '1', transform: 'scale(1) translate3d(0, 0, 0)' } },
         'shimmer': { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
         'apple-spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } },
-        'pulse-glow': { '0%, 100%': { boxShadow: '0 0 0 0 rgba(0,122,255,0.18)' }, '50%': { boxShadow: '0 0 0 6px rgba(0,122,255,0)' } },
-        'orb-drift': { '0%, 100%': { transform: 'translate(0,0) scale(1)' }, '33%': { transform: 'translate(3%,5%) scale(1.04)' }, '66%': { transform: 'translate(-2%,-3%) scale(0.97)' } },
+        'pulse-glow': { '0%, 100%': { boxShadow: '0 0 0 0 color-mix(in srgb, var(--c-blue) 18%, transparent)' }, '50%': { boxShadow: '0 0 0 6px color-mix(in srgb, var(--c-blue) 0%, transparent)' } },
+        'orb-drift': { '0%, 100%': { transform: 'translate3d(0, 0, 0) scale(1)' }, '33%': { transform: 'translate3d(3%, 5%, 0) scale(1.04)' }, '66%': { transform: 'translate3d(-2%, -3%, 0) scale(0.97)' } },
         'bell-shake': { '0%, 100%': { transform: 'rotate(0deg)' }, '20%': { transform: 'rotate(8deg)' }, '40%': { transform: 'rotate(-6deg)' }, '60%': { transform: 'rotate(4deg)' }, '80%': { transform: 'rotate(-2deg)' } },
       },
+
       animation: {
         'fade-in': 'fade-in 0.2s ease-out forwards',
         'slide-up': 'slide-up 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards',
@@ -145,6 +238,7 @@ export default {
         'orb-drift': 'orb-drift 40s ease-in-out infinite',
         'bell-shake': 'bell-shake 0.7s ease-in-out',
       },
+
       spacing: {
         '4.5': '1.125rem',
         '9.5': '2.375rem',
@@ -153,6 +247,7 @@ export default {
         '18': '4.5rem',
         '22': '5.5rem',
       },
+
       scale: {
         '97': '0.97',
       },

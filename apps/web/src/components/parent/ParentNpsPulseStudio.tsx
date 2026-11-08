@@ -69,18 +69,7 @@ export const ParentNpsPulseStudio: React.FC = () => {
           });
         }
 
-        setFeedbacks(loaded.length > 0 ? loaded : [
-          {
-            id: 'nps-fallback',
-            parentName: "Ota-ona",
-            studentName: "Amirjon Iskandarov",
-            groupName: "Pc",
-            score: 10,
-            comment: "Darslar juda qiziqarli o'tmoqda, markazga katta rahmat!",
-            createdAt: "Bugun",
-            status: 'REVIEWED',
-          }
-        ]);
+        setFeedbacks(loaded);
       } catch {
         // Fallback
       } 
@@ -187,7 +176,12 @@ export const ParentNpsPulseStudio: React.FC = () => {
 
       {/* Feedbacks Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFeedbacks.map((fb) => {
+        {filteredFeedbacks.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-xs text-slate-400 border border-dashed border-white/10 rounded-2xl p-6">
+            Hozircha ota-onalardan fikr-mulohazalar mavjud emas.
+          </div>
+        ) : (
+          filteredFeedbacks.map((fb) => {
           const isPromoter = fb.score >= 9;
           const isDetractor = fb.score <= 6;
 
@@ -256,8 +250,9 @@ export const ParentNpsPulseStudio: React.FC = () => {
               </div>
             </div>
           );
-        })}
-      </div>
+        })
+      )}
+    </div>
     </div>
   );
 };

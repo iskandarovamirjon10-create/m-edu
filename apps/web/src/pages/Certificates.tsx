@@ -273,7 +273,8 @@ export function nameHash(str: string): number {
 }
 
 export function avatarGradient(name: string): string {
-  const [a, b] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
+  const palette = AVATAR_PALETTES[Math.abs(nameHash(name || '')) % AVATAR_PALETTES.length] || AVATAR_PALETTES[0];
+  const [a, b] = palette;
   return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 }
 
@@ -2040,7 +2041,7 @@ export function CertificatesPage() {
                   />
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  {t('templates.variablesHint', `Mavjud o'zgaruvchilar: ${TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', ')}`)}
+                  {t('templates.variablesHint', `Mavjud o‘zgaruvchilar: ${TEMPLATE_VARIABLES.map((v) => `{{${v}}}`).join(', ')}`)}
                 </p>
               </GlassField>
 
@@ -2139,10 +2140,10 @@ export function CertificatesPage() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-bold leading-snug text-red-600 dark:text-red-400">
-                {t('templates.deleteConfirm', `"${deletingTemplate?.name ?? ''}" shablonini o'chirmoqchimisiz?`)}
+                {t('templates.deleteConfirm', `"${deletingTemplate?.name ?? ''}" shablonini o‘chirmoqchimisiz?`)}
               </p>
               <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                {t('templates.deleteHint', 'Bu amalni qaytarib bo\'lmaydi. Ushbu shablon asosida yaratilgan mavjud sertifikatlar saqlanib qoladi.')}
+                {t('templates.deleteHint', 'Bu amalni qaytarib bo‘lmaydi. Ushbu shablon asosida yaratilgan mavjud sertifikatlar saqlanib qoladi.')}
               </p>
             </div>
           </div>

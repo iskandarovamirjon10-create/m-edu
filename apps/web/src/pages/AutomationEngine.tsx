@@ -877,7 +877,7 @@ export function AutomationEnginePage() {
   /* State: LOADING */
   if (rulesQuery.isLoading) {
     return (
-      <div className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+      <div className="relative min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
         <div className="mx-auto w-full max-w-[1400px] space-y-6">
           <GlassPageHeader title={t('automation.title')} subtitle={t('automation.subtitle')} />
           <GlassSurface className="p-16">
@@ -898,7 +898,7 @@ export function AutomationEnginePage() {
   /* State: ERROR */
   if (rulesQuery.isError) {
     return (
-      <div className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+      <div className="relative min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
         <div className="mx-auto w-full max-w-[1400px] space-y-6">
           <GlassPageHeader title={t('automation.title')} subtitle="Connection error" />
           <GlassSurface className="p-12">
@@ -916,7 +916,7 @@ export function AutomationEnginePage() {
   const rules = rulesQuery.data ?? [];
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       <AuroraMesh variant="corporate" opacity={0.65} />
 
       <div className="relative z-10 mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8 pb-[max(6rem,env(safe-area-inset-bottom))] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-700">

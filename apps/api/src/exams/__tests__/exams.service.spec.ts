@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ExamsService } from '../exams.service';
-import { ExamType } from '@prisma/client';
+import { ExamType, Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 
 function makePrisma() {
@@ -16,12 +16,21 @@ function makePrisma() {
     },
     group: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
+    teacher: {
+      findFirst: vi.fn(),
     },
     student: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    parentStudent: {
+      findMany: vi.fn(),
     },
     studentGroup: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
     },
     examResult: {
       findMany: vi.fn(),
@@ -265,6 +274,98 @@ describe('ExamsService', () => {
       ).rejects.toThrow(NotFoundException);
       expect(prisma.examResult.create).not.toHaveBeenCalled();
     });
+
+    it('rejects teacher attempting to grade/create result for another teacher group', async () => {
+      prisma.exam.findFirst.mockResolvedValue({
+        id: 'ex-1',
+        groupId: 'grp-other',
+        group: { teacherId: 'teacher-2' },
+        passingMarks: 50,
+        totalMarks: 100,
+      });
+      prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      prisma.group.findFirst.mockResolvedValue({ id: 'grp-other', teacherId: 'teacher-2' });
+
+      await expect(
+        svc.createExamResult(
+          'org-1',
+          'ex-1',
+          { studentId: 'st-1', marksObtained: 75 },
+          { id: 'user-teacher-1', role: Role.TEACHER },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.examResult.create).not.toHaveBeenCalled();
+    });
+
+    it('allows teacher assigned to group to grade/create result', async () => {
+      prisma.exam.findFirst.mockResolvedValue({
+        id: 'ex-1',
+        groupId: 'grp-1',
+        group: { teacherId: 'teacher-1' },
+        passingMarks: 50,
+        totalMarks: 100,
+      });
+      prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      prisma.group.findFirst.mockResolvedValue({ id: 'grp-1', teacherId: 'teacher-1' });
+      prisma.student.findFirst.mockResolvedValue({ id: 'st-1' });
+      prisma.studentGroup.findFirst.mockResolvedValue({ studentId: 'st-1' });
+      prisma.examResult.findFirst.mockResolvedValue(null);
+      prisma.examResult.create.mockResolvedValue({ id: 'res-1', grade: 'B', isPassed: true });
+
+      const res = await svc.createExamResult(
+        'org-1',
+        'ex-1',
+        { studentId: 'st-1', marksObtained: 75 },
+        { id: 'user-teacher-1', role: Role.TEACHER },
+      );
+
+      expect(prisma.examResult.create).toHaveBeenCalled();
+      expect(res.id).toBe('res-1');
+    });
+  });
+
+  describe('getExamResults', () => {
+    it('rejects teacher attempting to view results for another teacher group', async () => {
+      prisma.exam.findFirst.mockResolvedValue({
+        id: 'ex-1',
+        groupId: 'grp-other',
+        group: { id: 'grp-other', teacherId: 'teacher-2' },
+      });
+      prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+
+      await expect(
+        svc.getExamResults('org-1', 'ex-1', undefined, { id: 'user-teacher-1', role: Role.TEACHER }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('restricts student to only their own result, preventing viewing other students results', async () => {
+      prisma.exam.findFirst.mockResolvedValue({
+        id: 'ex-1',
+        groupId: 'grp-1',
+        isPublished: true,
+      });
+      prisma.student.findUnique.mockResolvedValue({ id: 'student-own-id', organizationId: 'org-1' });
+      prisma.studentGroup.findFirst.mockResolvedValue({ studentId: 'student-own-id', groupId: 'grp-1' });
+      prisma.examResult.findMany.mockResolvedValue([
+        { id: 'res-own', studentId: 'student-own-id', marksObtained: 90 },
+      ]);
+
+      const res = await svc.getExamResults('org-1', 'ex-1', 'other-student-id', {
+        id: 'user-student-1',
+        role: Role.STUDENT,
+      });
+
+      expect(prisma.examResult.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            examId: 'ex-1',
+            organizationId: 'org-1',
+            studentId: 'student-own-id',
+          }),
+        }),
+      );
+      expect(res.results).toHaveLength(1);
+    });
   });
 
   describe('getExamStats', () => {
@@ -334,6 +435,70 @@ describe('ExamsService', () => {
       expect(res.statistics.totalExams).toBe(1);
       expect(res.statistics.gpa).toBe(0);
       expect(Number.isNaN(res.statistics.gpa)).toBe(false);
+    });
+
+    it('rejects student attempting to view another student exam results', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'st-other',
+        userId: 'user-other',
+        organizationId: 'org-1',
+        parentStudents: [],
+      });
+
+      await expect(
+        svc.getStudentExamResults('org-1', 'st-other', { id: 'user-me', role: Role.STUDENT }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows student to view their own exam results', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'st-own',
+        userId: 'user-me',
+        organizationId: 'org-1',
+        parentStudents: [],
+      });
+      prisma.examResult.findMany.mockResolvedValue([]);
+
+      const res = await svc.getStudentExamResults('org-1', 'st-own', {
+        id: 'user-me',
+        role: Role.STUDENT,
+      });
+
+      expect(res.student.id).toBe('st-own');
+    });
+
+    it('rejects teacher viewing results of a student not in their groups', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'st-1',
+        userId: 'user-st-1',
+        organizationId: 'org-1',
+        parentStudents: [],
+      });
+      prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      prisma.studentGroup.findFirst.mockResolvedValue(null);
+
+      await expect(
+        svc.getStudentExamResults('org-1', 'st-1', { id: 'user-teacher-1', role: Role.TEACHER }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('allows teacher to view results of a student in their assigned groups', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'st-1',
+        userId: 'user-st-1',
+        organizationId: 'org-1',
+        parentStudents: [],
+      });
+      prisma.teacher.findFirst.mockResolvedValue({ id: 'teacher-1' });
+      prisma.studentGroup.findFirst.mockResolvedValue({ studentId: 'st-1', groupId: 'grp-1' });
+      prisma.examResult.findMany.mockResolvedValue([]);
+
+      const res = await svc.getStudentExamResults('org-1', 'st-1', {
+        id: 'user-teacher-1',
+        role: Role.TEACHER,
+      });
+
+      expect(res.student.id).toBe('st-1');
     });
   });
 });

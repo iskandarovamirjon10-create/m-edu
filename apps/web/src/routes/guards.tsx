@@ -176,6 +176,11 @@ export function Protected({
     return <Navigate to={`/login${returnTo}`} replace />;
   }
 
+  if (user.mustChangePassword) {
+    return <Navigate to="/login" replace />;
+  }
+
+
   if (roles?.length) {
     let allowed = false;
     try {
@@ -224,6 +229,9 @@ export function PublicOnly({ children }: { children: ReactNode }) {
   }
 
   if (user) {
+    if (user.mustChangePassword) {
+      return <>{children}</>;
+    }
     const params = new URLSearchParams(location.search);
     const safe = sanitizeReturnTo(params.get('returnTo'), '/');
     return <Navigate to={safe} replace />;

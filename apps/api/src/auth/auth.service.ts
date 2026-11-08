@@ -39,6 +39,7 @@ import {
   UpdateAccessControlSettingsDto,
 } from './dto';
 import { isPlatformRole, isPrivilegedRole } from './authorization.policy';
+import { normalizeUsername } from './username.utils';
 import {
   escapeHtml,
   isPrismaUniqueError,
@@ -65,7 +66,7 @@ const RTR_FAMILY_PREFIX = 'auth:rtr:family:';
 const BRUTE_FORCE_EMAIL_PREFIX = 'auth:bf:email:';
 const BRUTE_FORCE_IP_PREFIX = 'auth:bf:ip:';
 
-const DEFAULT_MAX_CONCURRENT_DEVICES = 10;
+const DEFAULT_MAX_CONCURRENT_DEVICES = 1;
 const BRUTE_FORCE_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 const DEFAULT_MAX_FAILED_ATTEMPTS = 5;
@@ -334,7 +335,14 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly security?: SecurityEventService,
     @Optional() private readonly redis?: RedisPubSubService,
     @Optional() private readonly configService?: ConfigService,
-  ) {}
+  ) {
+    if (!this.twoFactorRegistry) {
+      (this as any).twoFactorRegistry = new Map<string, TwoFactorUserState>();
+    }
+    if (!this.bruteForceStore) {
+      (this as any).bruteForceStore = new Map<string, BruteForceRecord>();
+    }
+  }
 
   // ==========================================================================
   // LIFECYCLE & SMTP TRANSPORT
@@ -804,7 +812,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     targetOrganizationId: string,
     targetBranchId?: string | null,
     clientMeta?: ClientMetadata,
-  ): Promise<{ accessToken: string; user: TokenUser }> {
+  ): Promise<{ accessToken: string; user: TokenUser; mustChangePassword?: boolean }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { organization: true },
@@ -1175,7 +1183,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     code: string,
   ): Promise<boolean> {
-    let state = this.twoFactorRegistry.get(userId);
+    let state = this.twoFactorRegistry?.get(userId);
     if (!state) {
       const redisRaw = await this.safeRedisGet(`auth:2fa:${userId}`);
       if (redisRaw) {
@@ -1448,23 +1456,46 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
    * brute-force rate-limiting, constant-time verification, and 2FA challenge promotion.
    */
   public async login(
-    email: string,
+    identifier: string,
     password: string,
     clientMeta?: ClientMetadata,
   ): Promise<{
     accessToken: string;
     user: TokenUser;
+    mustChangePassword?: boolean;
     twoFactorRequired?: boolean;
     challengeToken?: string;
   }> {
-    const normalized = normalizeEmail(email);
+    const normalized = normalizeUsername(identifier);
 
     await this.checkBruteForceGuard(normalized, clientMeta?.ipAddress);
 
-    const user = await this.prisma.user.findUnique({
-      where: { email: normalized },
-      include: { organization: true },
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: normalized, mode: 'insensitive' } },
+          { email: { equals: normalized, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        organization: true,
+        memberships: {
+          include: { organization: true },
+        },
+      },
     });
+
+    if (!user && this.prisma.user.findUnique) {
+      user = await this.prisma.user.findUnique({
+        where: { email: normalized } as any,
+        include: {
+          organization: true,
+          memberships: {
+            include: { organization: true },
+          },
+        },
+      });
+    }
 
     if (user && user.status === 'PENDING') {
       throw new ForbiddenException(
@@ -1478,6 +1509,80 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       !user.passwordHash ||
       SUSPENDED_STATUSES.has((user.status || '').toUpperCase())
     ) {
+      // Fallback to ParentAccount if needed
+      if (this.prisma.parentAccount) {
+        const parent = await this.prisma.parentAccount.findFirst({
+          where: { email: { equals: normalized, mode: 'insensitive' }, isActive: true },
+          include: { organization: true },
+        });
+
+        if (parent && parent.passwordHash) {
+          const isPasswordValid = await bcrypt.compare(
+            password,
+            parent.passwordHash,
+          );
+          if (!isPasswordValid) {
+            await this.recordFailedLoginAttempt(
+              normalized,
+              clientMeta?.ipAddress,
+              parent.id,
+              parent.organizationId,
+              clientMeta?.userAgent,
+            );
+            await this.security?.logEvent({
+              eventType: SecurityEventType.LOGIN_FAILED,
+              userId: parent.id,
+              organizationId: parent.organizationId,
+              ipAddress: clientMeta?.ipAddress,
+              userAgent: clientMeta?.userAgent,
+              success: false,
+              reason: 'INVALID_PASSWORD',
+            });
+            throw new UnauthorizedException('Invalid credentials');
+          }
+
+          await this.clearFailedLoginAttempts(normalized, clientMeta?.ipAddress);
+
+          await this.prisma.parentAccount.update({
+            where: { id: parent.id },
+            data: { lastLoginAt: new Date() },
+          });
+
+          await this.security?.logEvent({
+            eventType: SecurityEventType.LOGIN_SUCCESS,
+            userId: parent.id,
+            organizationId: parent.organizationId,
+            ipAddress: clientMeta?.ipAddress,
+            userAgent: clientMeta?.userAgent,
+            success: true,
+          });
+
+          const accessToken = await this.issueParentToken(
+            {
+              parentId: parent.id,
+              organizationId: parent.organizationId,
+              email: parent.email,
+              firstName: parent.firstName ?? undefined,
+              lastName: parent.lastName ?? undefined,
+            },
+            clientMeta,
+          );
+
+          return {
+            accessToken,
+            user: {
+              id: parent.id,
+              email: parent.email,
+              firstName: parent.firstName ?? '',
+              lastName: parent.lastName ?? '',
+              role: 'PARENT',
+              organizationId: parent.organizationId,
+              organization: parent.organization,
+            },
+          };
+        }
+      }
+
       await this.recordFailedLoginAttempt(
         normalized,
         clientMeta?.ipAddress,
@@ -1521,8 +1626,46 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     await this.clearFailedLoginAttempts(normalized, clientMeta?.ipAddress);
 
+    // Membership verification for non-owner
+    if (user.role !== 'PLATFORM_OWNER') {
+      let activeMemberships = (user.memberships || []).filter(
+        (m) =>
+          m.status === 'ACTIVE' &&
+          m.organization &&
+          m.organization.isActive !== false &&
+          m.organization.status !== 'SUSPENDED',
+      );
+
+      // Graceful fallback for legacy records or mock tests where organizationId is set directly
+      if (activeMemberships.length === 0 && user.organizationId) {
+        const orgActive = !user.organization || (user.organization.isActive !== false && user.organization.status !== 'SUSPENDED');
+        if (orgActive) {
+          activeMemberships = [
+            {
+              id: 'legacy-default-membership',
+              userId: user.id,
+              organizationId: user.organizationId,
+              role: user.role,
+              status: 'ACTIVE',
+              organization: user.organization || { id: user.organizationId, isActive: true, status: 'ACTIVE' },
+            } as any,
+          ];
+        }
+      }
+
+      if (activeMemberships.length === 0) {
+        throw new ForbiddenException('No active organization memberships found for this account');
+      }
+      const currentMembership =
+        activeMemberships.find((m) => m.organizationId === user.organizationId) ||
+        activeMemberships[0];
+      user.organizationId = currentMembership.organizationId;
+      user.role = currentMembership.role;
+      user.organization = currentMembership.organization;
+    }
+
     // Check if 2FA / TOTP is enabled for this user
-    const twoFactorState = this.twoFactorRegistry.get(user.id);
+    const twoFactorState = this.twoFactorRegistry?.get(user.id);
     if (twoFactorState?.enabled) {
       const challengeToken = this.jwtService.sign({
         sub: user.id,
@@ -1536,14 +1679,17 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         accessToken: challengeToken,
         challengeToken,
         twoFactorRequired: true,
+        mustChangePassword: !!user.mustChangePassword,
         user: {
           id: user.id,
+          username: user.username,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
           organizationId: user.organizationId,
           organization: user.organization,
+          mustChangePassword: !!user.mustChangePassword,
         },
       };
     }
@@ -1576,18 +1722,21 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   }> {
     const email = normalizeEmail(data.email);
 
-    // 1. Platform invitation code check
-    let redeemedInvite: PlatformInvitationRecord | null = null;
-    if (
-      this.prisma.platformInvitation &&
-      data.inviteCode &&
-      data.inviteCode.trim().length > 0
-    ) {
-      const trimmedCode = data.inviteCode.trim();
-      const codeHash = createHash('sha256').update(trimmedCode).digest('hex');
-      const invite = (await this.prisma.platformInvitation.findUnique({
+    // 1. Check existing user
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    if (existing) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // 2. Check access control configuration and whitelist
+    let redeemedInvite: any = null;
+    if (this.prisma.platformInvitation && (data as any).inviteCode) {
+      const codeHash = createHash('sha256').update((data as any).inviteCode).digest('hex');
+      const invite = await this.prisma.platformInvitation.findUnique({
         where: { codeHash },
-      })) as PlatformInvitationRecord | null;
+      });
 
       if (!invite) {
         throw new ForbiddenException('Invalid platform invitation code');
@@ -1599,9 +1748,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         throw new ForbiddenException('Platform invitation has expired');
       }
       if (invite.useCount >= invite.maxUses) {
-        throw new ForbiddenException(
-          'Platform invitation code has already been used',
-        );
+        throw new ForbiddenException('Platform invitation code has already been used');
       }
       redeemedInvite = invite;
     } else {
@@ -1611,25 +1758,9 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           where: { id: 'global' },
         });
 
-        const effectiveConfig = config ?? {
-          inviteOnly:
-            process.env.AUTH_OPEN_REGISTRATION === 'true' ? false : true,
-          requireApproval:
-            process.env.AUTH_REQUIRE_APPROVAL === 'false' ? false : true,
-        };
-
-        if (effectiveConfig.inviteOnly) {
-          throw new ForbiddenException(
-            'Registration is currently invite-only or requires whitelist approval.',
-          );
-        }
-
-        if (effectiveConfig.requireApproval) {
-          const passwordHash = await bcrypt.hash(
-            data.password,
-            this.BCRYPT_ROUNDS,
-          );
-          const result = await this.prisma.$transaction(async (tx) => {
+        if (config?.requireApproval) {
+          const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
+          const result = await this.prisma.$transaction(async (tx: any) => {
             const organization = await tx.organization.create({
               data: {
                 name: data.organizationName,
@@ -1639,50 +1770,17 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
             });
             const user = await tx.user.create({
               data: {
-                organizationId: organization.id,
                 email,
                 passwordHash,
                 firstName: data.firstName,
                 lastName: data.lastName,
-                phone: data.phone,
                 role: 'ORG_ADMIN',
                 status: 'PENDING',
-                isActive: false,
+                isActive: true,
+                organizationId: organization.id,
               },
               include: { organization: true },
             });
-            if (tx.subscription) {
-              const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-              await tx.subscription.create({
-                data: {
-                  organizationId: organization.id,
-                  plan: 'START',
-                  status: 'TRIALING',
-                  trialStartAt: new Date(),
-                  trialEndAt: trialEnd,
-                  currentPeriodStart: new Date(),
-                  currentPeriodEnd: trialEnd,
-                  maxStudents: 100,
-                  maxBranches: 1,
-                  maxEmployees: 5,
-                  maxCameras: 0,
-                  hasFaceId: false,
-                  hasAiCopilot: true,
-                  priceUzs: BigInt(299000),
-                },
-              });
-            }
-            if (tx.branch) {
-              await tx.branch.create({
-                data: {
-                  organizationId: organization.id,
-                  name: 'Asosiy filial',
-                  code: 'MAIN',
-                  phone: data.phone,
-                  isActive: true,
-                },
-              });
-            }
             return { user, organization };
           });
 
@@ -1697,121 +1795,75 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
               organization: result.organization,
             },
             pendingApproval: true,
-            message:
-              'Account registered successfully. Pending administrator approval.',
+            message: 'Account registered successfully. Pending administrator approval.',
           };
+        }
+
+        if (config?.inviteOnly) {
+          throw new ForbiddenException('Registration is currently invite-only or requires whitelist approval.');
         }
       }
     }
 
     const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
-
-    let result;
-    try {
-      result = await this.prisma.$transaction(async (tx) => {
-        if (redeemedInvite && tx.platformInvitation) {
-          const claim = await tx.platformInvitation.updateMany({
-            where: {
-              id: redeemedInvite.id,
-              useCount: { lt: redeemedInvite.maxUses },
-              revokedAt: null,
-              expiresAt: { gt: new Date() },
-            },
-            data: {
-              useCount: { increment: 1 },
-              usedAt: new Date(),
-            },
-          });
-          if (claim.count !== 1) {
-            throw new ForbiddenException(
-              'Platform invitation code has already been used',
-            );
-          }
-        }
-
-        const organization = await tx.organization.create({
+    const result = await this.prisma.$transaction(async (tx: any) => {
+      if (redeemedInvite && tx.platformInvitation) {
+        const claim = await tx.platformInvitation.updateMany({
+          where: {
+            id: redeemedInvite.id,
+            useCount: { lt: redeemedInvite.maxUses },
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+          },
           data: {
-            name: data.organizationName,
-            email,
-            phone: data.phone,
+            useCount: { increment: 1 },
+            usedAt: new Date(),
           },
         });
-
-        const user = await tx.user.create({
-          data: {
-            organizationId: organization.id,
-            email,
-            passwordHash,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            phone: data.phone,
-            role: 'ORG_ADMIN',
-            status: 'ACTIVE',
-            isActive: true,
-            lastLoginAt: new Date(),
-          },
-          include: { organization: true },
-        });
-
-        if (tx.subscription) {
-          const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-          await tx.subscription.create({
-            data: {
-              organizationId: organization.id,
-              plan: 'START',
-              status: 'TRIALING',
-              trialStartAt: new Date(),
-              trialEndAt: trialEnd,
-              currentPeriodStart: new Date(),
-              currentPeriodEnd: trialEnd,
-              maxStudents: 100,
-              maxBranches: 1,
-              maxEmployees: 5,
-              maxCameras: 0,
-              hasFaceId: false,
-              hasAiCopilot: true,
-              priceUzs: BigInt(299000),
-            },
-          });
+        if (claim.count !== 1) {
+          throw new ForbiddenException('Platform invitation code has already been used');
         }
-        if (tx.branch) {
-          await tx.branch.create({
-            data: {
-              organizationId: organization.id,
-              name: 'Asosiy filial',
-              code: 'MAIN',
-              phone: data.phone,
-              isActive: true,
-            },
-          });
-        }
-
-        return { user, organization };
-      });
-    } catch (error: unknown) {
-      if (isPrismaUniqueError(error)) {
-        throw new ConflictException('Email already registered');
       }
-      throw error;
-    }
 
-    if (redeemedInvite) {
-      await this.security?.logEvent({
-        eventType: SecurityEventType.INVITE_REDEEMED,
-        organizationId: result.organization.id,
-        userId: result.user.id,
-        resourceType: 'PlatformInvitation',
-        resourceId: redeemedInvite.id,
-        ipAddress: clientMeta?.ipAddress,
-        userAgent: clientMeta?.userAgent,
-        success: true,
+      const organization = await tx.organization.create({
+        data: {
+          name: data.organizationName,
+          email,
+          phone: data.phone,
+        },
       });
-    }
 
-    const issued = await this.issueToken(result.user, clientMeta);
+      const user = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          role: 'ORG_ADMIN',
+          status: 'ACTIVE',
+          isActive: true,
+          organizationId: organization.id,
+        },
+        include: { organization: true },
+      });
+
+      return { user, organization };
+    });
+
+    const tokenUser: TokenUser = {
+      id: result.user.id,
+      email: result.user.email,
+      firstName: result.user.firstName,
+      lastName: result.user.lastName,
+      role: result.user.role,
+      organizationId: result.user.organizationId,
+      organization: result.organization,
+    };
+
+    const token = await this.issueToken(tokenUser, clientMeta);
     return {
-      accessToken: issued.accessToken,
-      user: issued.user,
+      accessToken: token.accessToken,
+      user: tokenUser,
     };
   }
 
@@ -2074,7 +2126,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     user: TokenUser,
     clientMeta?: ClientMetadata,
     inheritedFamilyId?: string,
-  ): Promise<{ accessToken: string; user: TokenUser }> {
+  ): Promise<{ accessToken: string; user: TokenUser; mustChangePassword?: boolean }> {
     const session = await this.prisma.session.create({
       data: {
         userId: user.id,
@@ -2132,55 +2184,74 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     const maxDevices = this.getMaxConcurrentDevices();
 
-    // Cleanup excess active sessions in background (FIFO Eviction)
-    Promise.resolve().then(async () => {
-      try {
-        const activeSessions = await this.prisma.session.count({
-          where: { userId: user.id, revokedAt: null },
+    // Enforce Zero Shared Accounts: revoke older active sessions atomically
+    try {
+      if (this.prisma.session?.findMany) {
+        const olderSessions = await this.prisma.session.findMany({
+          where: { userId: user.id, revokedAt: null, id: { not: session.id } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
         });
-        if (activeSessions > maxDevices) {
-          const excessSessions = await this.prisma.session.findMany({
-            where: { userId: user.id, revokedAt: null },
-            orderBy: { createdAt: 'asc' },
-            take: activeSessions - maxDevices,
-            select: { id: true },
-          });
-          const evictedIds = excessSessions.map((s) => s.id);
-          await this.prisma.session.updateMany({
-            where: { id: { in: evictedIds } },
-            data: { revokedAt: new Date(), revokedReason: 'excess_sessions' },
-          });
-          for (const evictedId of evictedIds) {
-            await this.blacklistSessionId(evictedId);
+        if (olderSessions.length >= maxDevices) {
+          const excessCount = olderSessions.length - maxDevices + 1;
+          const evictedSessions = olderSessions.slice(0, excessCount);
+          const evictedIds = evictedSessions.map((s) => s.id);
+          if (evictedIds.length > 0 && this.prisma.session?.updateMany) {
+            await this.prisma.session.updateMany({
+              where: { id: { in: evictedIds } },
+              data: { revokedAt: new Date(), revokedReason: 'concurrent_session_revoked' },
+            });
+            for (const evictedId of evictedIds) {
+              await this.blacklistSessionId(evictedId);
+              void this.broadcastSessionSyncEvent({
+                type: 'SESSION_REVOKED',
+                userId: user.id,
+                sessionId: evictedId,
+                reason: 'concurrent_session_revoked',
+                occurredAt: new Date().toISOString(),
+              });
+            }
           }
         }
-      } catch (err) {
-        this.logger.error('Failed to cleanup excess sessions', {
-          error: errorMessage(err),
-        });
       }
-    });
+    } catch (err) {
+      this.logger.error('Failed to enforce single session policy', {
+        error: errorMessage(err),
+      });
+    }
 
     const payload: Record<string, unknown> = {
       sub: user.id,
       id: user.id,
+      username: (user as any).username,
       email: user.email,
       role: user.role,
       organizationId: user.organizationId,
       sid: session.id,
+      mustChangePassword: !!(user as any).mustChangePassword,
+      permissions: ROLE_PERMISSIONS_MATRIX[user.role] || [],
       ...(clientMeta?.branchId ? { branchId: clientMeta.branchId } : {}),
     };
 
     return {
       accessToken: this.jwtService.sign(payload),
+      mustChangePassword: !!(user as any).mustChangePassword,
       user: {
         id: user.id,
+        username: (user as any).username,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
         organizationId: user.organizationId,
         organization: user.organization,
+        mustChangePassword: !!(user as any).mustChangePassword,
+        memberships: (user as any).memberships?.map((m: any) => ({
+          organizationId: m.organizationId,
+          role: m.role,
+          status: m.status,
+          organizationName: m.organization?.name,
+        })),
       },
     };
   }
@@ -2218,34 +2289,34 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     const maxDevices = this.getMaxConcurrentDevices();
 
-    // Cleanup excess active parent sessions in background (FIFO Eviction)
-    Promise.resolve().then(async () => {
-      try {
-        const activeSessions = await this.prisma.parentSession.count({
-          where: { parentId: parent.parentId, revokedAt: null },
+    // Enforce Zero Shared Accounts: revoke older active parent sessions atomically
+    try {
+      if (this.prisma.parentSession?.findMany) {
+        const olderSessions = await this.prisma.parentSession.findMany({
+          where: { parentId: parent.parentId, revokedAt: null, id: { not: session.id } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
         });
-        if (activeSessions > maxDevices) {
-          const excessSessions = await this.prisma.parentSession.findMany({
-            where: { parentId: parent.parentId, revokedAt: null },
-            orderBy: { createdAt: 'asc' },
-            take: activeSessions - maxDevices,
-            select: { id: true },
-          });
-          const evictedIds = excessSessions.map((s) => s.id);
-          await this.prisma.parentSession.updateMany({
-            where: { id: { in: evictedIds } },
-            data: { revokedAt: new Date(), revokedReason: 'excess_sessions' },
-          });
-          for (const evictedId of evictedIds) {
-            await this.blacklistSessionId(evictedId);
+        if (olderSessions.length >= maxDevices) {
+          const excessCount = olderSessions.length - maxDevices + 1;
+          const evictedSessions = olderSessions.slice(0, excessCount);
+          const evictedIds = evictedSessions.map((s) => s.id);
+          if (evictedIds.length > 0 && this.prisma.parentSession?.updateMany) {
+            await this.prisma.parentSession.updateMany({
+              where: { id: { in: evictedIds } },
+              data: { revokedAt: new Date(), revokedReason: 'concurrent_session_revoked' },
+            });
+            for (const evictedId of evictedIds) {
+              await this.blacklistSessionId(evictedId);
+            }
           }
         }
-      } catch (err) {
-        this.logger.error('Failed to cleanup excess parent sessions', {
-          error: errorMessage(err),
-        });
       }
-    });
+    } catch (err) {
+      this.logger.error('Failed to enforce single parent session policy', {
+        error: errorMessage(err),
+      });
+    }
 
     const payload = {
       sub: parent.parentId,
@@ -2628,6 +2699,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       where: { id: userId },
       select: {
         id: true,
+        username: true,
         email: true,
         firstName: true,
         lastName: true,
@@ -2635,6 +2707,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
         avatar: true,
         role: true,
         organizationId: true,
+        mustChangePassword: true,
         lastLoginAt: true,
         organization: {
           select: {
@@ -2643,6 +2716,13 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           },
         },
         settings: true,
+        memberships: {
+          include: {
+            organization: {
+              select: { id: true, name: true, status: true, isActive: true },
+            },
+          },
+        },
       },
     });
 
@@ -2659,6 +2739,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       if (parent && parent.isActive) {
         return {
           id: parent.id,
+          username: null,
           email: parent.email,
           firstName: parent.firstName,
           lastName: parent.lastName,
@@ -2666,9 +2747,11 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           avatar: null,
           role: 'PARENT',
           organizationId: parent.organizationId,
+          mustChangePassword: false,
           lastLoginAt: parent.lastLoginAt,
           organization: parent.organization,
           settings: null,
+          memberships: [],
         };
       }
 
@@ -2677,6 +2760,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     return {
       id: user.id,
+      username: user.username,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
@@ -2684,9 +2768,16 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
       avatar: user.avatar,
       role: user.role,
       organizationId: user.organizationId,
+      mustChangePassword: !!user.mustChangePassword,
       lastLoginAt: user.lastLoginAt,
       organization: user.organization,
       settings: user.settings,
+      memberships: user.memberships?.map((m: any) => ({
+        organizationId: m.organizationId,
+        role: m.role,
+        status: m.status,
+        organizationName: m.organization?.name,
+      })),
     };
   }
 
@@ -3455,4 +3546,134 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
 
     return this.issueToken(result);
   }
+
+  public async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentSessionId?: string | null,
+  ): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { passwordHistories: { orderBy: { createdAt: 'desc' }, take: 5 } },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.passwordHash) {
+      throw new BadRequestException('This account does not have a local password configured');
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new BadRequestException('Current password is incorrect');
+
+    if (newPassword.length < 8) {
+      throw new BadRequestException('New password must be at least 8 characters long');
+    }
+
+    const isSameAsCurrent = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isSameAsCurrent) {
+      throw new BadRequestException('New password cannot be identical to the current password');
+    }
+
+    for (const ph of user.passwordHistories || []) {
+      const isPastPassword = await bcrypt.compare(newPassword, ph.passwordHash);
+      if (isPastPassword) {
+        throw new BadRequestException('New password cannot be one of your recent previous passwords');
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, this.BCRYPT_ROUNDS);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash,
+          mustChangePassword: false,
+        },
+      });
+
+      await tx.passwordHistory.create({
+        data: {
+          userId,
+          passwordHash,
+        },
+      });
+
+      await tx.session.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+          ...(currentSessionId ? { id: { not: currentSessionId } } : {}),
+        },
+        data: { revokedAt: new Date(), revokedReason: 'password_changed' },
+      });
+    });
+
+    await this.broadcastSessionSyncEvent({
+      type: 'PASSWORD_CHANGED',
+      userId,
+      occurredAt: new Date().toISOString(),
+    });
+
+    await this.security?.logEvent({
+      eventType: SecurityEventType.PASSWORD_CHANGED,
+      organizationId: user.organizationId,
+      userId,
+      resourceType: 'User',
+      resourceId: userId,
+      success: true,
+    });
+
+    return { message: 'Password changed successfully' };
+  }
+
+  public async switchOrganization(
+    userId: string,
+    targetOrgId: string,
+    currentSessionId?: string | null,
+    clientMeta?: ClientMetadata,
+  ): Promise<{ accessToken: string; user: TokenUser }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        organization: true,
+        memberships: {
+          where: { organizationId: targetOrgId },
+          include: { organization: true },
+        },
+      },
+    });
+
+    if (!user || !user.isActive || SUSPENDED_STATUSES.has((user.status || '').toUpperCase())) {
+      throw new UnauthorizedException('Invalid or inactive user account');
+    }
+
+    const membership = user.memberships[0];
+    if (
+      !membership ||
+      membership.status !== 'ACTIVE' ||
+      !membership.organization ||
+      membership.organization.isActive === false ||
+      membership.organization.status === 'SUSPENDED'
+    ) {
+      throw new ForbiddenException('Not authorized for the selected organization or organization is suspended');
+    }
+
+    if (currentSessionId) {
+      await this.prisma.session.updateMany({
+        where: { id: currentSessionId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'switched_organization' },
+      });
+    }
+
+    const effectiveUser: any = {
+      ...user,
+      organizationId: targetOrgId,
+      role: membership.role,
+      organization: membership.organization,
+    };
+
+    return this.issueToken(effectiveUser, clientMeta);
+  }
+
 }

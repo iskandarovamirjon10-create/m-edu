@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { GamificationHubPage } from '../GamificationHub';
 import request from '@/lib/api';
 
@@ -164,7 +166,13 @@ function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <MemoryRouter>
+      <I18nProvider>
+        <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+      </I18nProvider>
+    </MemoryRouter>
+  );
 }
 
 describe('GamificationHubPage', () => {

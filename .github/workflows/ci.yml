@@ -16,6 +16,10 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
+      # Dependency audit gate: fail on CRITICAL advisories in production deps
+      # only, so a flood of dev-only/low advisories does not block every push.
+      - name: Dependency audit (production, critical only)
+        run: npm audit --omit=dev --audit-level=critical
 
   typecheck:
     needs: install
@@ -51,6 +55,11 @@ jobs:
         run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - name: Lint
         run: npm run lint
+      # DS-06 ratchet: the existing hardcoded Cyrillic debt is frozen in
+      # scripts/i18n-cyrillic-baseline.json. New literals fail; migrating old
+      # ones is always allowed.
+      - name: Hardcoded Cyrillic ratchet
+        run: node scripts/check-hardcoded-cyrillic.cjs
 
   test:
     needs: install
@@ -104,8 +113,13 @@ jobs:
         run: npm ci
       - name: Prisma generate
         run: npx prisma generate --schema apps/api/prisma/schema.prisma
-      - name: Unit tests
-        run: npm run test
+      # TEST-01: coverage was configured in both vitest configs but never
+      # executed, so the 70/60 thresholds could not fail a build. Run the suite
+      # through --coverage so the gate is real.
+      - name: Unit tests with coverage
+        run: |
+          npm run test -w @medu/api -- --coverage
+          npm run test -w @medu/web -- --coverage
       - name: Prisma validate
         run: npx prisma validate --schema apps/api/prisma/schema.prisma
       - name: Prisma migrate status

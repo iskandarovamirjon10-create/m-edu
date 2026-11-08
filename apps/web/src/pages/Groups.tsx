@@ -45,7 +45,7 @@ import { getErrorMessage } from '@/lib/errorMessages';
 import { fullName } from '@/lib/format';
 import type { Paginated, Group, Course, Teacher } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -363,12 +363,12 @@ function buildGroupInspectorPayload(
     },
     metrics: [
       {
-        label: "O'quvchilar",
+        label: "O‘quvchilar",
         value: capacityStr,
         subtext: group.capacity ? `To'lganlik: ${ratioPct}%` : 'Cheklovsiz sig‘im',
       },
       {
-        label: "O'qituvchi",
+        label: "O‘qituvchi",
         value: teacherName,
         subtext: 'Asosiy murabbiy',
       },
@@ -386,9 +386,9 @@ function buildGroupInspectorPayload(
     details: [
       { label: 'Guruh nomi', value: group.name },
       { label: 'Kurs yo‘nalishi', value: group.course?.name || '—' },
-      { label: "Mas'ul o'qituvchi", value: teacherName },
+      { label: "Masʼul o‘qituvchi", value: teacherName },
       { label: 'Biriktirilgan xona', value: group.room || 'Belgilanmagan' },
-      { label: "Talabalar sig'imi", value: capacityStr },
+      { label: "Talabalar sig‘imi", value: capacityStr },
       {
         label: 'Boshlanish sanasi',
         value: group.startDate ? new Date(group.startDate).toLocaleDateString('uz-UZ') : '—',
@@ -401,7 +401,7 @@ function buildGroupInspectorPayload(
       group.capacity ? `${ratioPct}% band` : '',
     ].filter(Boolean),
     primaryAction: {
-      label: "Batafsil guruhga o'tish",
+      label: "Batafsil guruhga o‘tish",
       onExecute: () => navigate(`/groups/${group.id}`),
     },
     secondaryAction: {
@@ -664,7 +664,7 @@ function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
  * ========================================================================== */
 
 export function GroupsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('groups.title'));
   const navigate = useNavigate();
   const sound = usePremiumSound();
@@ -1045,10 +1045,10 @@ export function GroupsPage() {
         'ID',
         'Guruh nomi',
         'Kurs',
-        "O'qituvchi",
+        "O‘qituvchi",
         'Xona',
-        "O'quvchilar soni",
-        "Sig'im",
+        "O‘quvchilar soni",
+        "Sig‘im",
         'Holati',
         'Boshlanish sanasi',
       ];
@@ -1149,7 +1149,7 @@ export function GroupsPage() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container space-y-5"
+      className="page-container relative isolate max-w-7xl space-y-5 pb-[max(6rem,env(safe-area-inset-bottom))] 2xl:max-w-[1600px] 3xl:max-w-[1800px]"
     >
       <AuroraMesh variant="corporate" opacity={0.65} />
       {toastNode}
@@ -2262,7 +2262,7 @@ export function GroupsPage() {
             onClick: handleExportSelectedGroupsCSV,
           },
           {
-            label: "O'chirish",
+            label: "O‘chirish",
             shortcut: 'D',
             icon: <Icon paths={I.trash} size={13} strokeWidth={2} />,
             variant: 'destructive',

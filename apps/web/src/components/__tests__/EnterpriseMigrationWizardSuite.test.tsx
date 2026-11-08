@@ -97,14 +97,32 @@ describe('Enterprise Migration & School Launch Wizard Suite', () => {
       expect(excelBtn).toBeInTheDocument();
     });
 
-    it('loads sample Modme data and renders telemetry and preview table', () => {
-      renderWithClient(<ModmeExcelMigrationStudio />, 'uz');
-      const sampleBtn = screen.getByText(/Namunaviy Ma’lumotlar bilan Sinash/i);
-      fireEvent.click(sampleBtn);
+    it('ships no demo students and downloads a header-only template', async () => {
+      const blobs: Blob[] = [];
+      const originalCreate = URL.createObjectURL;
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        blobs.push(blob);
+        return 'blob:template';
+      });
 
-      expect(screen.getByText(/Aniqlangan O‘quvchilar/i)).toBeInTheDocument();
-      expect(screen.getAllByText(/Abdurashidov Bilolbek/i).length).toBeGreaterThan(0);
-      expect(screen.getByText(/General English B2/i)).toBeInTheDocument();
+      try {
+        renderWithClient(<ModmeExcelMigrationStudio />, 'uz');
+
+        // Demo tugmasi va namunaviy o'quvchilar butunlay olib tashlangan
+        expect(screen.queryByText(/Namunaviy Ma’lumotlar bilan Sinash/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Abdurashidov Bilolbek/i)).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByText(/Shablonni Yuklab Olish/i));
+
+        expect(blobs).toHaveLength(1);
+        const csv = await blobs[0].text();
+        expect(csv).toBe(
+          'F.I.Sh,Telefon raqami,Guruh nomi,Hisob balansi (UZS),Ota-onasi,Ota-ona telefoni',
+        );
+        expect(csv).not.toMatch(/\+998\d{9}/);
+      } finally {
+        URL.createObjectURL = originalCreate;
+      }
     });
   });
 

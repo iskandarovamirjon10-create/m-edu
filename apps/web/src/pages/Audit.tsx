@@ -251,7 +251,7 @@ export function AuditPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={SPRING.smooth}
-      className="relative min-h-screen bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
+      className="relative min-h-full bg-transparent p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
       <AuroraMesh variant="security" opacity={0.65} />
 
@@ -321,7 +321,7 @@ export function AuditPage() {
         <div className="liquid-glass-card rounded-2xl p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Jami hodisalar</p>
           <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-[var(--text-primary)]">{totalEvents}</p>
-          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">Ushbu ro'yxatda {items.length} ta</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">Ushbu ro‘yxatda {items.length} ta</p>
         </div>
         <div className="liquid-glass-card rounded-2xl p-4">
           <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Yaratish (Creates)</p>
@@ -329,14 +329,14 @@ export function AuditPage() {
           <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">Yangi yozuvlar</p>
         </div>
         <div className="liquid-glass-card rounded-2xl p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">O'zgartirish (Updates)</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">O‘zgartirish (Updates)</p>
           <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-[var(--text-primary)]">{stats.updates}</p>
-          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">Tahrirlangan ma'lumotlar</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">Tahrirlangan maʼlumotlar</p>
         </div>
         <div className="liquid-glass-card rounded-2xl p-4">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">O'chirish & Kirish</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">O‘chirish & Kirish</p>
           <p className="mt-1 font-mono text-2xl font-bold tracking-tight text-[var(--text-primary)]">{stats.deletes + stats.security}</p>
-          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">O'chirish: {stats.deletes} · Kirish: {stats.security}</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">O‘chirish: {stats.deletes} · Kirish: {stats.security}</p>
         </div>
       </div>
 
@@ -445,7 +445,7 @@ export function AuditPage() {
                               setDiffModalEvent(event);
                             }}
                             className="inline-flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm backdrop-blur-md transition-all hover:bg-indigo-500/20"
-                            title="Diff Ko'rish"
+                            title="Diff Ko‘rish"
                           >
                             <span>⚡</span>
                             <span>Diff</span>
@@ -487,7 +487,7 @@ export function AuditPage() {
         open={Boolean(diffModalEvent)}
         onClose={() => setDiffModalEvent(null)}
         size="xl"
-        title={`O'zgarishlar Tafsiloti (Diff) · ${diffModalEvent?.action || ''} ${diffModalEvent?.entityType || ''}`}
+        title={`O‘zgarishlar Tafsiloti (Diff) · ${diffModalEvent?.action || ''} ${diffModalEvent?.entityType || ''}`}
         description={`${diffModalEvent?.entityLabel || diffModalEvent?.description || ''} · Bajaruvchi: ${diffModalEvent?.actorName || 'Tizim'}`}
       >
         {diffModalEvent && (

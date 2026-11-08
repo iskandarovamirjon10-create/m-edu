@@ -7,6 +7,13 @@ import {
 import type { ExpensesService } from '../../../expenses/expenses.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
 
+const recordExpenseSchema = z.object({
+  category: z.string().min(2).max(100),
+  amount: z.number().positive(),
+  description: z.string().min(2).max(500),
+  paymentMethod: z.enum(['CASH', 'BANK_TRANSFER', 'CARD', 'OTHER']).optional(),
+});
+
 export function createFinanceTools(
   expenses: ExpensesService,
   prisma: PrismaService,
@@ -89,18 +96,20 @@ export function createFinanceTools(
           take,
         });
 
-        const debtors = (unpaidInvoices as any[]).map((inv: any) => {
-          const debt = Number(inv.total) - Number(inv.paidAmount || 0);
-          return {
-            invoiceId: inv.id,
-            studentId: inv.studentId,
-            studentName: `${inv.student?.user?.firstName || ''} ${inv.student?.user?.lastName || ''}`.trim() || 'Nomaʼlum',
-            phone: inv.student?.user?.phone || 'Mavjud emas',
-            debtAmountUzs: debt,
-            dueDate: inv.dueDate,
-            status: inv.status,
-          };
-        });
+        const debtors = (unpaidInvoices as any[])
+          .map((inv: any) => {
+            const debt = Math.max(0, Number(inv.total) - Number(inv.paidAmount || 0));
+            return {
+              invoiceId: inv.id,
+              studentId: inv.studentId,
+              studentName: `${inv.student?.user?.firstName || ''} ${inv.student?.user?.lastName || ''}`.trim() || 'Nomaʼlum',
+              phone: inv.student?.user?.phone || 'Mavjud emas',
+              debtAmountUzs: debt,
+              dueDate: inv.dueDate,
+              status: inv.status,
+            };
+          })
+          .filter((d) => d.debtAmountUzs > 0);
 
         return {
           count: debtors.length,
@@ -112,16 +121,11 @@ export function createFinanceTools(
       name: 'finance.record_expense',
       description:
         "O'quv markazi uchun xarajat yozish (ijara, kommunal, kantselyariya, marketing va h.k.). Foydalanuvchi tasdiqlaganidan keyin saqlanadi.",
-      inputSchema: z.object({
-        category: z.string().min(2).max(100),
-        amount: z.number().positive(),
-        description: z.string().min(2).max(500),
-        paymentMethod: z.enum(['CASH', 'BANK_TRANSFER', 'CARD', 'OTHER']).optional(),
-      }),
+      inputSchema: recordExpenseSchema,
       riskLevel: AiToolRiskLevel.MEDIUM,
       requiresConfirmation: true,
       permission: AiPermission.FINANCE_WRITE,
-      execute: async (input: any, context) => {
+      execute: async (input: z.infer<typeof recordExpenseSchema>, context) => {
         const record = await expenses.create(context.organizationId, {
           category: input.category,
           amount: input.amount,

@@ -4,7 +4,7 @@
 // or browser storage. Credentials are included so cookies travel.
 
 import type { DashboardStats, MonthlyRevenue } from './types';
-import type { ZReportSummary, ZReportRecord, CloseCashierShiftPayload } from '../types/finance';
+import type { ZReportSummary, ZReportRecord, CloseCashierShiftPayload, CashShift, OpenCashShiftPayload, CurrentShiftResponse } from '../types/finance';
 import type { LessonCopilotAnalysis } from '../types/academics';
 import type { ParentWeeklyDigest } from '../types/parent';
 import { purgeSessionCaches } from './sessionCleanup';
@@ -34,11 +34,65 @@ import type {
 export class ApiError extends Error {
   status: number;
   details?: unknown;
-  constructor(status: number, message: string, details?: unknown) {
+  code?: string;
+  requestId?: string;
+  timestamp?: string;
+
+  constructor(
+    status: number,
+    message: string,
+    details?: unknown,
+    code?: string,
+    requestId?: string,
+    timestamp?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.details = details;
+    this.code = code;
+    this.requestId = requestId;
+    this.timestamp = timestamp;
+  }
+
+  isValidationError(): boolean {
+    return this.status === 400 && (this.code === 'VALIDATION_ERROR' || Boolean((this.details as Record<string, unknown> | null)?.errors));
+  }
+
+  getValidationErrors(): string[] {
+    const rawErrors = (this.details as Record<string, unknown> | null)?.errors;
+    if (Array.isArray(rawErrors)) {
+      return rawErrors.filter((e): e is string => typeof e === 'string');
+    }
+    return [];
+  }
+
+  isRateLimited(): boolean {
+    return this.status === 429;
+  }
+
+  isUnauthorized(): boolean {
+    return this.status === 401;
+  }
+
+  isForbidden(): boolean {
+    return this.status === 403;
+  }
+
+  isNotFound(): boolean {
+    return this.status === 404;
+  }
+
+  isConflict(): boolean {
+    return this.status === 409;
+  }
+
+  isTimeout(): boolean {
+    return this.status === 408;
+  }
+
+  isServerError(): boolean {
+    return this.status >= 500;
   }
 }
 
@@ -113,7 +167,10 @@ export type RequestOptions = RequestInit & {
   defaultFilename?: string;
   _isCsrfRetry?: boolean;
   _isRefreshRetry?: boolean;
+  _retryAttempt?: number;
   idempotencyKey?: string;
+  retries?: number;
+  retryDelayMs?: number;
 };
 
 export function generateIdempotencyKey(): string {
@@ -121,6 +178,27 @@ export function generateIdempotencyKey(): string {
     return crypto.randomUUID();
   }
   return 'idemp_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+}
+
+export function generateRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `req_${crypto.randomUUID().replace(/-/g, '')}`;
+  }
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
+}
+
+export function isRetryableStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504 || status === 408;
+}
+
+export function isRetryableMethod(method: string, hasIdempotencyKey: boolean): boolean {
+  const m = method.toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return true;
+  return hasIdempotencyKey;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 /**
@@ -212,17 +290,36 @@ export async function attemptSilentRefresh(): Promise<boolean> {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const method = options.method?.toUpperCase() || 'GET';
+  const idempotencyKey =
+    options.idempotencyKey ||
+    (options.headers as Record<string, string> | undefined)?.['idempotency-key'] ||
+    (options.headers as Record<string, string> | undefined)?.['Idempotency-Key'];
+
+  const attempt = options._retryAttempt ?? 0;
+  const maxRetries =
+    options.retries !== undefined
+      ? options.retries
+      : isRetryableMethod(method, Boolean(idempotencyKey))
+      ? 2
+      : 0;
+
+  const clientRequestId =
+    (options.headers as Record<string, string> | undefined)?.['x-request-id'] ||
+    (options.headers as Record<string, string> | undefined)?.['X-Request-Id'] ||
+    generateRequestId();
+
   // NO Authorization: Bearer header. The browser sends the HttpOnly cookie (access_token)
   // automatically when credentials are included. No token is read from storage.
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-Request-Id': clientRequestId,
     ...(options.headers as Record<string, string> | undefined),
   };
   if (options.body instanceof FormData) {
     delete headers['Content-Type'];
   }
 
-  const method = options.method?.toUpperCase() || 'GET';
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
     await ensureCsrfCookie();
     const token = readXsrfCookie();
@@ -231,10 +328,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
   }
 
-  const idempotencyKey =
-    options.idempotencyKey ||
-    (options.headers as Record<string, string> | undefined)?.['idempotency-key'] ||
-    (options.headers as Record<string, string> | undefined)?.['Idempotency-Key'];
   if (idempotencyKey) {
     headers['Idempotency-Key'] = idempotencyKey;
   }
@@ -243,7 +336,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const onCallerAbort = () => controller.abort();
-  options.signal?.addEventListener('abort', onCallerAbort, { once: true });
+  if (options.signal?.aborted) {
+    controller.abort();
+  } else {
+    options.signal?.addEventListener('abort', onCallerAbort, { once: true });
+  }
 
   let res: Response;
   try {
@@ -256,11 +353,25 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     });
   } catch (err) {
     const errName = (err as { name?: string } | null | undefined)?.name;
+    const isTimeout = errName === 'AbortError' && controller.signal.aborted && !options.signal?.aborted;
+    const isNetworkError = err instanceof TypeError;
+    const canRetryTimeout = options.retries !== undefined && options.retries > 0;
+
+    if (attempt < maxRetries && !options.signal?.aborted && (isNetworkError || (isTimeout && canRetryTimeout))) {
+      const baseDelay = options.retryDelayMs ?? 250;
+      const delay = Math.min(2000, baseDelay * Math.pow(2, attempt) + Math.random() * 100);
+      await sleep(delay);
+      return request<T>(path, { ...options, _retryAttempt: attempt + 1 });
+    }
+
     if (errName === 'AbortError') {
       const timedOut = controller.signal.aborted && !options.signal?.aborted;
       throw new ApiError(
         408,
         timedOut ? 'The request timed out. Please check your connection and try again.' : 'The request was cancelled. Please try again.',
+        undefined,
+        timedOut ? 'REQUEST_TIMEOUT' : 'REQUEST_CANCELLED',
+        clientRequestId,
       );
     }
     throw err;
@@ -270,6 +381,32 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (res.status === 401) {
+    let errorDetail: any = null;
+    try {
+      errorDetail = await res.clone().json();
+    } catch {
+      // ignore
+    }
+
+    const errCode = errorDetail?.code || errorDetail?.error;
+    const errMsg = typeof errorDetail?.message === 'string' ? errorDetail.message : undefined;
+
+    if (typeof window !== 'undefined' && (errCode === 'CONCURRENT_SESSION_REVOKED' || errCode === 'TENANT_SUSPENDED')) {
+      try {
+        sessionStorage.setItem(
+          'medu_session_revoked_notice',
+          JSON.stringify({
+            type: errCode === 'CONCURRENT_SESSION_REVOKED' ? 'CONCURRENT_LOGIN' : 'TENANT_SUSPENDED',
+            message: errMsg || (errCode === 'CONCURRENT_SESSION_REVOKED'
+              ? 'Hisobingizga boshqa qurilmadan kirildi. Xavfsizlik maqsadida ushbu seans yakunlandi.'
+              : 'Tashkilot faoliyati vaqtincha to\'xtatilgan. Iltimos, Platforma Egasi bilan bog\'laning.'),
+          }),
+        );
+      } catch {
+        // ignore
+      }
+    }
+
     // Do NOT force sign-out/redirect for auth-probe or public-page requests:
     // - /auth/me 401 on boot is normal when logged out (public pages, OAuth, reset links)
     // - /auth/login 401 = wrong password, not a dead session (would log out other tabs)
@@ -289,7 +426,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         window.location.pathname,
       );
 
-    if (!isAuthProbe && !options._isRefreshRetry && !onPublic) {
+    if (!isAuthProbe && !options._isRefreshRetry && !onPublic && errCode !== 'CONCURRENT_SESSION_REVOKED' && errCode !== 'TENANT_SUSPENDED') {
       const refreshed = await attemptSilentRefresh();
       if (refreshed) {
         return request<T>(path, { ...options, _isRefreshRetry: true });
@@ -303,7 +440,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       purgeSessionCaches();
       if (onUnauthorized) onUnauthorized();
     }
-    throw new ApiError(401, 'Your session has expired. Please sign in again.');
+    throw new ApiError(401, errMsg || 'Your session has expired. Please sign in again.', undefined, errCode || 'SESSION_EXPIRED', clientRequestId);
+  }
+
+  // Handle transient retryable HTTP errors (502, 503, 504, 408) for retryable operations
+  if (attempt < maxRetries && !options.signal?.aborted && isRetryableStatus(res.status)) {
+    const baseDelay = options.retryDelayMs ?? 250;
+    const delay = Math.min(2000, baseDelay * Math.pow(2, attempt) + Math.random() * 100);
+    await sleep(delay);
+    return request<T>(path, { ...options, _retryAttempt: attempt + 1 });
+  }
+
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return null as T;
   }
 
   const contentType = res.headers.get('content-type') || '';
@@ -331,10 +480,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       : typeof rawMsg === 'string'
       ? rawMsg
       : Array.isArray(body)
-      ? body.map((b: any) => (typeof b === 'string' ? b : b?.message)).filter(Boolean).join('; ')
+      ? body
+          .map((b: unknown) =>
+            typeof b === 'string'
+              ? b
+              : typeof b === 'object' && b !== null && 'message' in b && typeof (b as { message: unknown }).message === 'string'
+              ? (b as { message: string }).message
+              : '',
+          )
+          .filter(Boolean)
+          .join('; ')
       : null;
     const message = friendlyHttpMessage(res.status, serverMessage);
-    throw new ApiError(res.status, message, body);
+    const code = (body as { code?: string } | null)?.code;
+    const details = (body as { details?: unknown } | null)?.details ?? (Array.isArray(rawMsg) ? { errors: rawMsg } : body);
+    const responseRequestId = res.headers.get('x-request-id') || (body as { requestId?: string } | null)?.requestId || clientRequestId;
+    const timestamp = (body as { timestamp?: string } | null)?.timestamp || new Date().toISOString();
+    throw new ApiError(res.status, message, details, code, responseRequestId, timestamp);
   }
 
   return body as T;
@@ -352,10 +514,14 @@ export function buildQuery(params: object | undefined): string {
 }
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    request<{ user: unknown }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  parentLogin: (email: string, password: string) =>
-    request<{ user: unknown }>('/auth/parent-login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  login: (username: string, password: string) =>
+    request<{ user: unknown; mustChangePassword?: boolean; accessToken?: string }>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  parentLogin: (username: string, password: string) =>
+    request<{ user: unknown }>('/auth/parent-login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    request<{ message: string }>('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+  switchOrganization: (organizationId: string) =>
+    request<{ user: unknown; accessToken: string }>('/auth/switch-organization', { method: 'POST', body: JSON.stringify({ organizationId }) }),
   register: (data: {
     email: string; password: string; firstName: string; lastName: string; phone?: string; organizationName: string; inviteCode?: string;
   }) =>
@@ -370,8 +536,8 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ code, ...(state ? { state } : {}) }),
     }),
-  forgotPassword: (email: string) =>
-    request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  forgotPassword: (username: string) =>
+    request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ username }) }),
   resetPassword: (token: string, newPassword: string) =>
     request<{ message: string }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) }),
   getWhitelist: () =>
@@ -662,12 +828,25 @@ export const scheduleApi = {
 };
 export const paymentsApi = {
   ...crud('/payments'),
-  getZReportSummary: (params?: { startDate?: string; endDate?: string }, options: RequestOptions = {}) =>
+  openCashierShift: (data: OpenCashShiftPayload, options: RequestOptions = {}) =>
+    request<CashShift>('/payments/cashier/shift/open', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      ...options,
+    }),
+  getCurrentCashierShift: (options: RequestOptions = {}) =>
+    request<CurrentShiftResponse>('/payments/cashier/shift/current', options),
+  getCashierShifts: (params?: { limit?: number; page?: number; status?: 'OPEN' | 'CLOSED' }, options: RequestOptions = {}) =>
+    request<{ items: CashShift[]; total: number; page: number; limit: number; totalPages: number }>(
+      `/payments/cashier/shift/history${buildQuery(params)}`,
+      options,
+    ),
+  getZReportSummary: (params?: { startDate?: string; endDate?: string; cashierId?: string }, options: RequestOptions = {}) =>
     request<ZReportSummary>(`/payments/cashier/z-report/summary${buildQuery(params)}`, options),
   getRecentZReports: (limit?: number, options: RequestOptions = {}) =>
     request<ZReportRecord[]>(`/payments/cashier/z-report/history${buildQuery({ limit })}`, options),
   closeCashierShift: (data: CloseCashierShiftPayload, options: RequestOptions = {}) =>
-    request<ZReportRecord & { success: boolean }>('/payments/cashier/z-report/close', {
+    request<ZReportRecord & { success: boolean; shift?: CashShift }>('/payments/cashier/z-report/close', {
       method: 'POST',
       body: JSON.stringify(data),
       ...options,
@@ -808,9 +987,67 @@ export interface TelegramAdminOverview {
   };
   webhook: { updatesLast24h: number; lastUpdateAt: string | null } | null;
 }
+
+export interface TelegramBotInfoResponse {
+  configured: boolean;
+  username: string | null;
+  bot: {
+    id: number;
+    is_bot: boolean;
+    first_name: string;
+    username: string;
+    can_join_groups?: boolean;
+    can_read_all_group_messages?: boolean;
+    supports_inline_queries?: boolean;
+  } | null;
+  isPolling: boolean;
+}
+
+export interface TelegramWebhookInfoResponse {
+  configured: boolean;
+  mode: 'POLLING' | 'WEBHOOK' | 'NOT_CONFIGURED';
+  webhook: {
+    url: string;
+    has_custom_certificate?: boolean;
+    pending_update_count: number;
+    ip_address?: string;
+    last_error_date?: number;
+    last_error_message?: string;
+    max_connections?: number;
+    allowed_updates?: string[];
+  } | null;
+  polling: {
+    isPolling: boolean;
+    currentOffset: number;
+    lastPollAt: string | null;
+    errorCount: number;
+  };
+}
+
+export interface TelegramToggleModeResponse {
+  success: boolean;
+  mode: 'WEBHOOK' | 'POLLING';
+  message: string;
+}
+
+export interface TelegramPingResponse {
+  ok: boolean;
+  pingMs: number;
+  bot?: unknown;
+  timestamp: string;
+}
+
 export const telegramApi = {
   status: () => request<TelegramStatusResponse>('/telegram/status'),
   adminOverview: () => request<TelegramAdminOverview>('/telegram/admin/overview'),
+  botInfo: () => request<TelegramBotInfoResponse>('/telegram/admin/bot-info'),
+  webhookInfo: () => request<TelegramWebhookInfoResponse>('/telegram/admin/webhook-info'),
+  toggleMode: (mode: 'WEBHOOK' | 'POLLING') =>
+    request<TelegramToggleModeResponse>('/telegram/admin/toggle-mode', {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
+    }),
+  ping: () => request<TelegramPingResponse>('/telegram/admin/ping', { method: 'POST' }),
   createLink: () =>
     request<{ token: string; deepLink: string; expiresAt: string }>('/telegram/link', {
       method: 'POST',
@@ -844,7 +1081,14 @@ export const aiApi = {
     request<AiExecutiveBriefing>('/ai/executive-briefing', options),
   diagnoseStudent: (studentId: string, options: RequestOptions = {}) =>
     request<AiStudentDiagnostic>(`/ai/diagnose/student/${encodeURIComponent(studentId)}`, options),
-  draftParentMessage: (body: { studentName: string; topic: string; details?: string; balanceDue?: number }, options: RequestOptions = {}) =>
+  draftParentMessage: (body: {
+    studentId?: string;
+    studentName: string;
+    tone?: 'friendly' | 'formal' | 'urgent';
+    topic?: 'attendance' | 'debt' | 'praise' | 'exam' | 'custom' | string;
+    details?: string;
+    balanceDue?: number;
+  }, options: RequestOptions = {}) =>
     request<AiDraftMessageResponse>('/ai/draft-parent-message', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -858,6 +1102,26 @@ export const aiApi = {
     }),
   generateLessonPlan: (body: { topic: string; subject?: string; level?: string; durationMinutes?: number; learningObjectives?: string[]; bloomsTaxonomyLevel?: string }, options: RequestOptions = {}) =>
     request<any>('/ai/generate-lesson-plan', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...options,
+    }),
+  generateSocialPost: (
+    body: {
+      topic: string;
+      platform?: 'TELEGRAM' | 'INSTAGRAM' | 'FACEBOOK' | 'SMS';
+      goal?: 'NEW_GROUP' | 'DISCOUNT_OFFER' | 'EVENT' | 'EXAM_RESULTS' | 'PARENT_NOTICE' | 'GENERAL';
+      tone?: 'exciting' | 'professional' | 'urgent' | 'friendly';
+      targetAudience?: string;
+      keyBenefits?: string[];
+      priceOffer?: string;
+      callToAction?: string;
+      contactPhone?: string;
+      centerAddress?: string;
+    },
+    options: RequestOptions = {},
+  ) =>
+    request<any>('/ai/generate-social-post', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
@@ -1394,31 +1658,74 @@ export const invoicesApi = {
 
 export async function downloadFile(path: string, options: RequestOptions = {}): Promise<void> {
   const method = options.method?.toUpperCase() || 'GET';
+  const clientRequestId =
+    (options.headers as Record<string, string> | undefined)?.['x-request-id'] ||
+    (options.headers as Record<string, string> | undefined)?.['X-Request-Id'] ||
+    generateRequestId();
+
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'X-Request-Id': clientRequestId,
     ...(options.headers as Record<string, string> | undefined),
   };
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
     await ensureCsrfCookie();
     const token = readXsrfCookie();
     if (token) headers['x-xsrf-token'] = token;
   }
-  
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    credentials: 'include',
-    body: options.body,
-  });
-  
+
+  const controller = new AbortController();
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const onCallerAbort = () => controller.abort();
+  if (options.signal?.aborted) {
+    controller.abort();
+  } else {
+    options.signal?.addEventListener('abort', onCallerAbort, { once: true });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      credentials: 'include',
+      body: options.body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    const errName = (err as { name?: string } | null | undefined)?.name;
+    if (errName === 'AbortError') {
+      const timedOut = controller.signal.aborted && !options.signal?.aborted;
+      throw new ApiError(
+        408,
+        timedOut ? 'The download timed out. Please check your connection and try again.' : 'The download was cancelled.',
+        undefined,
+        'DOWNLOAD_TIMEOUT',
+        clientRequestId,
+      );
+    }
+    throw err;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    options.signal?.removeEventListener('abort', onCallerAbort);
+  }
+
   if (!res.ok) {
     const errorBody = await res.json().catch(() => null);
-    throw new ApiError(res.status, errorBody?.message || res.statusText, errorBody);
+    const serverMessage = errorBody?.message || res.statusText;
+    const message = friendlyHttpMessage(res.status, serverMessage);
+    const code = errorBody?.code;
+    const details = errorBody?.details ?? errorBody;
+    const responseRequestId = res.headers.get('x-request-id') || errorBody?.requestId || clientRequestId;
+    throw new ApiError(res.status, message, details, code, responseRequestId);
   }
-  
+
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  
+
   // Try to read filename from Content-Disposition header
   const contentDisposition = res.headers.get('Content-Disposition');
   let filename = options.defaultFilename || 'download';
@@ -1428,14 +1735,14 @@ export async function downloadFile(path: string, options: RequestOptions = {}): 
       filename = filenameMatch[1];
     }
   }
-  
+
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export const reportsApi = {
   designs: () => request('/reports/designs'),
@@ -1796,6 +2103,120 @@ export const parentSafetyGuardApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+};
+
+export interface BulkAccountRow {
+  username: string;
+  password?: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  organizationId: string;
+  role: string;
+  branchId?: string;
+}
+
+export interface BulkPreviewResult {
+  total: number;
+  validCount: number;
+  errorCount: number;
+  preview: Array<{
+    row: number;
+    username: string;
+    role: string;
+    organizationId: string;
+    valid: boolean;
+    errors: string[];
+  }>;
+}
+
+export interface BulkCommitResult {
+  total: number;
+  created: number;
+  failed: number;
+  results: Array<{ username: string; success: boolean; error?: string }>;
+}
+
+export const iamApi = {
+  createOrganization: (data: any) =>
+    request<any>('/iam/organizations', { method: 'POST', body: JSON.stringify(data) }),
+  updateOrganization: (id: string, data: any) =>
+    request<any>(`/iam/organizations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  activateOrganization: (id: string) =>
+    request<any>(`/iam/organizations/${id}/activate`, { method: 'POST' }),
+  suspendOrganization: (id: string) =>
+    request<any>(`/iam/organizations/${id}/suspend`, { method: 'POST' }),
+  getOrganizationMemberships: (id: string) =>
+    request<any[]>(`/iam/organizations/${id}/memberships`),
+  getOrganizationStatistics: (id: string) =>
+    request<any>(`/iam/organizations/${id}/statistics`),
+
+  createAccount: (data: any) =>
+    request<any>('/iam/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  updateAccount: (id: string, data: any) =>
+    request<any>(`/iam/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  activateAccount: (id: string) =>
+    request<any>(`/iam/accounts/${id}/activate`, { method: 'POST' }),
+  suspendAccount: (id: string) =>
+    request<any>(`/iam/accounts/${id}/suspend`, { method: 'POST' }),
+  resetPassword: (id: string, data: { newPassword?: string; mustChangePassword?: boolean }) =>
+    request<any>(`/iam/accounts/${id}/reset-password`, { method: 'POST', body: JSON.stringify(data) }),
+  getAccount: (id: string) =>
+    request<any>(`/iam/accounts/${id}`),
+  getAccountSecurityHistory: (id: string) =>
+    request<any[]>(`/iam/accounts/${id}/security-history`),
+  assignMembership: (id: string, data: any) =>
+    request<any>(`/iam/accounts/${id}/memberships`, { method: 'POST', body: JSON.stringify(data) }),
+  revokeMembership: (id: string, orgId: string) =>
+    request<any>(`/iam/accounts/${id}/memberships/${orgId}`, { method: 'DELETE' }),
+
+  previewBulk: (records: BulkAccountRow[]) =>
+    request<BulkPreviewResult>('/iam/bulk/preview', { method: 'POST', body: JSON.stringify({ records }) }),
+  commitBulk: (records: BulkAccountRow[]) =>
+    request<BulkCommitResult>('/iam/bulk/commit', { method: 'POST', body: JSON.stringify({ records }) }),
+  uploadBulkFile: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request<BulkPreviewResult>('/iam/bulk/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  getSecurityOverview: () =>
+    request<{
+      activeSessionsCount: number;
+      totalUsersCount: number;
+      suspendedUsersCount: number;
+      mustChangePasswordCount: number;
+      organizations: { total: number; active: number; suspended: number };
+      recentEvents24h: number;
+    }>('/iam/security/overview'),
+
+  getActiveSessions: (limit = 50) =>
+    request<
+      Array<{
+        id: string;
+        userId: string;
+        username?: string;
+        fullName: string;
+        role: string;
+        organizationId: string;
+        organizationName: string;
+        ipAddress?: string;
+        userAgent?: string;
+        lastActiveAt?: string;
+        createdAt: string;
+        expiresAt: string;
+      }>
+    >(`/iam/security/sessions?limit=${limit}`),
+
+  terminateSession: (sessionId: string) =>
+    request<{ message: string; id: string }>(`/iam/security/sessions/${sessionId}`, { method: 'DELETE' }),
+
+  getSecurityEvents: (limit = 50) =>
+    request<any[]>(`/iam/security/events?limit=${limit}`),
 };
 
 export default request;

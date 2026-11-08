@@ -71,6 +71,36 @@ describe('MobileBottomNav', () => {
     expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
   });
 
+  it('renders assistant-specific mobile tabs for ASSISTANT role', () => {
+    const handleOpenMore = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <MemoryRouter>
+          <MobileBottomNav role="ASSISTANT" onOpenMore={handleOpenMore} />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole('link', { name: /attendance/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /schedule/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /students/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /groups/i })).toBeInTheDocument();
+  });
+
+  it('indicates More button as active when route is outside the 4 bottom tabs', () => {
+    const handleOpenMore = vi.fn();
+    render(
+      <I18nProvider initialLocale="en">
+        <MemoryRouter initialEntries={['/courses']}>
+          <MobileBottomNav role="ADMIN" onOpenMore={handleOpenMore} />
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+
+    const moreBtn = screen.getByRole('button', { name: /open.*menu|more/i });
+    expect(moreBtn.querySelector('span[aria-hidden="true"]')).toBeInTheDocument();
+  });
+
   it('triggers onOpenMore when tapping the More button', async () => {
     const handleOpenMore = vi.fn();
     render(
@@ -115,6 +145,10 @@ describe('MobileMenuDrawer', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('JD')).toBeInTheDocument();
+
+    // Preferences strip (Theme toggle & Language switcher)
+    expect(screen.getByRole('button', { name: /theme/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/language/i)).toBeInTheDocument();
 
     const closeBtn = screen.getByRole('button', { name: /close menu/i });
     fireEvent.click(closeBtn);

@@ -105,7 +105,9 @@ export const SplitViewSidecar = memo(function SplitViewSidecar() {
   const handleCopy = useCallback(
     (key: string, val: string) => {
       sound.playTick();
-      navigator.clipboard.writeText(val);
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(val).catch(() => {});
+      }
       setCopiedKey(key);
       setTimeout(() => setCopiedKey(null), 1800);
     },
@@ -116,7 +118,11 @@ export const SplitViewSidecar = memo(function SplitViewSidecar() {
     if (!data?.id) return;
     setIsSavingNote(true);
     sound.playSuccess();
-    localStorage.setItem(`m-edu.sidecar-note-${data.id}`, noteContent);
+    try {
+      localStorage.setItem(`m-edu.sidecar-note-${data.id}`, noteContent);
+    } catch {
+      // Ignore localStorage quota or private mode errors
+    }
     setTimeout(() => {
       setIsSavingNote(false);
       setNoteSavedFeedback(true);

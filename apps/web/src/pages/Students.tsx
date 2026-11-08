@@ -1,6 +1,17 @@
 /**
- * M-EDU Students Page
+ * M-EDU Students Page · v2 — Liquid Glass
  * Student roster management, profile filters, enrollment actions, and batch operations.
+ *
+ * v2 o'zgarishlari:
+ *  - Liquid glass tizimi (students-liquid.css): specular rim, kursor ortidan yuruvchi yorug'lik,
+ *    recessed track + glass thumb, glass icon tugmalar
+ *  - GlassSegmented: bitta qayta ishlatiladigan segmented control (status / zichlik / ko'rinish)
+ *  - StudentActions va StatusBadge: grid va jadvaldagi takrorlanish olib tashlandi
+ *  - buildStudentPanel: QuickLook va Sidecar uchun yagona payload builder
+ *  - Emoji va ◨ belgilari SVG ikonlarga almashtirildi
+ *  - Vaqt zonasi xatosi tuzatildi (toISOString → mahalliy sana)
+ *  - Kalendar heatmap haftaga mos 7 ustunli qilindi
+ *  - Tailwind'da mavjud bo'lmagan `/08` opacity tuzatildi
  */
 
 import {
@@ -12,7 +23,7 @@ import {
   memo,
   forwardRef,
 } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { studentsApi, groupsApi } from '@/lib/api';
@@ -45,16 +56,17 @@ import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { usePrefersReducedMotion } from '@/layouts/core/singletons';
+import './students-liquid.css';
 
 /* ══════════════════════════════════════════════════════════════════════════
- * MOTION TOKENS — 120Hz ProMotion · Apple-grade Physics
+ * MOTION TOKENS
  * ════════════════════════════════════════════════════════════════════════ */
 
 const SPRING = {
-  snappy:  { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.60 },
+  snappy:  { type: 'spring' as const, stiffness: 520, damping: 34, mass: 0.6 },
   smooth:  { type: 'spring' as const, stiffness: 320, damping: 32, mass: 0.85 },
   soft:    { type: 'spring' as const, stiffness: 220, damping: 30, mass: 1.0 },
   island:  { type: 'spring' as const, stiffness: 480, damping: 32, mass: 0.72 },
@@ -66,10 +78,7 @@ const EASE_PREMIUM = [0.22, 1, 0.36, 1] as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.035, delayChildren: 0.015 },
-  },
+  visible: { opacity: 1, transition: { staggerChildren: 0.035, delayChildren: 0.015 } },
 };
 
 const rowVariants: Variants = {
@@ -83,87 +92,32 @@ const tileVariants: Variants = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
- * AURORA AMBIENT CANVAS — Breathing header halo
+ * UTILS
  * ════════════════════════════════════════════════════════════════════════ */
 
-const AuroraCanvas = memo(function AuroraCanvas() {
-  const reduced = usePrefersReducedMotion();
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 -top-40 z-0 flex h-[420px] justify-center overflow-hidden"
-    >
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1.4, ease: EASE_PREMIUM }}
-        className="relative h-full w-full"
-      >
-        <div className="absolute left-1/2 top-1/2 h-[280px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/15 blur-[100px] dark:bg-sky-500/12" />
-        <div className="absolute left-1/3 top-1/2 h-[200px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-400/10 blur-[90px] dark:bg-violet-500/10" />
-        <div className="absolute right-1/4 top-1/2 h-[200px] w-[400px] translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/10 blur-[90px] dark:bg-emerald-500/08" />
-        {!reduced && (
-          <motion.div
-            animate={{ scale: [1, 1.06, 1], opacity: [0.9, 1, 0.9] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute left-1/2 top-1/2 h-[320px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.06] via-violet-500/[0.04] to-emerald-500/[0.06] blur-[120px] dark:from-sky-500/[0.08] dark:via-violet-500/[0.05] dark:to-emerald-500/[0.06]"
-          />
-        )}
-      </motion.div>
-    </div>
-  );
-});
+type ClassPart = string | false | null | undefined;
+const cx = (...parts: ClassPart[]) => parts.filter(Boolean).join(' ');
 
-/* ══════════════════════════════════════════════════════════════════════════
- * OPTICAL GLASS SURFACE — Chromatic layered depth
- * ════════════════════════════════════════════════════════════════════════ */
+/** Kursor pozitsiyasini CSS o'zgaruvchisiga yozadi — re-render yo'q, 120Hz xavfsiz. */
+function trackPointer(e: React.PointerEvent<HTMLElement>) {
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  el.style.setProperty('--mx', `${e.clientX - r.left}px`);
+  el.style.setProperty('--my', `${e.clientY - r.top}px`);
+}
 
-const GlassCardSurface = memo(function GlassCardSurface({
-  children,
-  className = '',
-  hover = false,
-  subtle = false,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  hover?: boolean;
-  subtle?: boolean;
-}) {
-  return (
-    <div
-      className={[
-        'relative overflow-hidden rounded-[22px]',
-        subtle
-          ? 'border border-black/[0.05] dark:border-white/[0.06]'
-          : 'border border-black/[0.06] dark:border-white/[0.08]',
-        subtle ? 'bg-white/70 dark:bg-surface-900/70' : 'bg-white/80 dark:bg-surface-900/80',
-        'backdrop-blur-xl',
-        'shadow-[0_1px_2px_rgba(15,23,42,0.03),0_16px_40px_-12px_rgba(15,23,42,0.07),0_1px_0_0_rgba(255,255,255,0.85)_inset]',
-        'dark:shadow-[0_1px_2px_rgba(0,0,0,0.45),0_20px_48px_-14px_rgba(0,0,0,0.7),0_1px_0_0_rgba(255,255,255,0.09)_inset]',
-        hover ? 'transition-all duration-300 hover:border-slate-300/90 dark:hover:border-white/[0.16]' : '',
-        className,
-      ].join(' ')}
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/[0.2]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-8 left-0 w-px bg-gradient-to-b from-transparent via-blue-400/15 to-transparent dark:via-sky-400/20"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-8 right-0 w-px bg-gradient-to-b from-transparent via-violet-400/15 to-transparent dark:via-violet-400/20"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-24 left-1/2 h-32 w-2/3 -translate-x-1/2 rounded-full bg-blue-500/[0.035] blur-3xl dark:bg-sky-400/[0.05]"
-      />
-      {children}
-    </div>
-  );
-});
+function toIsoDate(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** 'YYYY-MM-DD' ni mahalliy sana sifatida o'qiydi (UTC siljishisiz). */
+function parseIsoDate(iso: string): Date | null {
+  const [y, m, d] = (iso || '').split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
  * TYPES
@@ -188,32 +142,33 @@ type SortDirection = 'asc' | 'desc';
 type ViewMode = 'table' | 'grid';
 type Density = 'compact' | 'cozy' | 'comfy';
 
+const DEFAULT_FREEZE_REASON = 'Tibbiy sabab / Kasallik maʼlumotnomasi (Medical leave)';
+
 function createDefaultFreezeForm(): FreezeFormData {
   const now = new Date();
-  const twoWeeksLater = new Date(now.getTime() + 14 * 86_400_000);
+  const twoWeeksLater = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 13);
   return {
-    startDate: now.toISOString().split('T')[0],
-    endDate: twoWeeksLater.toISOString().split('T')[0],
-    reason: "Tibbiy sabab / Kasallik ma'lumotnomasi (Medical leave)",
+    startDate: toIsoDate(now),
+    endDate: toIsoDate(twoWeeksLater),
+    reason: DEFAULT_FREEZE_REASON,
   };
 }
 
 function addDaysToIso(isoDate: string, days: number): string {
-  const base = isoDate ? new Date(isoDate) : new Date();
-  if (Number.isNaN(base.getTime())) return new Date().toISOString().split('T')[0];
-  const next = new Date(base.getTime() + days * 86_400_000);
-  return next.toISOString().split('T')[0];
+  const base = parseIsoDate(isoDate) ?? new Date();
+  base.setDate(base.getDate() + days);
+  return toIsoDate(base);
 }
 
 function calculateFreezeDays(startDate: string, endDate: string): number {
-  const s = new Date(startDate).getTime();
-  const e = new Date(endDate).getTime();
-  if (Number.isNaN(s) || Number.isNaN(e) || e < s) return 0;
-  return Math.max(1, Math.round((e - s) / 86_400_000) + 1);
+  const s = parseIsoDate(startDate);
+  const e = parseIsoDate(endDate);
+  if (!s || !e || e < s) return 0;
+  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * ICONS — SVG Icons
+ * ICONS
  * ════════════════════════════════════════════════════════════════════════ */
 
 const ICON_STROKE = 1.8;
@@ -222,7 +177,6 @@ const I = {
   search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3'],
   plus: ['M12 5v14', 'M5 12h14'],
   close: ['M18 6 6 18', 'M6 6l12 12'],
-  x: ['M18 6 6 18', 'M6 6l12 12'],
   userPlus: [
     'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
     'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -266,14 +220,7 @@ const I = {
     'M19 8v6',
     'M22 11h-6',
   ],
-  snowflake: [
-    'M12 2v20',
-    'M17 5 7 19',
-    'M7 5 17 19',
-    'M2 12h20',
-    'M20 9l-4 3 4 3',
-    'M4 9l4 3-4 3',
-  ],
+  snowflake: ['M12 2v20', 'M17 5 7 19', 'M7 5 17 19', 'M2 12h20', 'M20 9l-4 3 4 3', 'M4 9l4 3-4 3'],
   play: ['M6 4l14 8-14 8V4z'],
   eye: [
     'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z',
@@ -284,11 +231,7 @@ const I = {
     'M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2',
   ],
   check: ['M20 6 9 17l-5-5'],
-  download: [
-    'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4',
-    'M7 10l5 5 5-5',
-    'M12 15V3',
-  ],
+  download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
   grid: ['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z'],
   list: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'],
   sort: ['M7 15l5 5 5-5', 'M7 9l5-5 5 5'],
@@ -303,24 +246,23 @@ const I = {
   ],
   arrowUp: ['M12 19V5', 'M5 12l7-7 7 7'],
   arrowDown: ['M12 5v14', 'M19 12l-7 7-7-7'],
-  filter: ['M22 3H2l8 9.46V19l4 2v-8.54L22 3z'],
-  command: ['M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z'],
-  chevronDown: ['M6 9l6 6 6-6'],
-  chevronRight: ['M9 6l6 6-6 6'],
-  more: ['M12 12h.01', 'M19 12h.01', 'M5 12h.01'],
-  columns: [
-    'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z',
-    'M9 3v18',
-    'M15 3v18',
+  command: [
+    'M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z',
   ],
   layoutCompact: ['M3 3h18v6H3z', 'M3 11h18v6H3z', 'M3 19h18v2H3z'],
   layoutCozy: ['M3 3h18v8H3z', 'M3 13h18v8H3z'],
   layoutComfy: ['M3 3h18v10H3z', 'M3 15h18v6H3z'],
-  zap: ['M13 2 3 14h9l-1 8 10-12h-9l1-8z'],
-  sun: ['M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z', 'M12 1v2', 'M12 21v2', 'M4.22 4.22l1.42 1.42', 'M18.36 18.36l1.42 1.42', 'M1 12h2', 'M21 12h2', 'M4.22 19.78l1.42-1.42', 'M18.36 5.64l1.42-1.42'],
   info: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M12 16v-4', 'M12 8h.01'],
-  externalLink: ['M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6', 'M15 3h6v6', 'M10 14 21 3'],
-  arrowRight: ['M5 12h14', 'M12 5l7 7-7 7'],
+  gift: [
+    'M20 12v10H4V12',
+    'M2 7h20v5H2z',
+    'M12 22V7',
+    'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z',
+    'M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z',
+  ],
+  star: ['M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z'],
+  shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', 'M9 12l2 2 4-4'],
+  sidecar: ['M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z', 'M14 3v18'],
 } as const;
 
 const Icon = memo(function Icon({
@@ -395,9 +337,7 @@ function getInitials(name: string): string {
 
 function nameHash(str: string): number {
   let h = 0;
-  for (let i = 0; i < str.length; i += 1) {
-    h = (h * 31 + str.charCodeAt(i)) | 0;
-  }
+  for (let i = 0; i < str.length; i += 1) h = (h * 31 + str.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
@@ -415,13 +355,181 @@ const AVATAR_PALETTES: ReadonlyArray<readonly [string, string, string]> = [
 function avatarStyle(name: string): { background: string; glow: string } {
   const [a, b, c] = AVATAR_PALETTES[nameHash(name) % AVATAR_PALETTES.length];
   return {
-    background: `radial-gradient(circle at 28% 22%, ${c}44 0%, transparent 55%), linear-gradient(135deg, ${a} 0%, ${b} 100%)`,
+    background: `radial-gradient(circle at 28% 22%, ${c}55 0%, transparent 55%), linear-gradient(135deg, ${a} 0%, ${b} 100%)`,
     glow: b,
   };
 }
 
+/** QuickLook va Sidecar uchun yagona payload. Tiplar `ui.store` ga qarab cast qilinadi. */
+function buildStudentPanel(student: Student, navigate: NavigateFunction, copyable: boolean) {
+  const name = formatStudentName(student);
+  const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
+  const isActive = student.user?.isActive !== false;
+  const copy = copyable ? { copyable: true } : {};
+
+  return {
+    id: student.id,
+    type: 'student' as const,
+    title: name,
+    subtitle: student.user?.email || student.user?.phone || 'M-EDU Talabasi',
+    badge: {
+      text: isActive ? 'Faol Talaba' : 'Muzlatilgan',
+      tone: (isActive ? 'emerald' : 'amber') as 'emerald' | 'amber',
+    },
+    avatar: { text: name.slice(0, 2).toUpperCase() },
+    metrics: [
+      {
+        label: 'Guruhlar',
+        value: activeGroups.length,
+        subtext: activeGroups.map((g) => g.group?.name ?? '—').join(', ') || 'Biriktirilmagan',
+      },
+      { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
+      {
+        label: 'Ota-onasi',
+        value: student.parentName || '—',
+        subtext: student.parentPhone || 'Telefon kiritilmagan',
+      },
+    ],
+    details: [
+      { label: 'Telefon', value: student.user?.phone || student.parentPhone || '—', ...copy },
+      { label: 'Email', value: student.user?.email || '—', ...copy },
+      { label: 'Ota-ona ismi', value: student.parentName || '—' },
+      { label: 'Ota-ona telefoni', value: student.parentPhone || '—', ...copy },
+      { label: 'Talaba ID raqami', value: student.id, ...copy },
+    ],
+    tags: activeGroups.map((g) => g.group?.name ?? '').filter(Boolean),
+    primaryAction: {
+      label: 'To‘liq kartani ochish',
+      onExecute: () => navigate(`/students/${student.id}`),
+    },
+    secondaryAction: {
+      label: 'Tahrirlash',
+      onExecute: () => navigate(`/students/${student.id}/edit`),
+    },
+  };
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
- * SUB-COMPONENTS
+ * AURORA — sekin suzuvchi rang dog'lari (sahifa yuklanganda bitta fade-in)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const AuroraCanvas = memo(function AuroraCanvas() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 -top-40 z-0 h-[460px] overflow-hidden"
+    >
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.6, ease: EASE_PREMIUM }}
+        className="relative h-full w-full"
+      >
+        <div className="lg-orb left-[18%] top-[22%] h-[300px] w-[520px] bg-blue-400/25 dark:bg-sky-500/20" />
+        <div className="lg-orb lg-orb--b left-[48%] top-[34%] h-[260px] w-[440px] bg-violet-400/20 dark:bg-violet-500/18" />
+        <div className="lg-orb lg-orb--c left-[62%] top-[18%] h-[240px] w-[380px] bg-emerald-400/18 dark:bg-emerald-500/14" />
+      </motion.div>
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * GLASS SURFACE
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const GlassCardSurface = memo(function GlassCardSurface({
+  children,
+  className = '',
+  hover = false,
+  subtle = false,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  hover?: boolean;
+  subtle?: boolean;
+}) {
+  return (
+    <div
+      onPointerMove={hover ? trackPointer : undefined}
+      className={cx(
+        'lg-surface overflow-hidden',
+        subtle && 'lg-surface--subtle',
+        hover && 'lg-interactive',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * SEGMENTED CONTROL — recessed track + sirpanuvchi glass thumb
+ * ════════════════════════════════════════════════════════════════════════ */
+
+interface SegOption<T extends string> {
+  id: T;
+  label?: string;
+  icon?: readonly string[];
+  title?: string;
+  testId?: string;
+}
+
+function GlassSegmentedInner<T extends string>({
+  options,
+  value,
+  onChange,
+  layoutId,
+  ariaLabel,
+  semantics = 'toggle',
+}: {
+  options: SegOption<T>[];
+  value: T;
+  onChange: (v: T) => void;
+  layoutId: string;
+  ariaLabel: string;
+  semantics?: 'tabs' | 'toggle';
+}) {
+  const isTabs = semantics === 'tabs';
+  return (
+    <div role={isTabs ? 'tablist' : 'group'} aria-label={ariaLabel} className="lg-track">
+      {options.map((o) => {
+        const selected = o.id === value;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role={isTabs ? 'tab' : undefined}
+            aria-selected={isTabs ? selected : undefined}
+            aria-pressed={isTabs ? undefined : selected}
+            aria-label={o.title ?? o.label}
+            title={o.title ?? o.label}
+            data-testid={o.testId}
+            onClick={() => onChange(o.id)}
+            className={cx(
+              'relative shrink-0 whitespace-nowrap rounded-[11px] text-[11.5px] font-bold outline-none transition-colors duration-150',
+              'focus-visible:ring-2 focus-visible:ring-[#007AFF]/60',
+              o.label ? 'px-3 py-1.5' : 'p-1.5',
+              selected
+                ? 'text-slate-900 dark:text-white'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+            )}
+          >
+            {selected && <motion.span layoutId={layoutId} transition={SPRING.snappy} className="lg-thumb" />}
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              {o.icon && <Icon paths={o.icon} size={14} strokeWidth={2.05} />}
+              {o.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+const GlassSegmented = memo(GlassSegmentedInner) as typeof GlassSegmentedInner;
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PRIMITIVES
  * ════════════════════════════════════════════════════════════════════════ */
 
 const CountUp = memo(function CountUp({
@@ -436,48 +544,40 @@ const CountUp = memo(function CountUp({
   const reduced = usePrefersReducedMotion();
   const spanRef = useRef<HTMLSpanElement | null>(null);
   const prevValueRef = useRef<number>(0);
+  const fmt = (n: number) => `${(Number.isFinite(n) ? n : 0).toLocaleString()}${suffix}`;
 
   useEffect(() => {
     const el = spanRef.current;
     if (!el) return;
-    if (reduced) {
-      prevValueRef.current = value;
-      el.textContent = `${(Number.isFinite(value) ? value : 0).toLocaleString()}${suffix}`;
-      return;
-    }
     const from = prevValueRef.current;
     const to = value;
     prevValueRef.current = value;
-    if (from === to) {
-      el.textContent = `${(Number.isFinite(to) ? to : 0).toLocaleString()}${suffix}`;
+    if (reduced || from === to) {
+      el.textContent = fmt(to);
       return;
     }
-    let rafId: number;
+    let rafId = 0;
     let startTime: number | null = null;
     const durationMs = duration * 1000;
     const tick = (now: number) => {
       if (startTime === null) startTime = now;
       const progress = Math.min(1, (now - startTime) / durationMs);
       const eased = 1 - Math.pow(1 - progress, 4);
-      const current = Math.round(from + (to - from) * eased);
-      if (spanRef.current) {
-        spanRef.current.textContent = `${current.toLocaleString()}${suffix}`;
-      }
+      if (spanRef.current) spanRef.current.textContent = fmt(Math.round(from + (to - from) * eased));
       if (progress < 1) rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, duration, suffix, reduced]);
 
   return (
     <span ref={spanRef} className="tabular-nums">
-      {(Number.isFinite(value) ? value : 0).toLocaleString()}
-      {suffix}
+      {fmt(value)}
     </span>
   );
 });
 
-/* ── Sparkline — Refined micro-chart with smooth area ─────────────── */
 const Sparkline = memo(function Sparkline({
   data,
   className = '',
@@ -497,21 +597,15 @@ const Sparkline = memo(function Sparkline({
     const max = Math.max(...data);
     const range = max - min || 1;
     const step = w / Math.max(1, data.length - 1);
-    const pts = data.map((v, i) => {
-      const x = i * step;
-      const y = h - ((v - min) / range) * (h - 4) - 2;
-      return [x, y];
-    });
-    // Smooth cubic bezier path
+    const pts = data.map((v, i) => [i * step, h - ((v - min) / range) * (h - 4) - 2]);
     let d = `M${pts[0][0]},${pts[0][1]}`;
     for (let i = 1; i < pts.length; i++) {
       const [x0, y0] = pts[i - 1];
       const [x1, y1] = pts[i];
-      const cx = (x0 + x1) / 2;
-      d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+      const cx2 = (x0 + x1) / 2;
+      d += ` C${cx2},${y0} ${cx2},${y1} ${x1},${y1}`;
     }
-    const a = `${d} L${w},${h} L0,${h} Z`;
-    return { path: d, area: a };
+    return { path: d, area: `${d} L${w},${h} L0,${h} Z` };
   }, [data]);
 
   const gid = `sparkline-fill-${uid}`;
@@ -519,26 +613,18 @@ const Sparkline = memo(function Sparkline({
     <svg viewBox="0 0 100 28" preserveAspectRatio="none" className={className} aria-hidden="true">
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={stroke} stopOpacity="0.32" />
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.34" />
           <stop offset="100%" stopColor={stroke} stopOpacity="0" />
         </linearGradient>
       </defs>
       {area && <path d={area} fill={`url(#${gid})`} />}
       {path && (
-        <path
-          d={path}
-          fill="none"
-          stroke={stroke}
-          strokeWidth="1.7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <path d={path} fill="none" stroke={stroke} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
       )}
     </svg>
   );
 });
 
-/* ── StudentAvatar — Squircle + Progress Ring Presence ──────────── */
 const StudentAvatar = memo(function StudentAvatar({
   name,
   size = 40,
@@ -562,7 +648,7 @@ const StudentAvatar = memo(function StudentAvatar({
       {showRing && typeof ringProgress === 'number' && (
         <svg
           aria-hidden="true"
-          className="absolute -inset-[3px] transition-opacity duration-300"
+          className="absolute -inset-[3px]"
           width={ringSize}
           height={ringSize}
           viewBox={`0 0 ${ringSize} ${ringSize}`}
@@ -592,7 +678,7 @@ const StudentAvatar = memo(function StudentAvatar({
         </svg>
       )}
       <div
-        className="relative flex items-center justify-center rounded-[13px] font-bold text-white shadow-[0_2px_10px_-2px_rgba(0,0,0,0.3),0_1px_0_0_rgba(255,255,255,0.35)_inset] ring-1 ring-black/10 transition-transform duration-300 group-hover:scale-[1.04] dark:ring-white/15"
+        className="relative flex items-center justify-center overflow-hidden rounded-[13px] font-bold text-white shadow-[0_6px_14px_-6px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.4)] ring-1 ring-black/10 transition-transform duration-300 group-hover:scale-[1.04] dark:ring-white/15"
         style={{
           width: size,
           height: size,
@@ -601,24 +687,58 @@ const StudentAvatar = memo(function StudentAvatar({
           letterSpacing: '0.025em',
         }}
       >
-        <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
-          {getInitials(name)}
-        </span>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent"
+        />
+        <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">{getInitials(name)}</span>
       </div>
       <span
         aria-hidden="true"
-        className={[
+        className={cx(
           'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white dark:ring-surface-900',
-          isActive
-            ? 'bg-emerald-500 shadow-[0_0_8px_#10B981]'
-            : 'bg-amber-500 shadow-[0_0_6px_#F59E0B]',
-        ].join(' ')}
+          isActive ? 'bg-emerald-500 shadow-[0_0_8px_#10B981]' : 'bg-amber-500 shadow-[0_0_6px_#F59E0B]',
+        )}
       />
     </div>
   );
 });
 
-/* ── StatTile — Interactive Telemetry Card + Sparkline ─────────── */
+const StatusBadge = memo(function StatusBadge({
+  isActive,
+  pulse = false,
+  size = 'md',
+}: {
+  isActive: boolean | undefined;
+  pulse?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  const { t } = useSafeI18n();
+  const badge = getStudentStatusBadge(isActive);
+  const red = badge.color === 'red';
+  return (
+    <span
+      className={cx(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-full font-bold tracking-tight ring-1 ring-inset',
+        size === 'sm' ? 'px-2.5 py-0.5 text-[10.5px]' : 'px-2.5 py-1 text-[11px]',
+        red
+          ? 'bg-red-500/10 text-red-600 ring-red-500/25 dark:bg-red-500/15 dark:text-red-400'
+          : 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] dark:bg-emerald-500/15 dark:text-emerald-300 dark:shadow-none',
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'h-1.5 w-1.5 rounded-full',
+          red ? 'bg-red-500' : cx('bg-emerald-500 shadow-[0_0_6px_#10B981]', pulse && 'medu-pulse-dot'),
+        )}
+      />
+      <span>{t(badge.label)}</span>
+    </span>
+  );
+});
+
+/* ── StatTile ──────────────────────────────────────────────────── */
 type StatTone = 'blue' | 'green' | 'orange' | 'purple';
 
 const STAT_PALETTE: Record<
@@ -635,42 +755,42 @@ const STAT_PALETTE: Record<
   }
 > = {
   blue: {
-    iconBg: 'bg-gradient-to-br from-blue-500/15 to-sky-500/5 dark:from-blue-500/25 dark:to-sky-500/10',
+    iconBg: 'bg-gradient-to-br from-blue-500/20 to-sky-500/5 dark:from-blue-500/30 dark:to-sky-500/10',
     iconFg: 'text-blue-600 dark:text-sky-400',
-    activeRing: 'ring-2 ring-blue-500/60 dark:ring-sky-400/60 border-blue-400/60',
+    activeRing: 'ring-2 ring-blue-500/55 dark:ring-sky-400/55',
     barColor: 'bg-gradient-to-r from-blue-600 to-sky-400',
     pillBg: 'bg-blue-500/10 text-blue-700 dark:bg-sky-400/15 dark:text-sky-300',
-    glow: 'from-blue-500/12 via-transparent',
+    glow: 'from-blue-500/14',
     sparkStroke: '#38BDF8',
     sparkSeries: [12, 18, 14, 22, 20, 28, 24, 34, 30, 38, 42, 48],
   },
   green: {
-    iconBg: 'bg-gradient-to-br from-emerald-500/15 to-teal-500/5 dark:from-emerald-500/25 dark:to-teal-500/10',
+    iconBg: 'bg-gradient-to-br from-emerald-500/20 to-teal-500/5 dark:from-emerald-500/30 dark:to-teal-500/10',
     iconFg: 'text-emerald-600 dark:text-emerald-400',
-    activeRing: 'ring-2 ring-emerald-500/60 dark:ring-emerald-400/60 border-emerald-400/60',
+    activeRing: 'ring-2 ring-emerald-500/55 dark:ring-emerald-400/55',
     barColor: 'bg-gradient-to-r from-emerald-600 to-teal-400',
     pillBg: 'bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300',
-    glow: 'from-emerald-500/12 via-transparent',
+    glow: 'from-emerald-500/14',
     sparkStroke: '#10B981',
     sparkSeries: [8, 12, 10, 16, 14, 20, 18, 22, 26, 24, 30, 34],
   },
   orange: {
-    iconBg: 'bg-gradient-to-br from-amber-500/15 to-orange-500/5 dark:from-amber-500/25 dark:to-orange-500/10',
+    iconBg: 'bg-gradient-to-br from-amber-500/20 to-orange-500/5 dark:from-amber-500/30 dark:to-orange-500/10',
     iconFg: 'text-amber-600 dark:text-amber-400',
-    activeRing: 'ring-2 ring-amber-500/60 dark:ring-amber-400/60 border-amber-400/60',
+    activeRing: 'ring-2 ring-amber-500/55 dark:ring-amber-400/55',
     barColor: 'bg-gradient-to-r from-amber-500 to-orange-400',
     pillBg: 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300',
-    glow: 'from-amber-500/12 via-transparent',
+    glow: 'from-amber-500/14',
     sparkStroke: '#F59E0B',
     sparkSeries: [18, 16, 20, 14, 18, 12, 16, 10, 14, 8, 12, 6],
   },
   purple: {
-    iconBg: 'bg-gradient-to-br from-indigo-500/15 to-violet-500/5 dark:from-indigo-500/25 dark:to-violet-500/10',
+    iconBg: 'bg-gradient-to-br from-indigo-500/20 to-violet-500/5 dark:from-indigo-500/30 dark:to-violet-500/10',
     iconFg: 'text-indigo-600 dark:text-indigo-400',
-    activeRing: 'ring-2 ring-indigo-500/60 dark:ring-indigo-400/60 border-indigo-400/60',
+    activeRing: 'ring-2 ring-indigo-500/55 dark:ring-indigo-400/55',
     barColor: 'bg-gradient-to-r from-indigo-600 to-violet-400',
     pillBg: 'bg-indigo-500/10 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300',
-    glow: 'from-indigo-500/12 via-transparent',
+    glow: 'from-indigo-500/14',
     sparkStroke: '#8B5CF6',
     sparkSeries: [10, 14, 12, 18, 16, 22, 20, 26, 22, 28, 26, 30],
   },
@@ -702,33 +822,26 @@ const StatTile = memo(function StatTile({
       type="button"
       data-testid={`metric-pill-${tone}`}
       variants={tileVariants}
-      whileHover={reduced ? undefined : { y: -3, scale: 1.008 }}
+      whileHover={reduced ? undefined : { y: -4, scale: 1.01 }}
       whileTap={reduced ? undefined : { scale: 0.985 }}
       transition={SPRING.snappy}
       onClick={onClick}
+      onPointerMove={trackPointer}
       aria-pressed={active}
-      className={[
-        'group relative flex w-full flex-col justify-between overflow-hidden rounded-[22px] p-4 text-left select-none outline-none',
-        'border border-black/[0.06] dark:border-white/[0.08]',
-        'bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl',
-        'shadow-[0_1px_2px_rgba(15,23,42,0.03),0_12px_28px_-8px_rgba(15,23,42,0.06),0_1px_0_0_rgba(255,255,255,0.85)_inset]',
-        'dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_16px_32px_-10px_rgba(0,0,0,0.6),0_1px_0_0_rgba(255,255,255,0.09)_inset]',
-        'transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#007AFF]',
-        active ? c.activeRing : 'hover:border-black/[0.12] dark:hover:border-white/[0.16]',
-      ].join(' ')}
+      className={cx(
+        'lg-surface lg-interactive group flex w-full flex-col justify-between overflow-hidden p-4 text-left select-none outline-none [--lg-r:24px]',
+        'focus-visible:ring-2 focus-visible:ring-[#007AFF]',
+        active && c.activeRing,
+      )}
     >
       <div
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${c.glow} to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-100`}
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/[0.18]"
+        className={`pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br ${c.glow} to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-100`}
       />
 
       <div className="relative z-10 flex w-full items-start justify-between gap-2">
         <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] ${c.iconBg} ${c.iconFg} shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset] ring-1 ring-black/5 transition-transform duration-300 group-hover:scale-105 dark:ring-white/10`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${c.iconBg} ${c.iconFg} shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-black/5 transition-transform duration-300 group-hover:scale-105 dark:ring-white/10`}
         >
           <Icon paths={icon} size={19} strokeWidth={2.0} duotone />
         </div>
@@ -740,13 +853,11 @@ const StatTile = memo(function StatTile({
       </div>
 
       <div className="relative z-10 mt-3 w-full">
-        <div className="text-[26px] font-extrabold leading-none tracking-tight text-slate-900 dark:text-white tabular-nums">
+        <div className="text-[28px] font-extrabold leading-none tracking-tight text-slate-900 tabular-nums dark:text-white">
           <CountUp value={value} />
         </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="truncate text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
-            {label}
-          </span>
+        <div className="mt-1.5 truncate text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+          {label}
         </div>
 
         <div className="relative mt-2.5 h-8 w-full">
@@ -758,7 +869,7 @@ const StatTile = memo(function StatTile({
           />
         </div>
 
-        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07]">
+        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-900/[0.07] shadow-[inset_0_1px_1px_rgba(0,0,0,0.08)] dark:bg-white/[0.07]">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${ratio}%` }}
@@ -782,6 +893,14 @@ const CopyChip = memo(function CopyChip({
   maxWidth?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
@@ -791,7 +910,8 @@ const CopyChip = memo(function CopyChip({
         .writeText(value)
         .then(() => {
           setCopied(true);
-          setTimeout(() => setCopied(false), 1600);
+          if (timerRef.current) window.clearTimeout(timerRef.current);
+          timerRef.current = window.setTimeout(() => setCopied(false), 1600);
         })
         .catch(() => {});
     },
@@ -803,7 +923,7 @@ const CopyChip = memo(function CopyChip({
       type="button"
       onClick={handleCopy}
       title={`${value} (Nusxalash uchun bosing)`}
-      className="group/chip inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2 py-1 -mx-2 text-[12.5px] font-medium text-[var(--text-secondary)] transition-all duration-150 hover:border-slate-200/80 hover:bg-white/80 hover:text-slate-900 hover:shadow-xs dark:hover:border-white/10 dark:hover:bg-white/[0.06] dark:hover:text-white"
+      className="group/chip -mx-2 inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2 py-1 text-[12.5px] font-medium text-[var(--text-secondary)] transition-all duration-150 hover:border-slate-200/80 hover:bg-white/70 hover:text-slate-900 dark:hover:border-white/10 dark:hover:bg-white/[0.06] dark:hover:text-white"
     >
       <Icon
         paths={copied ? I.check : icon}
@@ -819,7 +939,7 @@ const CopyChip = memo(function CopyChip({
   );
 });
 
-/* ── Shimmer ───────────────────────────────────────────────────── */
+/* ── Skeletons ─────────────────────────────────────────────────── */
 const Shimmer = memo(function Shimmer({
   className = '',
   radius = '0.85rem',
@@ -836,7 +956,6 @@ const Shimmer = memo(function Shimmer({
   );
 });
 
-/* ── Ghost Row Skeleton ────────────────────────────────────────── */
 const GhostRow = memo(function GhostRow({ index = 0 }: { index?: number }) {
   return (
     <div
@@ -861,10 +980,10 @@ const StudentsSkeleton = memo(function StudentsSkeleton() {
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <Shimmer key={i} className="h-[148px]" radius="1.375rem" />
+          <Shimmer key={i} className="h-[156px]" radius="1.5rem" />
         ))}
       </div>
-      <Shimmer className="h-[72px]" radius="1.375rem" />
+      <Shimmer className="h-[72px]" radius="1.625rem" />
       <GlassCardSurface>
         <div className="border-b border-slate-200/60 p-3.5 dark:border-white/[0.06]">
           <Shimmer className="h-5 w-40" radius="0.5rem" />
@@ -877,7 +996,9 @@ const StudentsSkeleton = memo(function StudentsSkeleton() {
   );
 });
 
-/* ── RowAction ─────────────────────────────────────────────────── */
+/* ── RowAction — glass icon button ─────────────────────────────── */
+type ActionTone = 'neutral' | 'edit' | 'freeze' | 'delete' | 'celebrate';
+
 const RowAction = memo(function RowAction({
   icon,
   label,
@@ -889,31 +1010,12 @@ const RowAction = memo(function RowAction({
 }: {
   icon: readonly string[];
   label: string;
-  tone: 'edit' | 'freeze' | 'delete' | 'celebrate';
+  tone: ActionTone;
   to?: string;
   onClick?: () => void;
   disabled?: boolean;
   loading?: boolean;
 }) {
-  const toneClasses =
-    tone === 'delete'
-      ? 'text-[#FF3B30] hover:bg-[#FF3B30]/12 hover:border-[#FF3B30]/30 dark:text-[#FF453A]'
-      : tone === 'freeze'
-        ? 'text-sky-600 hover:bg-sky-500/12 hover:border-sky-500/30 dark:text-sky-400'
-        : tone === 'celebrate'
-          ? 'text-amber-500 hover:bg-amber-500/12 hover:border-amber-500/30 dark:text-amber-400'
-        : 'text-[#007AFF] hover:bg-[#007AFF]/12 hover:border-[#007AFF]/30 dark:text-[#38BDF8]';
-
-  const baseClass = [
-    'flex h-8 w-8 items-center justify-center rounded-[11px] outline-none select-none',
-    'border border-slate-200/80 bg-white/75 shadow-[0_1px_0_#FFF_inset,0_2px_5px_rgba(15,23,42,0.04)]',
-    'dark:border-white/[0.10] dark:bg-white/[0.05] dark:shadow-none',
-    'transition-all duration-200 hover:scale-105 active:scale-95',
-    'focus-visible:ring-2 focus-visible:ring-[#007AFF]/60',
-    'disabled:opacity-40 disabled:cursor-not-allowed',
-    toneClasses,
-  ].join(' ');
-
   const content = loading ? (
     <svg
       className="h-3.5 w-3.5 animate-spin"
@@ -932,7 +1034,7 @@ const RowAction = memo(function RowAction({
 
   if (to) {
     return (
-      <Link to={to} aria-label={label} title={label} className={baseClass}>
+      <Link to={to} aria-label={label} title={label} data-tone={tone} className="lg-btn">
         {content}
       </Link>
     );
@@ -945,16 +1047,90 @@ const RowAction = memo(function RowAction({
       disabled={disabled || loading}
       aria-label={label}
       title={label}
-      className={baseClass}
+      data-tone={tone}
+      className="lg-btn"
     >
       {content}
     </button>
   );
 });
 
+/* ── StudentActions — grid va jadval uchun yagona action qatori ── */
+const StudentActions = memo(function StudentActions({
+  student,
+  isActive,
+  unfreezing,
+  deleting,
+  deleteBusy,
+  onFreeze,
+  onUnfreeze,
+  onSidecar,
+  onQuickLook,
+  onCelebrate,
+  onDelete,
+}: {
+  student: Student;
+  isActive: boolean;
+  unfreezing: boolean;
+  deleting: boolean;
+  deleteBusy: boolean;
+  onFreeze: (s: Student) => void;
+  onUnfreeze: (id: string) => void;
+  onSidecar: (s: Student) => void;
+  onQuickLook: (s: Student) => void;
+  onCelebrate: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { t } = useSafeI18n();
+  return (
+    <>
+      {isActive ? (
+        <RowAction
+          icon={I.snowflake}
+          label="Darslarni muzlatish (Freeze)"
+          tone="freeze"
+          onClick={() => onFreeze(student)}
+        />
+      ) : (
+        <RowAction
+          icon={I.play}
+          label="Faollashtirish (Unfreeze)"
+          tone="edit"
+          onClick={() => onUnfreeze(student.id)}
+          loading={unfreezing}
+        />
+      )}
+      <RowAction
+        icon={I.sidecar}
+        label="Sidecar tafsilotlari (Split-View · Space)"
+        tone="neutral"
+        onClick={() => onSidecar(student)}
+      />
+      <RowAction
+        icon={I.sparkles}
+        label="Yutuq & Sertifikat (Milestone)"
+        tone="celebrate"
+        onClick={() => onCelebrate(student.id)}
+      />
+      <RowAction icon={I.eye} label="Quick-Look (Space)" tone="edit" onClick={() => onQuickLook(student)} />
+      <RowAction icon={I.edit} label={t('common.edit')} tone="edit" to={`/students/${student.id}/edit`} />
+      <RowAction
+        icon={I.trash}
+        label={t('common.delete')}
+        tone="delete"
+        onClick={() => onDelete(student.id)}
+        disabled={deleteBusy}
+        loading={deleting}
+      />
+    </>
+  );
+});
+
 /* ══════════════════════════════════════════════════════════════════════════
- * CALENDAR HEATMAP — 30-day freeze visualization
+ * CALENDAR HEATMAP — hafta bo'yicha tekislangan 6 haftalik ko'rinish
  * ════════════════════════════════════════════════════════════════════════ */
+
+const WEEKDAYS = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'] as const;
 
 const CalendarHeatmap = memo(function CalendarHeatmap({
   startDate,
@@ -964,36 +1140,38 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
   endDate: string;
 }) {
   const days = useMemo(() => {
+    const start = parseIsoDate(startDate);
+    const end = parseIsoDate(endDate);
+    if (!start || !end) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(0, 0, 0, 0);
-    const todayMidnight = new Date(today);
-    // Show 30 cells: 15 before today, 15 after — but anchored to start date
+
+    // Dushanbaga tekislangan boshlanish nuqtasi
     const anchor = new Date(Math.min(start.getTime(), today.getTime()));
-    anchor.setDate(anchor.getDate() - 2);
-    return Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(anchor);
-      d.setDate(d.getDate() + i);
+    anchor.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7));
+
+    const s = start.getTime();
+    const e = end.getTime();
+    const tm = today.getTime();
+
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + i);
       const t = d.getTime();
-      const s = start.getTime();
-      const e = end.getTime();
-      const tm = todayMidnight.getTime();
-      const inRange = t >= s && t <= e;
-      const isStart = t === s;
-      const isEnd = t === e;
-      const isToday = t === tm;
-      const isPast = t < tm;
-      return { date: d, inRange, isStart, isEnd, isToday, isPast };
+      return {
+        date: d,
+        inRange: t >= s && t <= e,
+        isStart: t === s,
+        isEnd: t === e,
+        isToday: t === tm,
+      };
     });
   }, [startDate, endDate]);
 
-  const dayLabels = ['D', 'S', 'C', 'P', 'J', 'Sh', 'Y'];
+  if (days.length === 0) return null;
+  const rangeFmt = (d: Date) => d.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' });
 
   return (
-    <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.04] via-blue-500/[0.02] to-transparent p-3.5 dark:border-sky-400/15">
+    <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.05] via-blue-500/[0.02] to-transparent p-3.5 dark:border-sky-400/15">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Vizual kalendar
@@ -1009,41 +1187,43 @@ const CalendarHeatmap = memo(function CalendarHeatmap({
           </span>
         </div>
       </div>
-      <div className="grid grid-cols-10 gap-1">
-        {days.map(({ date, inRange, isStart, isEnd, isToday }, idx) => (
+
+      <div className="mb-1 grid grid-cols-7 gap-1">
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="text-center text-[9.5px] font-bold text-slate-400 dark:text-slate-500">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {days.map(({ date, inRange, isStart, isEnd, isToday }) => (
           <div
-            key={idx}
-            title={date.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}
-            className={[
+            key={date.getTime()}
+            title={rangeFmt(date)}
+            className={cx(
               'relative flex h-6 items-center justify-center rounded-md text-[9.5px] font-bold tabular-nums transition-all duration-200',
               inRange
-                ? 'bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-[0_1px_4px_rgba(56,189,248,0.35)]'
+                ? 'bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-[0_1px_4px_rgba(56,189,248,0.35),inset_0_1px_0_rgba(255,255,255,0.35)]'
                 : 'border border-slate-200/70 bg-white/50 text-slate-400 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-500',
-              isToday && !inRange ? 'ring-1 ring-[#007AFF]/50' : '',
-              isStart || isEnd ? 'ring-1 ring-sky-400/70 shadow-[0_0_8px_rgba(56,189,248,0.45)]' : '',
-            ].join(' ')}
+              isToday && !inRange && 'ring-1 ring-[#007AFF]/50',
+              (isStart || isEnd) && 'ring-1 ring-sky-300/80 shadow-[0_0_10px_rgba(56,189,248,0.5)]',
+            )}
           >
             {date.getDate()}
             {isToday && (
-              <span className="absolute -top-0.5 -right-0.5 h-1 w-1 rounded-full bg-[#007AFF] shadow-[0_0_4px_#007AFF]" />
+              <span className="absolute -right-0.5 -top-0.5 h-1 w-1 rounded-full bg-[#007AFF] shadow-[0_0_4px_#007AFF]" />
             )}
           </div>
         ))}
       </div>
-      <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400 dark:text-slate-500">
-        <span>{dayLabels.map((d) => d).join(' · ')}</span>
-        <span className="tabular-nums">
-          {days[0].date.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })} —{' '}
-          {days[29].date.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'short' })}
-        </span>
+
+      <div className="mt-2 flex items-center justify-end text-[10px] font-medium tabular-nums text-slate-400 dark:text-slate-500">
+        {rangeFmt(days[0].date)} — {rangeFmt(days[days.length - 1].date)}
       </div>
     </div>
   );
 });
-
-/* ══════════════════════════════════════════════════════════════════════════
- * FREEZE TIMELINE PREVIEW
- * ════════════════════════════════════════════════════════════════════════ */
 
 const FreezeTimeline = memo(function FreezeTimeline({
   startDate,
@@ -1055,11 +1235,8 @@ const FreezeTimeline = memo(function FreezeTimeline({
   days: number;
 }) {
   const fmt = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' });
-    } catch {
-      return iso;
-    }
+    const d = parseIsoDate(iso);
+    return d ? d.toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' }) : iso;
   };
   const pct = Math.min(100, Math.max(5, (days / 30) * 100));
   return (
@@ -1072,17 +1249,12 @@ const FreezeTimeline = memo(function FreezeTimeline({
         </span>
         <span className="text-slate-500 dark:text-slate-400">{fmt(endDate)}</span>
       </div>
-      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.06]">
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-900/[0.07] shadow-[inset_0_1px_1px_rgba(0,0,0,0.1)] dark:bg-white/[0.06]">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 0.6, ease: EASE_PREMIUM }}
           className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500"
-        />
-        <motion.div
-          animate={pct > 70 ? { opacity: [0.5, 1, 0.5] } : { opacity: 0.4 }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute inset-y-0 right-0 w-1/3 rounded-full bg-gradient-to-r from-transparent via-white/40 to-transparent"
         />
       </div>
     </div>
@@ -1090,45 +1262,7 @@ const FreezeTimeline = memo(function FreezeTimeline({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * DENSITY TOGGLE
- * ════════════════════════════════════════════════════════════════════════ */
-
-const DensityToggle = memo(function DensityToggle({
-  density,
-  onChange,
-}: {
-  density: Density;
-  onChange: (d: Density) => void;
-}) {
-  const options: { id: Density; icon: readonly string[]; label: string }[] = [
-    { id: 'compact', icon: I.layoutCompact, label: 'Ixcham' },
-    { id: 'cozy', icon: I.layoutCozy, label: 'Qulay' },
-    { id: 'comfy', icon: I.layoutComfy, label: 'Keng' },
-  ];
-  return (
-    <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
-      {options.map((opt) => (
-        <button
-          key={opt.id}
-          type="button"
-          onClick={() => onChange(opt.id)}
-          aria-label={opt.label}
-          title={opt.label}
-          className={`rounded-lg p-1.5 transition-all ${
-            density === opt.id
-              ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-          }`}
-        >
-          <Icon paths={opt.icon} size={14} strokeWidth={2.0} />
-        </button>
-      ))}
-    </div>
-  );
-});
-
-/* ══════════════════════════════════════════════════════════════════════════
- * FILTER CHIPS — Dismissible active filter indicators
+ * FILTER CHIPS
  * ════════════════════════════════════════════════════════════════════════ */
 
 interface FilterChip {
@@ -1138,15 +1272,16 @@ interface FilterChip {
   tone?: 'blue' | 'amber' | 'emerald' | 'slate';
 }
 
+const CHIP_TONES: Record<NonNullable<FilterChip['tone']>, string> = {
+  blue: 'bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/25',
+  amber: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/25',
+  emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
+  slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/10',
+};
+
 const FilterChips = memo(
   forwardRef<HTMLDivElement, { chips: FilterChip[] }>(function FilterChips({ chips }, ref) {
     if (chips.length === 0) return null;
-    const toneMap: Record<NonNullable<FilterChip['tone']>, string> = {
-      blue: 'bg-blue-500/10 text-blue-700 ring-blue-500/25 dark:bg-sky-400/12 dark:text-sky-300 dark:ring-sky-400/25',
-      amber: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:bg-amber-400/12 dark:text-amber-300 dark:ring-amber-400/25',
-      emerald: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:bg-emerald-400/12 dark:text-emerald-300 dark:ring-emerald-400/25',
-      slate: 'bg-slate-500/10 text-slate-700 ring-slate-500/20 dark:bg-white/[0.06] dark:text-slate-300 dark:ring-white/10',
-    };
     return (
       <motion.div
         ref={ref}
@@ -1155,37 +1290,37 @@ const FilterChips = memo(
         exit={{ opacity: 0, height: 0 }}
         className="flex flex-wrap items-center gap-1.5 px-1"
       >
-      <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-        Filtrlar:
-      </span>
-      {chips.map((chip) => (
-        <motion.button
-          key={chip.id}
-          type="button"
-          layout
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={SPRING.snappy}
-          onClick={chip.onRemove}
-          className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset transition-all hover:scale-[1.03] ${toneMap[chip.tone ?? 'slate']}`}
-        >
-          <span className="max-w-[140px] truncate">{chip.label}</span>
-          <Icon
-            paths={I.close}
-            size={10}
-            strokeWidth={2.6}
-            className="opacity-55 transition-opacity group-hover:opacity-100"
-          />
-        </motion.button>
-      ))}
-    </motion.div>
-  );
+        <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          Filtrlar:
+        </span>
+        {chips.map((chip) => (
+          <motion.button
+            key={chip.id}
+            type="button"
+            layout
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={SPRING.snappy}
+            onClick={chip.onRemove}
+            className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset transition-transform hover:scale-[1.03] ${CHIP_TONES[chip.tone ?? 'slate']}`}
+          >
+            <span className="max-w-[140px] truncate">{chip.label}</span>
+            <Icon
+              paths={I.close}
+              size={10}
+              strokeWidth={2.6}
+              className="opacity-55 transition-opacity group-hover:opacity-100"
+            />
+          </motion.button>
+        ))}
+      </motion.div>
+    );
   }),
 );
 
 /* ══════════════════════════════════════════════════════════════════════════
- * SELECTION PREVIEW — Floating island avatars
+ * SELECTION PREVIEW
  * ════════════════════════════════════════════════════════════════════════ */
 
 const SelectionPreview = memo(function SelectionPreview({
@@ -1201,12 +1336,11 @@ const SelectionPreview = memo(function SelectionPreview({
     <div className="flex items-center">
       {visible.map((s, i) => {
         const name = formatStudentName(s);
-        const style = avatarStyle(name);
         return (
           <div
             key={s.id}
-            className="relative -ml-2 first:ml-0 flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-extrabold text-white ring-2 ring-white transition-transform duration-200 hover:z-10 hover:scale-110 dark:ring-surface-900"
-            style={{ background: style.background, zIndex: max - i }}
+            className="relative -ml-2 flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-extrabold text-white ring-2 ring-white transition-transform duration-200 first:ml-0 hover:z-10 hover:scale-110 dark:ring-surface-900"
+            style={{ background: avatarStyle(name).background, zIndex: max - i }}
             title={name}
           >
             {getInitials(name)}
@@ -1223,7 +1357,7 @@ const SelectionPreview = memo(function SelectionPreview({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * COMMAND PALETTE — ⌘K Spotlight-style
+ * COMMAND PALETTE — ⌘K
  * ════════════════════════════════════════════════════════════════════════ */
 
 interface PaletteAction {
@@ -1234,6 +1368,9 @@ interface PaletteAction {
   onExecute: () => void;
   keywords?: string;
 }
+
+const KBD =
+  'rounded-md border border-slate-200/80 bg-white/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-400 dark:shadow-none';
 
 const CommandPalette = memo(function CommandPalette({
   open,
@@ -1251,28 +1388,30 @@ const CommandPalette = memo(function CommandPalette({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActiveIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 80);
-    }
+    if (!open) return;
+    setQuery('');
+    setActiveIndex(0);
+    const id = window.setTimeout(() => inputRef.current?.focus(), 80);
+    return () => window.clearTimeout(id);
   }, [open]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return actions.slice(0, 8);
     return actions
-      .filter(
-        (a) =>
-          a.label.toLowerCase().includes(q) ||
-          (a.keywords ?? '').toLowerCase().includes(q),
-      )
+      .filter((a) => a.label.toLowerCase().includes(q) || (a.keywords ?? '').toLowerCase().includes(q))
       .slice(0, 8);
   }, [query, actions]);
 
   useEffect(() => {
     if (activeIndex >= filtered.length) setActiveIndex(Math.max(0, filtered.length - 1));
   }, [filtered, activeIndex]);
+
+  const run = (action: PaletteAction | undefined) => {
+    if (!action) return;
+    action.onExecute();
+    onClose();
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -1283,11 +1422,7 @@ const CommandPalette = memo(function CommandPalette({
       setActiveIndex((i) => Math.max(0, i - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const chosen = filtered[activeIndex];
-      if (chosen) {
-        chosen.onExecute();
-        onClose();
-      }
+      run(filtered[activeIndex]);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
@@ -1301,23 +1436,23 @@ const CommandPalette = memo(function CommandPalette({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/35 px-4 pt-[12vh] backdrop-blur-md"
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/30 px-4 pt-[12vh] backdrop-blur-md"
           onClick={onClose}
           role="presentation"
         >
           <motion.div
-            initial={{ opacity: 0, y: -16, scale: 0.97 }}
+            initial={{ opacity: 0, y: -18, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={SPRING.palette}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl overflow-hidden rounded-[22px] border border-white/60 bg-white/95 shadow-[0_20px_70px_-20px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.1] dark:bg-surface-900/95 dark:shadow-[0_20px_70px_-20px_rgba(0,0,0,0.9)]"
+            className="lg-surface lg-float w-full max-w-xl overflow-hidden [--lg-r:26px]"
             role="dialog"
             aria-modal="true"
             aria-label="Command Palette"
           >
-            <div className="flex items-center gap-2.5 border-b border-slate-200/70 px-4 py-3 dark:border-white/[0.06]">
+            <div className="flex items-center gap-2.5 border-b border-slate-900/[0.07] px-4 py-3.5 dark:border-white/[0.07]">
               <Icon paths={I.search} size={17} className="text-slate-400 dark:text-slate-500" />
               <input
                 ref={inputRef}
@@ -1325,13 +1460,12 @@ const CommandPalette = memo(function CommandPalette({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
-                className="flex-1 bg-transparent text-[14px] font-medium text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
+                className="flex-1 bg-transparent text-[14.5px] font-medium text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
               />
-              <kbd className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
-                ESC
-              </kbd>
+              <kbd className={KBD}>ESC</kbd>
             </div>
-            <div className="max-h-[52vh] overflow-y-auto p-1.5">
+
+            <div className="relative z-10 max-h-[52vh] overflow-y-auto p-2">
               {filtered.length === 0 ? (
                 <div className="p-6 text-center text-[13px] text-slate-500 dark:text-slate-400">
                   Hech narsa topilmadi
@@ -1343,48 +1477,43 @@ const CommandPalette = memo(function CommandPalette({
                     <button
                       key={action.id}
                       type="button"
-                      onClick={() => {
-                        action.onExecute();
-                        onClose();
-                      }}
+                      onClick={() => run(action)}
                       onMouseEnter={() => setActiveIndex(idx)}
-                      className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors ${
-                        isActive
-                          ? 'bg-[#007AFF]/12 text-[#007AFF] dark:bg-sky-400/15 dark:text-sky-300'
-                          : 'text-slate-700 hover:bg-slate-100/70 dark:text-slate-200 dark:hover:bg-white/[0.04]'
-                      }`}
+                      className={cx(
+                        'relative flex w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-left transition-colors',
+                        isActive ? 'text-[#007AFF] dark:text-sky-300' : 'text-slate-700 dark:text-slate-200',
+                      )}
                     >
+                      {isActive && (
+                        <motion.span
+                          layoutId="palette-active"
+                          transition={SPRING.snappy}
+                          className="absolute inset-0 rounded-2xl bg-[#007AFF]/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] ring-1 ring-[#007AFF]/15 dark:bg-sky-400/15 dark:shadow-none dark:ring-sky-400/20"
+                        />
+                      )}
                       <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] ${
+                        className={cx(
+                          'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px]',
                           isActive
-                            ? 'bg-[#007AFF]/15 text-[#007AFF] dark:bg-sky-400/20 dark:text-sky-300'
-                            : 'bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-400'
-                        }`}
+                            ? 'bg-[#007AFF]/15 dark:bg-sky-400/20'
+                            : 'bg-slate-900/[0.05] text-slate-500 dark:bg-white/[0.05] dark:text-slate-400',
+                        )}
                       >
                         <Icon paths={action.icon} size={15} strokeWidth={2.0} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-semibold">{action.label}</div>
-                      </div>
-                      {action.hint && (
-                        <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400">
-                          {action.hint}
-                        </kbd>
-                      )}
+                      <div className="relative min-w-0 flex-1 text-[13px] font-semibold">{action.label}</div>
+                      {action.hint && <kbd className={`relative ${KBD}`}>{action.hint}</kbd>}
                     </button>
                   );
                 })
               )}
             </div>
-            <div className="flex items-center justify-between border-t border-slate-200/70 px-3 py-2 text-[10.5px] font-medium text-slate-400 dark:border-white/[0.06] dark:text-slate-500">
+
+            <div className="relative z-10 flex items-center justify-between border-t border-slate-900/[0.07] px-3.5 py-2 text-[10.5px] font-medium text-slate-400 dark:border-white/[0.07] dark:text-slate-500">
               <div className="flex items-center gap-2">
-                <kbd className="rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono dark:border-white/10 dark:bg-white/[0.04]">
-                  ↑↓
-                </kbd>
+                <kbd className={KBD}>↑↓</kbd>
                 <span>harakatlanish</span>
-                <kbd className="ml-2 rounded border border-slate-200 bg-slate-50 px-1 py-0.5 font-mono dark:border-white/10 dark:bg-white/[0.04]">
-                  ⏎
-                </kbd>
+                <kbd className={`ml-2 ${KBD}`}>⏎</kbd>
                 <span>tanlash</span>
               </div>
               <span className="inline-flex items-center gap-1">
@@ -1399,7 +1528,7 @@ const CommandPalette = memo(function CommandPalette({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * ROW HOVER PEEK — Desktop-only floating preview
+ * ROW HOVER PEEK
  * ════════════════════════════════════════════════════════════════════════ */
 
 const RowHoverPeek = memo(function RowHoverPeek({
@@ -1412,11 +1541,10 @@ const RowHoverPeek = memo(function RowHoverPeek({
   const name = formatStudentName(student);
   const isActive = student.user?.isActive !== false;
   const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
-  const style = avatarStyle(name);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+      initial={{ opacity: 0, y: 8, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 4, scale: 0.98 }}
       transition={SPRING.snappy}
@@ -1426,57 +1554,81 @@ const RowHoverPeek = memo(function RowHoverPeek({
         left: Math.max(12, Math.min(anchorRect.left + 60, window.innerWidth - 320)),
         pointerEvents: 'none',
       }}
-      className="z-50 w-[300px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[18px] border border-white/70 bg-white/95 p-3.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.25),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.12] dark:bg-surface-900/95 dark:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)]"
+      className="lg-surface lg-float z-50 w-[300px] max-w-[calc(100vw-1.5rem)] overflow-hidden p-3.5 [--lg-r:20px]"
     >
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-[13px] text-[13px] font-bold text-white ring-1 ring-black/10 dark:ring-white/15"
-          style={{ background: style.background }}
-        >
-          {getInitials(name)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13.5px] font-bold text-slate-900 dark:text-white">{name}</div>
-          <div className="truncate text-[11.5px] text-slate-500 dark:text-slate-400">
-            {student.user?.email || student.user?.phone || '—'}
+      <div className="relative z-10">
+        <div className="flex items-center gap-3">
+          <StudentAvatar name={name} size={44} isActive={isActive} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13.5px] font-bold text-slate-900 dark:text-white">{name}</div>
+            <div className="truncate text-[11.5px] text-slate-500 dark:text-slate-400">
+              {student.user?.email || student.user?.phone || '—'}
+            </div>
           </div>
         </div>
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${
-            isActive
-              ? 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300'
-              : 'bg-red-500/10 text-red-600 ring-red-500/25 dark:text-red-400'
-          }`}
-        >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-red-500'}`}
-          />
-          {isActive ? 'Faol' : 'Muzlatilgan'}
-        </span>
-      </div>
-      <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-slate-200/70 pt-2.5 dark:border-white/[0.06]">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            Guruhlar
+
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-900/[0.07] pt-2.5 dark:border-white/[0.07]">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Guruhlar
+            </div>
+            <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
+              {activeGroups.length > 0 ? activeGroups.map((g) => g.group?.name ?? '—').join(', ') : '—'}
+            </div>
           </div>
-          <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
-            {activeGroups.length > 0 ? activeGroups.map((g) => g.group?.name ?? '—').join(', ') : '—'}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Ota-ona
+            </div>
+            <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
+              {student.parentName || '—'}
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            Ota-ona
-          </div>
-          <div className="mt-0.5 truncate text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
-            {student.parentName || '—'}
-          </div>
+
+        <div className="mt-2.5 flex items-center gap-1.5 text-[10.5px] font-medium text-slate-400 dark:text-slate-500">
+          <Icon paths={I.info} size={11} />
+          Ochish uchun bosing · Quick-Look uchun Space
         </div>
-      </div>
-      <div className="mt-2.5 flex items-center gap-1.5 text-[10.5px] font-medium text-slate-400 dark:text-slate-500">
-        <Icon paths={I.info} size={11} />
-        Ochish uchun bosing · Quick-Look uchun Space
       </div>
     </motion.div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * TABLE HEADER CELLS
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const TH =
+  'px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]';
+
+const SortButton = memo(function SortButton({
+  label,
+  field,
+  sortField,
+  sortDir,
+  onToggle,
+}: {
+  label: string;
+  field: SortField;
+  sortField: SortField;
+  sortDir: SortDirection;
+  onToggle: (f: SortField) => void;
+}) {
+  const active = sortField === field;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(field)}
+      className="inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-slate-900 dark:hover:text-white"
+    >
+      <span>{label}</span>
+      <Icon
+        paths={active ? (sortDir === 'asc' ? I.arrowUp : I.arrowDown) : I.sort}
+        size={12}
+        className={active ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
+      />
+    </button>
   );
 });
 
@@ -1484,8 +1636,37 @@ const RowHoverPeek = memo(function RowHoverPeek({
  * MAIN STUDENTS PAGE
  * ════════════════════════════════════════════════════════════════════════ */
 
+const STATUS_TABS: SegOption<StatusQuickFilter>[] = [
+  { id: 'ALL', label: 'Barchasi' },
+  { id: 'ACTIVE', label: 'Faol' },
+  { id: 'INACTIVE', label: 'Muzlatilgan' },
+];
+
+const VIEW_OPTIONS: SegOption<ViewMode>[] = [
+  { id: 'table', icon: I.list, title: 'Jadval ko‘rinishi', testId: 'segment-table' },
+  { id: 'grid', icon: I.grid, title: 'Kartochkalar (Bento) ko‘rinishi', testId: 'segment-grid' },
+];
+
+const DENSITY_OPTIONS: SegOption<Density>[] = [
+  { id: 'compact', icon: I.layoutCompact, title: 'Ixcham' },
+  { id: 'cozy', icon: I.layoutCozy, title: 'Qulay' },
+  { id: 'comfy', icon: I.layoutComfy, title: 'Keng' },
+];
+
+const FREEZE_PRESETS = [
+  { label: '7 kun (1 hafta)', days: 7 },
+  { label: '14 kun (2 hafta)', days: 14 },
+  { label: '30 kun (1 oy)', days: 30 },
+] as const;
+
+const FREEZE_REASONS = [
+  DEFAULT_FREEZE_REASON,
+  'Oilaviy safar / Taʼtil sababli',
+  'Maktab imtihonlari / Olimpiada yig‘ini',
+] as const;
+
 export function StudentsPage() {
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   usePageTitle(t('students.title'));
   const navigate = useNavigate();
   const sound = usePremiumSound();
@@ -1518,14 +1699,12 @@ export function StudentsPage() {
   const [hoveredStudent, setHoveredStudent] = useState<{ student: Student; rect: DOMRect } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
 
-  // Unmount cleanup for hover peek timeout to prevent memory leak
-  useEffect(() => {
-    return () => {
-      if (hoverTimerRef.current) {
-        window.clearTimeout(hoverTimerRef.current);
-      }
-    };
-  }, []);
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
+    },
+    [],
+  );
 
   const debouncedSearch = useDebounce(search.trim(), 300);
 
@@ -1585,13 +1764,12 @@ export function StudentsPage() {
 
   const stats = useMemo(() => {
     const active = rawStudentList.filter((s) => s.user?.isActive !== false).length;
-    const inactive = rawStudentList.length - active;
     const withGroups = rawStudentList.filter((s) => (s.groups ?? []).some((g) => g.isActive)).length;
     return {
       total: data?.total ?? rawStudentList.length,
       pageTotal: rawStudentList.length,
       active,
-      inactive,
+      inactive: rawStudentList.length - active,
       withGroups,
     };
   }, [rawStudentList, data?.total]);
@@ -1608,20 +1786,15 @@ export function StudentsPage() {
 
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      if (sortField === 'name') {
-        return formatStudentName(a).localeCompare(formatStudentName(b)) * dir;
-      }
+      if (sortField === 'name') return formatStudentName(a).localeCompare(formatStudentName(b)) * dir;
       if (sortField === 'groups') {
         const ga = (a.groups ?? []).filter((g) => g.isActive).length;
         const gb = (b.groups ?? []).filter((g) => g.isActive).length;
         return (ga - gb) * dir;
       }
-      if (sortField === 'status') {
-        const sa = a.user?.isActive !== false ? 1 : 0;
-        const sb = b.user?.isActive !== false ? 1 : 0;
-        return (sa - sb) * dir;
-      }
-      return 0;
+      const sa = a.user?.isActive !== false ? 1 : 0;
+      const sb = b.user?.isActive !== false ? 1 : 0;
+      return (sa - sb) * dir;
     });
   }, [rawStudentList, statusFilter, sortField, sortDir]);
 
@@ -1630,7 +1803,7 @@ export function StudentsPage() {
     mutationFn: ({ id, payload }: { id: string; payload: FreezeFormData }) =>
       studentsApi.freeze(id, payload),
     onSuccess: () => {
-      push('success', t('students.frozenSuccess') || "Talaba darslari va to'lovlari vaqtincha muzlatildi");
+      push('success', t('students.frozenSuccess') || 'Talaba darslari va to‘lovlari vaqtincha muzlatildi');
       setFreezeTarget(null);
       void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
@@ -1640,7 +1813,7 @@ export function StudentsPage() {
   const unfreezeMutation = useMutation({
     mutationFn: (id: string) => studentsApi.unfreeze(id),
     onSuccess: () => {
-      push('success', t('students.unfrozenSuccess') || "Talaba muzlatish holatidan chiqarildi va faollashtirildi");
+      push('success', t('students.unfrozenSuccess') || 'Talaba muzlatish holatidan chiqarildi va faollashtirildi');
       void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
     },
     onError: (e: unknown) => push('error', getErrorMessage(e as Error)),
@@ -1689,50 +1862,9 @@ export function StudentsPage() {
 
   const handleQuickLook = useCallback(
     (student: Student) => {
-      const studentName = formatStudentName(student);
-      const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
-      const isActive = student.user?.isActive !== false;
-
-      openQuickLook({
-        id: student.id,
-        type: 'student',
-        title: studentName,
-        subtitle: student.user?.email || student.user?.phone || 'M-EDU Talabasi',
-        badge: {
-          text: isActive ? 'Faol Talaba' : 'Muzlatilgan',
-          tone: isActive ? 'emerald' : 'amber',
-        },
-        avatar: { text: studentName.slice(0, 2).toUpperCase() },
-        metrics: [
-          {
-            label: 'Guruhlar',
-            value: activeGroups.length,
-            subtext: activeGroups.map((g) => g.group?.name ?? '—').join(', ') || 'Biriktirilmagan',
-          },
-          { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
-          {
-            label: 'Ota-onasi',
-            value: student.parentName || '—',
-            subtext: student.parentPhone || 'Telefon kiritilmagan',
-          },
-        ],
-        details: [
-          { label: 'Telefon', value: student.user?.phone || student.parentPhone || '—' },
-          { label: 'Email', value: student.user?.email || '—' },
-          { label: 'Ota-ona ismi', value: student.parentName || '—' },
-          { label: 'Ota-ona telefoni', value: student.parentPhone || '—' },
-          { label: 'Talaba ID raqami', value: student.id },
-        ],
-        tags: activeGroups.map((g) => g.group?.name ?? '').filter(Boolean),
-        primaryAction: {
-          label: "To'liq kartani ochish",
-          onExecute: () => navigate(`/students/${student.id}`),
-        },
-        secondaryAction: {
-          label: 'Tahrirlash',
-          onExecute: () => navigate(`/students/${student.id}/edit`),
-        },
-      });
+      openQuickLook(
+        buildStudentPanel(student, navigate, false) as unknown as Parameters<typeof openQuickLook>[0],
+      );
     },
     [navigate],
   );
@@ -1740,50 +1872,9 @@ export function StudentsPage() {
   const handleOpenStudentSidecar = useCallback(
     (student: Student) => {
       sound.playTick();
-      const studentName = formatStudentName(student);
-      const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
-      const isActive = student.user?.isActive !== false;
-
-      openSidecar({
-        id: student.id,
-        type: 'student',
-        title: studentName,
-        subtitle: student.user?.email || student.user?.phone || 'M-EDU Talabasi',
-        badge: {
-          text: isActive ? 'Faol Talaba' : 'Muzlatilgan',
-          tone: isActive ? 'emerald' : 'amber',
-        },
-        avatar: { text: studentName.slice(0, 2).toUpperCase() },
-        metrics: [
-          {
-            label: 'Guruhlar',
-            value: activeGroups.length,
-            subtext: activeGroups.map((g) => g.group?.name ?? '—').join(', ') || 'Biriktirilmagan',
-          },
-          { label: 'Holati', value: isActive ? 'Faol' : 'Muzlatilgan', subtext: 'Davomat ochiq' },
-          {
-            label: 'Ota-onasi',
-            value: student.parentName || '—',
-            subtext: student.parentPhone || 'Telefon kiritilmagan',
-          },
-        ],
-        details: [
-          { label: 'Telefon', value: student.user?.phone || student.parentPhone || '—', copyable: true },
-          { label: 'Email', value: student.user?.email || '—', copyable: true },
-          { label: 'Ota-ona ismi', value: student.parentName || '—' },
-          { label: 'Ota-ona telefoni', value: student.parentPhone || '—', copyable: true },
-          { label: 'Talaba ID raqami', value: student.id, copyable: true },
-        ],
-        tags: activeGroups.map((g) => g.group?.name ?? '').filter(Boolean),
-        primaryAction: {
-          label: "To'liq kartani ochish",
-          onExecute: () => navigate(`/students/${student.id}`),
-        },
-        secondaryAction: {
-          label: 'Tahrirlash',
-          onExecute: () => navigate(`/students/${student.id}/edit`),
-        },
-      });
+      openSidecar(
+        buildStudentPanel(student, navigate, true) as unknown as Parameters<typeof openSidecar>[0],
+      );
     },
     [sound, navigate],
   );
@@ -1797,6 +1888,17 @@ export function StudentsPage() {
     setFreezeForm(createDefaultFreezeForm());
     setFreezeTarget(student);
   }, []);
+
+  const handleUnfreeze = useCallback((id: string) => unfreezeMutation.mutate(id), [unfreezeMutation]);
+
+  const handleCelebrate = useCallback(
+    (id: string) => {
+      sound.playPop?.();
+      setSelectedStudentForCelebration(id);
+      setIsMilestoneCelebrationOpen(true);
+    },
+    [sound],
+  );
 
   const handleDelete = useCallback((id: string) => setDeleteTarget(id), []);
 
@@ -1838,21 +1940,21 @@ export function StudentsPage() {
       selectedIds.size > 0 ? studentList.filter((s) => selectedIds.has(s.id)) : studentList;
     if (source.length === 0) return;
 
+    const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const headers = ['ID', 'Ism Familiya', 'Email', 'Telefon', 'Guruhlar', 'Ota-ona', 'Holati'];
     const rows = source.map((s) => {
-      const name = formatStudentName(s);
-      const activeGroups = (s.groups ?? []).filter((g) => g.isActive && g.group)
+      const activeGroups = (s.groups ?? [])
+        .filter((g) => g.isActive && g.group)
         .map((g) => g.group?.name ?? '—')
         .join('; ');
-      const status = s.user?.isActive !== false ? 'Faol' : 'Muzlatilgan';
       return [
         s.id,
-        `"${name.replace(/"/g, '""')}"`,
+        q(formatStudentName(s)),
         s.user?.email || '',
         s.user?.phone || s.parentPhone || '',
-        `"${activeGroups.replace(/"/g, '""')}"`,
-        `"${(s.parentName || '').replace(/"/g, '""')}"`,
-        status,
+        q(activeGroups),
+        q(s.parentName || ''),
+        s.user?.isActive !== false ? 'Faol' : 'Muzlatilgan',
       ].join(',');
     });
 
@@ -1861,12 +1963,12 @@ export function StudentsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `medu-students-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `medu-students-${toIsoDate(new Date())}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    push('success', `${source.length} ta talaba ma'lumoti CSV formatda yuklab olindi`);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    push('success', `${source.length} ta talaba maʼlumoti CSV formatda yuklab olindi`);
   }, [selectedIds, studentList, push]);
 
   const confirmDelete = useCallback(() => {
@@ -1879,16 +1981,11 @@ export function StudentsPage() {
 
   const hasActiveFilters = Boolean(search.trim() || groupId || statusFilter !== 'ALL');
 
-  // ── Filter chips for display ──────────────────────────────────
+  // ── Filter chips ──────────────────────────────────────────────
   const filterChips = useMemo<FilterChip[]>(() => {
     const chips: FilterChip[] = [];
     if (search.trim()) {
-      chips.push({
-        id: 'search',
-        label: `“${search.trim()}”`,
-        tone: 'blue',
-        onRemove: () => setSearch(''),
-      });
+      chips.push({ id: 'search', label: `“${search.trim()}”`, tone: 'blue', onRemove: () => setSearch('') });
     }
     if (groupId) {
       const g = groupList.find((x) => x.id === groupId);
@@ -1906,12 +2003,7 @@ export function StudentsPage() {
         WITH_GROUPS: { label: 'Guruhli', tone: 'blue' },
       };
       const cfg = map[statusFilter];
-      chips.push({
-        id: 'status',
-        label: cfg.label,
-        tone: cfg.tone,
-        onRemove: () => setStatusFilter('ALL'),
-      });
+      chips.push({ id: 'status', label: cfg.label, tone: cfg.tone, onRemove: () => setStatusFilter('ALL') });
     }
     return chips;
   }, [search, groupId, statusFilter, groupList]);
@@ -1922,9 +2014,7 @@ export function StudentsPage() {
       if (reduced) return;
       const rect = e.currentTarget.getBoundingClientRect();
       if (hoverTimerRef.current) window.clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = window.setTimeout(() => {
-        setHoveredStudent({ student, rect });
-      }, 420);
+      hoverTimerRef.current = window.setTimeout(() => setHoveredStudent({ student, rect }), 420);
     },
     [reduced],
   );
@@ -1933,11 +2023,8 @@ export function StudentsPage() {
     setHoveredStudent(null);
   }, []);
 
-  // ── Density row padding ──────────────────────────────────────
-  const densityRowPadding =
-    density === 'compact' ? 'py-2' : density === 'cozy' ? 'py-3.5' : 'py-5';
+  const densityRowPadding = density === 'compact' ? 'py-2' : density === 'cozy' ? 'py-3.5' : 'py-5';
 
-  // ── Selected students objects ────────────────────────────────
   const selectedStudents = useMemo(
     () => studentList.filter((s) => selectedIds.has(s.id)),
     [studentList, selectedIds],
@@ -1949,176 +2036,181 @@ export function StudentsPage() {
       {
         id: 'new-student',
         label: 'Yangi talaba qo‘shish',
-        hint: 'N',
         icon: I.userPlus,
-        keywords: 'new add student create',
+        keywords: 'new add student create yangi qo‘shish',
         onExecute: () => navigate('/students/new'),
       },
       {
         id: 'export',
         label: 'CSV eksport qilish',
-        hint: 'E',
         icon: I.download,
-        keywords: 'export csv download',
+        keywords: 'export csv download yuklab',
         onExecute: handleExportCsv,
       },
       {
         id: 'clear',
         label: 'Filtrlarni tozalash',
-        hint: '⌫',
         icon: I.close,
-        keywords: 'clear reset filters',
+        keywords: 'clear reset filters tozalash',
         onExecute: handleClearFilters,
       },
       {
         id: 'view-table',
-        label: "Jadval ko‘rinishi",
+        label: 'Jadval ko‘rinishi',
         icon: I.list,
-        keywords: 'table list view',
+        keywords: 'table list view jadval',
         onExecute: () => setViewMode('table'),
       },
       {
         id: 'view-grid',
-        label: "Kartochkalar ko‘rinishi",
+        label: 'Kartochkalar ko‘rinishi',
         icon: I.grid,
-        keywords: 'grid cards bento view',
+        keywords: 'grid cards bento view kartochka',
         onExecute: () => setViewMode('grid'),
       },
       {
         id: 'density-compact',
-        label: "Ixcham rejim",
+        label: 'Ixcham rejim',
         icon: I.layoutCompact,
-        keywords: 'compact density',
+        keywords: 'compact density ixcham',
         onExecute: () => setDensity('compact'),
       },
       {
         id: 'density-comfy',
-        label: "Keng rejim",
+        label: 'Keng rejim',
         icon: I.layoutComfy,
-        keywords: 'comfy comfortable density',
+        keywords: 'comfy comfortable density keng',
         onExecute: () => setDensity('comfy'),
       },
-      ...(groupList.slice(0, 5).map((g) => ({
+      ...groupList.slice(0, 5).map<PaletteAction>((g) => ({
         id: `group-${g.id}`,
         label: `Guruh: ${g.name}`,
         icon: I.usersRound,
-        keywords: `group ${g.name}`,
+        keywords: `group guruh ${g.name}`,
         onExecute: () => setGroupId(g.id),
-      })) as PaletteAction[]),
+      })),
     ],
     [navigate, handleExportCsv, handleClearFilters, groupList],
   );
 
+  // ── Header toolbar ───────────────────────────────────────────
+  const toolBtn = 'h-10 w-10 min-w-[2.5rem] min-h-[2.5rem] shrink-0 p-0 flex items-center justify-center rounded-xl transition-all';
+
   const HeaderActions = useMemo(
     () => (
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Pro AI & Operations Glass Toolbar */}
-        <div className="flex items-center gap-1 p-1 rounded-2xl bg-black/10 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/10 backdrop-blur-xl shadow-xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-full">
+        <div className="inline-flex items-center gap-1.5 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.08] dark:border-white/10 shadow-xs max-w-full overflow-x-auto no-scrollbar">
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={() => setPaletteOpen(true)}
             title="Buyruq paneli (⌘K)"
             aria-label="Buyruq paneli"
-            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl"
+            className={toolBtn}
           >
-            <Icon paths={I.command} size={14} strokeWidth={2.0} />
+            <Icon paths={I.command} size={16} strokeWidth={2.0} />
           </GlassButton>
 
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={() => {
               sound.playPop?.();
               setIsAdmissionPathfinderOpen(true);
             }}
             title="AI Abituriyent & Karyera Pathfinder"
             aria-label="AI Karyera"
-            className="h-9 px-2.5 flex items-center justify-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20"
+            className={`${toolBtn} border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500/20 dark:text-cyan-400`}
           >
             <MeduAiLogo size="xs" />
-            <span className="hidden xl:inline text-xs font-bold">Karyera</span>
           </GlassButton>
 
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={() => {
               sound.playPop?.();
               setIsReferralEngineOpen(true);
             }}
             title="Referral & Promo Dvigateli"
             aria-label="Referral"
-            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 hover:bg-emerald-500/20"
+            className={`${toolBtn} border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 dark:text-emerald-400`}
           >
-            <span className="text-sm">🎁</span>
+            <Icon paths={I.gift} size={16} strokeWidth={2.0} />
           </GlassButton>
 
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={() => {
               sound.playPop?.();
               setIsMilestoneCelebrationOpen(true);
             }}
             title="Yutuqlarni Nishonlash"
             aria-label="Yutuqlar"
-            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-500 dark:text-amber-400 hover:bg-amber-500/20"
+            className={`${toolBtn} border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 dark:text-amber-400`}
           >
-            <span className="text-sm">🌟</span>
+            <Icon paths={I.star} size={16} strokeWidth={2.0} />
           </GlassButton>
 
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={() => {
               sound.playPop?.();
               setIsRetentionCockpitOpen(true);
             }}
             title="AI Retention & Churn Risk"
             aria-label="AI Retention"
-            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-500 dark:text-rose-400 hover:bg-rose-500/20"
+            className={`${toolBtn} border border-rose-500/30 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 dark:text-rose-400`}
           >
-            <span className="text-sm">🛡️</span>
+            <Icon paths={I.shield} size={16} strokeWidth={2.0} />
           </GlassButton>
 
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={() => {
               sound.playPop?.();
               setIsSmartDiscountOpen(true);
             }}
             title="Smart Oila Klasteri & Dinamik Chegirmalar"
             aria-label="Oila Chegirmalari"
-            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl border border-violet-500/30 bg-violet-500/10 text-violet-500 dark:text-violet-400 hover:bg-violet-500/20"
+            className={`${toolBtn} border border-violet-500/30 bg-violet-500/10 text-violet-500 hover:bg-violet-500/20 dark:text-violet-400`}
           >
-            <span className="text-sm">👨‍👩‍👧</span>
+            <Icon paths={I.users} size={16} strokeWidth={2.0} />
           </GlassButton>
 
           <GlassButton
             type="button"
             variant="ghost"
+            size="icon"
             onClick={handleExportCsv}
             title="CSV formatda eksport qilish"
             aria-label="Eksport CSV"
-            className="h-9 w-9 p-0 flex items-center justify-center rounded-xl"
+            className={toolBtn}
           >
-            <Icon paths={I.download} size={14} strokeWidth={2.0} />
+            <Icon paths={I.download} size={16} strokeWidth={2.0} />
           </GlassButton>
         </div>
 
-        {/* Primary CTA */}
-        <GlassButton asChild variant="primary" className="h-10 px-4 rounded-2xl shadow-sm">
+        <GlassButton asChild variant="primary" className="h-10 min-h-[44px] w-full sm:w-auto shrink-0 rounded-2xl px-4 shadow-sm justify-center">
           <Link to="/students/new">
-            <span className="inline-flex items-center gap-2 font-bold text-xs sm:text-sm">
-              <Icon paths={I.userPlus} size={15} strokeWidth={2.2} />
+            <span className="inline-flex items-center gap-2 text-xs font-bold sm:text-sm">
+              <Icon paths={I.userPlus} size={16} strokeWidth={2.2} />
               <span>{t('students.add')}</span>
             </span>
           </Link>
         </GlassButton>
       </div>
     ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, handleExportCsv, sound],
   );
 
@@ -2149,6 +2241,8 @@ export function StudentsPage() {
 
   const allSelectedOnPage = studentList.length > 0 && studentList.every((s) => selectedIds.has(s.id));
   const freezeDurationDays = calculateFreezeDays(freezeForm.startDate, freezeForm.endDate);
+  const isUnfreezing = (id: string) => unfreezeMutation.isPending && unfreezeMutation.variables === id;
+  const isDeleting = (id: string) => removeMutation.isPending && removeMutation.variables === id;
 
   return (
     <div className="page-container relative z-10 space-y-5 pb-24">
@@ -2156,7 +2250,7 @@ export function StudentsPage() {
 
       <GlassPageHeader title={t('students.title')} subtitle={t('students.pageSubtitle')} actions={HeaderActions} />
 
-      {/* ═══ 1 · TELEMETRY STATS ═══ */}
+      {/* ═══ 1 · STATS ═══ */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -2197,9 +2291,7 @@ export function StudentsPage() {
           icon={I.usersRound}
           tone="purple"
           active={statusFilter === 'WITH_GROUPS'}
-          onClick={() =>
-            setStatusFilter((prev) => (prev === 'WITH_GROUPS' ? 'ALL' : 'WITH_GROUPS'))
-          }
+          onClick={() => setStatusFilter((prev) => (prev === 'WITH_GROUPS' ? 'ALL' : 'WITH_GROUPS'))}
         />
       </motion.div>
 
@@ -2222,7 +2314,7 @@ export function StudentsPage() {
                 {!search && (
                   <kbd
                     aria-hidden="true"
-                    className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded-md border border-slate-200/80 bg-slate-100/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500 sm:inline-flex dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-400"
+                    className={`pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex ${KBD}`}
                   >
                     ⌘K
                   </kbd>
@@ -2244,52 +2336,21 @@ export function StudentsPage() {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2.5 lg:justify-end">
-              <div
-                role="tablist"
-                aria-label="Talaba holati bo'yicha filtr"
-                className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]"
-              >
-                {(
-                  [
-                    { id: 'ALL', label: 'Barchasi' },
-                    { id: 'ACTIVE', label: 'Faol' },
-                    { id: 'INACTIVE', label: 'Muzlatilgan' },
-                  ] as const
-                ).map((tab) => {
-                  const isSelected = statusFilter === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={isSelected}
-                      onClick={() => setStatusFilter(tab.id)}
-                      className={[
-                        'relative shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11.5px] font-bold transition-colors duration-150 outline-none',
-                        isSelected
-                          ? 'text-slate-900 dark:text-white'
-                          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
-                      ].join(' ')}
-                    >
-                      {isSelected && (
-                        <motion.span
-                          layoutId="students-status-pill"
-                          transition={SPRING.snappy}
-                          className="absolute inset-0 rounded-lg border border-black/5 bg-white shadow-xs dark:border-white/10 dark:bg-white/[0.12]"
-                        />
-                      )}
-                      <span className="relative z-10">{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <GlassSegmented
+                options={STATUS_TABS}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                layoutId="students-status-pill"
+                ariaLabel="Talaba holati bo‘yicha filtr"
+                semantics="tabs"
+              />
 
               <div className="flex items-center gap-2">
                 {hasActiveFilters && (
                   <button
                     type="button"
                     onClick={handleClearFilters}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-all hover:bg-blue-500/15 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-[#38BDF8]"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-colors hover:bg-blue-500/15 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-[#38BDF8]"
                   >
                     <Icon paths={I.close} size={12} strokeWidth={2.4} />
                     <span>{t('common.clear') || 'Tozalash'}</span>
@@ -2297,41 +2358,24 @@ export function StudentsPage() {
                 )}
 
                 <div className="hidden md:inline-flex">
-                  <DensityToggle density={density} onChange={setDensity} />
+                  <GlassSegmented
+                    options={DENSITY_OPTIONS}
+                    value={density}
+                    onChange={setDensity}
+                    layoutId="students-density-pill"
+                    ariaLabel="Qatorlar zichligi"
+                  />
                 </div>
 
-                <div className="inline-flex items-center rounded-xl border border-slate-200/80 bg-slate-100/75 p-1 dark:border-white/[0.08] dark:bg-white/[0.04]">
-                  <button
-                    type="button"
-                    data-testid="segment-table"
-                    onClick={() => setViewMode('table')}
-                    aria-label="Jadval ko'rinishi"
-                    title="Jadval ko'rinishi"
-                    className={`rounded-lg p-1.5 transition-all ${
-                      viewMode === 'table'
-                        ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                    }`}
-                  >
-                    <Icon paths={I.list} size={14} strokeWidth={2.1} />
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="segment-grid"
-                    onClick={() => setViewMode('grid')}
-                    aria-label="Kartochkalar (Bento) ko'rinishi"
-                    title="Kartochkalar (Bento) ko'rinishi"
-                    className={`rounded-lg p-1.5 transition-all ${
-                      viewMode === 'grid'
-                        ? 'bg-white text-slate-900 shadow-xs dark:bg-white/[0.14] dark:text-white'
-                        : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
-                    }`}
-                  >
-                    <Icon paths={I.grid} size={14} strokeWidth={2.1} />
-                  </button>
-                </div>
+                <GlassSegmented
+                  options={VIEW_OPTIONS}
+                  value={viewMode}
+                  onChange={setViewMode}
+                  layoutId="students-view-pill"
+                  ariaLabel="Ko‘rinish rejimi"
+                />
 
-                <div className="pl-1 text-[12.5px] font-bold text-[var(--text-secondary)] tabular-nums">
+                <div className="pl-1 text-[12.5px] font-bold tabular-nums text-[var(--text-secondary)]">
                   {stats.total === 1 ? t('students.totalOne') : t('students.totalMany', { count: stats.total })}
                 </div>
               </div>
@@ -2344,8 +2388,8 @@ export function StudentsPage() {
         </div>
       </GlassCardSurface>
 
-      {/* ═══ 3 · STUDENTS DATA SURFACE ═══ */}
-      <GlassCardSurface className={students.isPlaceholderData ? 'opacity-75 transition-opacity' : ''}>
+      {/* ═══ 3 · DATA SURFACE ═══ */}
+      <GlassCardSurface className={students.isPlaceholderData ? 'opacity-75 transition-opacity' : 'transition-opacity'}>
         <AnimatePresence mode="wait">
           {studentList.length === 0 ? (
             <motion.div
@@ -2354,7 +2398,7 @@ export function StudentsPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={SPRING.smooth}
-              className="p-10 sm:p-12"
+              className="relative z-10 p-10 sm:p-12"
             >
               <GlassEmptyState
                 title={hasActiveFilters ? t('students.emptyFiltered') : t('students.emptySearch')}
@@ -2377,10 +2421,9 @@ export function StudentsPage() {
               initial="hidden"
               animate="visible"
               exit={{ opacity: 0 }}
-              className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3"
+              className="relative z-10 grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3"
             >
               {studentList.map((student) => {
-                const statusBadge = getStudentStatusBadge(student.user?.isActive);
                 const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
                 const name = formatStudentName(student);
                 const isActive = student.user?.isActive !== false;
@@ -2390,117 +2433,62 @@ export function StudentsPage() {
                     key={student.id}
                     variants={tileVariants}
                     onClick={() => handleStudentClick(student.id)}
+                    onPointerMove={trackPointer}
                     tabIndex={0}
                     role="link"
                     aria-label={t('students.viewStudentAria', { name })}
-                    className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400/50 hover:shadow-md dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:border-sky-400/40"
+                    className="lg-surface lg-surface--subtle lg-interactive group flex cursor-pointer flex-col justify-between overflow-hidden p-4 outline-none transition-transform duration-300 [--lg-r:22px] hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-[#007AFF]"
                   >
-                    <div>
+                    <div className="relative z-10">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex min-w-0 items-center gap-3">
                           <StudentAvatar name={name} size={44} isActive={isActive} />
                           <div className="min-w-0">
-                            <div className="truncate text-[14.5px] font-bold text-slate-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-sky-400">
+                            <div className="truncate text-[14.5px] font-bold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-sky-400">
                               {name}
                             </div>
                             <div className="mt-0.5 truncate text-[12px] text-slate-500 dark:text-slate-400">
-                              {student.user?.email || student.user?.phone || 'M-EDU ID: ' + student.id.slice(0, 8)}
+                              {student.user?.email || student.user?.phone || `M-EDU ID: ${student.id.slice(0, 8)}`}
                             </div>
                           </div>
                         </div>
-                        <span
-                          className={[
-                            'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ring-1 ring-inset',
-                            statusBadge.color === 'red'
-                              ? 'bg-red-500/10 text-red-600 ring-red-500/25 dark:bg-red-500/15 dark:text-red-400'
-                              : 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300',
-                          ].join(' ')}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              statusBadge.color === 'red' ? 'bg-red-500' : 'bg-emerald-500'
-                            }`}
-                          />
-                          {t(statusBadge.label)}
-                        </span>
+                        <StatusBadge isActive={student.user?.isActive} size="sm" />
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-1.5">
                         {activeGroups.length > 0 ? (
                           activeGroups.slice(0, 3).map((enrollment, idx) => (
-                            <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">{enrollment.group?.name ?? '—'}</GlassBadge>
+                            <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">
+                              {enrollment.group?.name ?? '—'}
+                            </GlassBadge>
                           ))
                         ) : (
-                          <span className="text-[11.5px] italic text-slate-400">
-                            Guruhga biriktirilmagan
-                          </span>
+                          <span className="text-[11.5px] italic text-slate-400">Guruhga biriktirilmagan</span>
                         )}
-                        {activeGroups.length > 3 && (
-                          <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>
-                        )}
+                        {activeGroups.length > 3 && <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>}
                       </div>
                     </div>
 
                     <div
-                      className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-200/60 pt-3 dark:border-white/[0.06]"
+                      className="relative z-10 mt-4 flex flex-col justify-between gap-2 border-t border-slate-900/[0.07] pt-3 sm:flex-row sm:items-center dark:border-white/[0.07]"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="truncate text-[11.5px] font-medium text-slate-500 dark:text-slate-400">
                         {student.parentName ? `Ota-ona: ${student.parentName}` : 'Ota-ona kiritilmagan'}
                       </div>
-                      <div className="flex items-center justify-end gap-1.5 shrink-0">
-                        {isActive ? (
-                          <RowAction
-                            icon={I.snowflake}
-                            label="Darslarni muzlatish (Freeze)"
-                            tone="freeze"
-                            onClick={() => handleOpenFreeze(student)}
-                          />
-                        ) : (
-                          <RowAction
-                            icon={I.play}
-                            label="Faollashtirish (Unfreeze)"
-                            tone="edit"
-                            onClick={() => unfreezeMutation.mutate(student.id)}
-                            loading={unfreezeMutation.isPending && unfreezeMutation.variables === student.id}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenStudentSidecar(student)}
-                          aria-label="Sidecar Split-View"
-                          title="Sidecar tafsilotlari (Split-View · Space)"
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200/80 bg-white/70 text-slate-600 hover:text-slate-950 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white transition-colors"
-                        >
-                          <span className="text-[12px] leading-none">◨</span>
-                        </button>
-                        <RowAction
-                          icon={I.sparkles}
-                          label="Yutuq & Sertifikat (Milestone)"
-                          tone="celebrate"
-                          onClick={() => {
-                            sound.playPop?.();
-                            setSelectedStudentForCelebration(student.id);
-                            setIsMilestoneCelebrationOpen(true);
-                          }}
-                        />
-                        <RowAction
-                          icon={I.eye}
-                          label="Quick-Look"
-                          tone="edit"
-                          onClick={() => handleQuickLook(student)}
-                        />
-                        <RowAction
-                          icon={I.edit}
-                          label={t('common.edit')}
-                          tone="edit"
-                          to={`/students/${student.id}/edit`}
-                        />
-                        <RowAction
-                          icon={I.trash}
-                          label={t('common.delete')}
-                          tone="delete"
-                          onClick={() => handleDelete(student.id)}
+                      <div className="flex shrink-0 items-center justify-end gap-1.5">
+                        <StudentActions
+                          student={student}
+                          isActive={isActive}
+                          unfreezing={isUnfreezing(student.id)}
+                          deleting={isDeleting(student.id)}
+                          deleteBusy={removeMutation.isPending}
+                          onFreeze={handleOpenFreeze}
+                          onUnfreeze={handleUnfreeze}
+                          onSidecar={handleOpenStudentSidecar}
+                          onQuickLook={handleQuickLook}
+                          onCelebrate={handleCelebrate}
+                          onDelete={handleDelete}
                         />
                       </div>
                     </div>
@@ -2509,15 +2497,12 @@ export function StudentsPage() {
               })}
             </motion.div>
           ) : (
-            <motion.div key="table" variants={containerVariants} initial="hidden" animate="visible">
+            <motion.div key="table" variants={containerVariants} initial="hidden" animate="visible" className="relative z-10">
               <div className="medu-scroll-x">
                 <table className="w-full border-collapse text-[13.5px]">
-                  <thead className="sticky top-0 z-10 backdrop-blur-xl">
-                    <tr className="border-b border-slate-200/75 bg-slate-50/85 dark:border-white/[0.08] dark:bg-surface-900/85">
-                      <th
-                        scope="col"
-                        className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
-                      >
+                  <thead className="lg-thead sticky top-0 z-10">
+                    <tr>
+                      <th scope="col" className={TH}>
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
@@ -2526,76 +2511,40 @@ export function StudentsPage() {
                             aria-label="Barcha talabalarni tanlash"
                             className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#007AFF] focus:ring-[#007AFF] dark:border-white/20 dark:bg-white/5"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleToggleSort('name')}
-                            className="inline-flex items-center gap-1 uppercase tracking-[0.14em] hover:text-slate-900 dark:hover:text-white"
-                          >
-                            <span>{t('common.name')}</span>
-                            <Icon
-                              paths={
-                                sortField === 'name'
-                                  ? sortDir === 'asc'
-                                    ? I.arrowUp
-                                    : I.arrowDown
-                                  : I.sort
-                              }
-                              size={12}
-                              className={sortField === 'name' ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
-                            />
-                          </button>
+                          <SortButton
+                            label={t('common.name')}
+                            field="name"
+                            sortField={sortField}
+                            sortDir={sortDir}
+                            onToggle={handleToggleSort}
+                          />
                         </div>
                       </th>
-                      <th scope="col" className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                      <th scope="col" className={TH}>
                         {t('common.email')}
                       </th>
-                      <th scope="col" className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleSort('groups')}
-                          className="inline-flex items-center gap-1 uppercase tracking-[0.14em] hover:text-slate-900 dark:hover:text-white"
-                        >
-                          <span>{t('students.col.groups')}</span>
-                          <Icon
-                            paths={
-                              sortField === 'groups'
-                                ? sortDir === 'asc'
-                                  ? I.arrowUp
-                                  : I.arrowDown
-                                : I.sort
-                            }
-                            size={12}
-                            className={sortField === 'groups' ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
-                          />
-                        </button>
+                      <th scope="col" className={TH}>
+                        <SortButton
+                          label={t('students.col.groups')}
+                          field="groups"
+                          sortField={sortField}
+                          sortDir={sortDir}
+                          onToggle={handleToggleSort}
+                        />
                       </th>
-                      <th scope="col" className="hidden lg:table-cell px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                      <th scope="col" className={`hidden lg:table-cell ${TH}`}>
                         {t('students.col.parentName')}
                       </th>
-                      <th scope="col" className="px-6 py-3.5 text-left text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleSort('status')}
-                          className="inline-flex items-center gap-1 uppercase tracking-[0.14em] hover:text-slate-900 dark:hover:text-white"
-                        >
-                          <span>{t('students.col.status')}</span>
-                          <Icon
-                            paths={
-                              sortField === 'status'
-                                ? sortDir === 'asc'
-                                  ? I.arrowUp
-                                  : I.arrowDown
-                                : I.sort
-                            }
-                            size={12}
-                            className={sortField === 'status' ? 'text-[#007AFF] dark:text-[#38BDF8]' : 'opacity-60'}
-                          />
-                        </button>
+                      <th scope="col" className={TH}>
+                        <SortButton
+                          label={t('students.col.status')}
+                          field="status"
+                          sortField={sortField}
+                          sortDir={sortDir}
+                          onToggle={handleToggleSort}
+                        />
                       </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3.5 text-right text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
-                      >
+                      <th scope="col" className={`${TH} !text-right`}>
                         {t('common.actions')}
                       </th>
                     </tr>
@@ -2603,7 +2552,6 @@ export function StudentsPage() {
 
                   <tbody>
                     {studentList.map((student, index) => {
-                      const statusBadge = getStudentStatusBadge(student.user?.isActive);
                       const activeGroups = (student.groups ?? []).filter((g) => g.isActive && g.group);
                       const name = formatStudentName(student);
                       const isActive = student.user?.isActive !== false;
@@ -2614,8 +2562,9 @@ export function StudentsPage() {
                       return (
                         <motion.tr
                           key={student.id}
-                          id={'student-row-' + student.id}
+                          id={`student-row-${student.id}`}
                           variants={rowVariants}
+                          data-selected={isSelected}
                           onClick={() => {
                             setFocusedIndex(index);
                             handleStudentClick(student.id);
@@ -2634,20 +2583,15 @@ export function StudentsPage() {
                               handleQuickLook(student);
                             }
                           }}
-                          className={[
-                            'group relative cursor-pointer border-b border-slate-200/60 transition-all duration-150 last:border-0 focus-visible:outline-none dark:border-white/[0.06]',
-                            isSelected
-                              ? 'bg-blue-500/[0.08] dark:bg-sky-500/[0.12]'
-                              : 'hover:bg-slate-50/85 focus-visible:bg-slate-50 dark:hover:bg-white/[0.03] dark:focus-visible:bg-white/[0.04]',
-                            isRowFocused
-                              ? 'ring-2 ring-[#007AFF] shadow-[0_0_14px_rgba(0,122,255,0.25)] z-10'
-                              : '',
-                          ].join(' ')}
+                          className={cx(
+                            'lg-row group cursor-pointer border-b border-slate-900/[0.06] last:border-0 focus-visible:outline-none dark:border-white/[0.06]',
+                            isRowFocused && 'z-10 ring-2 ring-[#007AFF] shadow-[0_0_18px_rgba(0,122,255,0.28)]',
+                          )}
                         >
                           <td className={`relative px-6 ${densityRowPadding}`}>
                             <span
                               aria-hidden="true"
-                              className="pointer-events-none absolute inset-y-2 left-0 w-1 origin-center scale-y-0 rounded-r-full bg-[#007AFF] transition-transform duration-200 group-hover:scale-y-100 dark:bg-[#38BDF8]"
+                              className="pointer-events-none absolute inset-y-2 left-0 w-1 origin-center scale-y-0 rounded-r-full bg-[#007AFF] shadow-[0_0_10px_rgba(0,122,255,0.6)] transition-transform duration-200 group-hover:scale-y-100 dark:bg-[#38BDF8]"
                             />
                             <div className="flex items-center gap-3">
                               <input
@@ -2674,8 +2618,7 @@ export function StudentsPage() {
                                     <span className="inline-flex items-center gap-1">
                                       <Icon paths={I.usersRound} size={11} strokeWidth={2} />
                                       <span>
-                                        {activeGroups.length}{' '}
-                                        {t('students.col.groups')?.toLowerCase() || 'guruh'}
+                                        {activeGroups.length} {t('students.col.groups')?.toLowerCase() || 'guruh'}
                                       </span>
                                     </span>
                                   ) : (
@@ -2688,9 +2631,9 @@ export function StudentsPage() {
 
                           <td className={`px-6 ${densityRowPadding}`}>
                             {student.user?.email ? (
-                              <CopyChip value={student.user?.email || ''} icon={I.mail} />
+                              <CopyChip value={student.user.email} icon={I.mail} />
                             ) : student.user?.phone ? (
-                              <CopyChip value={student.user?.phone || ''} icon={I.phone} />
+                              <CopyChip value={student.user.phone} icon={I.phone} />
                             ) : (
                               <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                             )}
@@ -2699,14 +2642,14 @@ export function StudentsPage() {
                           <td className={`px-6 ${densityRowPadding}`}>
                             <div className="flex flex-wrap gap-1.5">
                               {activeGroups.slice(0, 3).map((enrollment, idx) => (
-                                <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">{enrollment.group?.name ?? '—'}</GlassBadge>
+                                <GlassBadge key={enrollment.group?.id ?? `group-${idx}`} color="blue">
+                                  {enrollment.group?.name ?? '—'}
+                                </GlassBadge>
                               ))}
                               {activeGroups.length === 0 && (
                                 <span className="text-[var(--text-tertiary)] opacity-45">—</span>
                               )}
-                              {activeGroups.length > 3 && (
-                                <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>
-                              )}
+                              {activeGroups.length > 3 && <GlassBadge color="slate">+{activeGroups.length - 3}</GlassBadge>}
                             </div>
                           </td>
 
@@ -2718,7 +2661,7 @@ export function StudentsPage() {
                                   <span className="max-w-[165px] truncate">{student.parentName}</span>
                                 </span>
                                 {student.parentPhone && (
-                                  <span className="mt-0.5 pl-5 text-[11px] font-medium text-slate-500 tabular-nums dark:text-slate-400">
+                                  <span className="mt-0.5 pl-5 text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
                                     {student.parentPhone}
                                   </span>
                                 )}
@@ -2729,24 +2672,7 @@ export function StudentsPage() {
                           </td>
 
                           <td className={`px-6 ${densityRowPadding}`}>
-                            <span
-                              className={[
-                                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-tight ring-1 ring-inset',
-                                statusBadge.color === 'red'
-                                  ? 'bg-red-500/10 text-red-600 ring-red-500/25 dark:bg-red-500/15 dark:text-red-400'
-                                  : 'bg-emerald-500/12 text-emerald-700 ring-emerald-500/30 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset] dark:bg-emerald-500/15 dark:text-emerald-300 dark:shadow-none',
-                              ].join(' ')}
-                            >
-                              <span
-                                aria-hidden="true"
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  statusBadge.color === 'red'
-                                    ? 'bg-red-500'
-                                    : 'medu-pulse-dot bg-emerald-500 shadow-[0_0_6px_#10B981]'
-                                }`}
-                              />
-                              <span>{t(statusBadge.label)}</span>
-                            </span>
+                            <StatusBadge isActive={student.user?.isActive} pulse />
                           </td>
 
                           <td className={`px-6 ${densityRowPadding}`}>
@@ -2755,66 +2681,18 @@ export function StudentsPage() {
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
                             >
-                              {isActive ? (
-                                <RowAction
-                                  icon={I.snowflake}
-                                  label="Darslarni muzlatish (Freeze)"
-                                  tone="freeze"
-                                  onClick={() => handleOpenFreeze(student)}
-                                />
-                              ) : (
-                                <RowAction
-                                  icon={I.play}
-                                  label="Faollashtirish (Unfreeze)"
-                                  tone="edit"
-                                  onClick={() => unfreezeMutation.mutate(student.id)}
-                                  loading={
-                                    unfreezeMutation.isPending &&
-                                    unfreezeMutation.variables === student.id
-                                  }
-                                />
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStudentSidecar(student)}
-                                aria-label="Sidecar Split-View"
-                                title="Sidecar tafsilotlari (Split-View · Space)"
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200/80 bg-white/70 text-slate-600 hover:text-slate-950 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white transition-colors"
-                              >
-                                <span className="text-[12px] leading-none">◨</span>
-                              </button>
-                              <RowAction
-                                icon={I.sparkles}
-                                label="Yutuq & Sertifikat (Milestone)"
-                                tone="celebrate"
-                                onClick={() => {
-                                  sound.playPop?.();
-                                  setSelectedStudentForCelebration(student.id);
-                                  setIsMilestoneCelebrationOpen(true);
-                                }}
-                              />
-                              <RowAction
-                                icon={I.eye}
-                                label="Quick-Look (Space)"
-                                tone="edit"
-                                onClick={() => handleQuickLook(student)}
-                              />
-                              <RowAction
-                                icon={I.edit}
-                                label={t('common.edit')}
-                                tone="edit"
-                                to={`/students/${student.id}/edit`}
-                              />
-                              <RowAction
-                                icon={I.trash}
-                                label={t('common.delete')}
-                                tone="delete"
-                                onClick={() => handleDelete(student.id)}
-                                disabled={removeMutation.isPending}
-                                loading={
-                                  removeMutation.isPending &&
-                                  removeMutation.variables === student.id
-                                }
+                              <StudentActions
+                                student={student}
+                                isActive={isActive}
+                                unfreezing={isUnfreezing(student.id)}
+                                deleting={isDeleting(student.id)}
+                                deleteBusy={removeMutation.isPending}
+                                onFreeze={handleOpenFreeze}
+                                onUnfreeze={handleUnfreeze}
+                                onSidecar={handleOpenStudentSidecar}
+                                onQuickLook={handleQuickLook}
+                                onCelebrate={handleCelebrate}
+                                onDelete={handleDelete}
                               />
                             </div>
                           </td>
@@ -2825,7 +2703,7 @@ export function StudentsPage() {
                 </table>
               </div>
 
-              <div className="border-t border-slate-200/70 px-4 py-3 dark:border-white/[0.08]">
+              <div className="border-t border-slate-900/[0.07] px-4 py-3 dark:border-white/[0.08]">
                 <GlassPagination page={page} totalPages={data?.totalPages ?? 1} onPageChange={setPage} />
               </div>
             </motion.div>
@@ -2833,7 +2711,7 @@ export function StudentsPage() {
         </AnimatePresence>
       </GlassCardSurface>
 
-      {/* ═══ 4 · FLOATING BULK COMMAND ISLAND ═══ */}
+      {/* ═══ 4 · FLOATING BULK ISLAND ═══ */}
       <FloatingActionIsland
         selectedCount={selectedCount}
         onClear={clearSelection}
@@ -2859,7 +2737,7 @@ export function StudentsPage() {
           },
           {
             id: 'bulk-delete',
-            label: "O'chirish",
+            label: 'O‘chirish',
             icon: <Icon paths={I.trash} size={13} />,
             variant: 'danger',
             shortcut: 'Del',
@@ -2898,17 +2776,17 @@ export function StudentsPage() {
             }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/25 bg-gradient-to-r from-sky-500/12 via-blue-500/8 to-transparent p-3.5 text-xs text-sky-950 dark:text-sky-100">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-sky-500/25 bg-gradient-to-r from-sky-500/12 via-blue-500/8 to-transparent p-3.5 text-xs text-sky-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:text-sky-100 dark:shadow-none">
+              <div className="flex min-w-0 items-center gap-3">
                 <StudentAvatar name={formatStudentName(freezeTarget)} size={38} />
                 <div className="min-w-0">
-                  <p className="truncate font-bold text-[13px]">{formatStudentName(freezeTarget)}</p>
+                  <p className="truncate text-[13px] font-bold">{formatStudentName(freezeTarget)}</p>
                   <p className="mt-0.5 text-[11.5px] opacity-80">
-                    Muzlatilgan davrda qarzdorlik hisoblanmaydi va guruhdagi o'rni saqlanadi.
+                    Muzlatilgan davrda qarzdorlik hisoblanmaydi va guruhdagi o‘rni saqlanadi.
                   </p>
                 </div>
               </div>
-              <span className="shrink-0 rounded-xl bg-sky-500/20 px-2.5 py-1 text-[11px] font-extrabold text-sky-700 dark:text-sky-300 tabular-nums">
+              <span className="shrink-0 rounded-xl bg-sky-500/20 px-2.5 py-1 text-[11px] font-extrabold tabular-nums text-sky-700 dark:text-sky-300">
                 {freezeDurationDays} kun
               </span>
             </div>
@@ -2926,21 +2804,14 @@ export function StudentsPage() {
                 Tezkor muddat tanlash
               </span>
               <div className="flex flex-wrap gap-2">
-                {[
-                  { label: '7 kun (1 hafta)', days: 7 },
-                  { label: '14 kun (2 hafta)', days: 14 },
-                  { label: '30 kun (1 oy)', days: 30 },
-                ].map((preset) => (
+                {FREEZE_PRESETS.map((preset) => (
                   <button
                     key={preset.days}
                     type="button"
                     onClick={() =>
-                      setFreezeForm((prev) => ({
-                        ...prev,
-                        endDate: addDaysToIso(prev.startDate, preset.days),
-                      }))
+                      setFreezeForm((prev) => ({ ...prev, endDate: addDaysToIso(prev.startDate, preset.days - 1) }))
                     }
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-400 hover:text-sky-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:border-sky-400"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:-translate-y-px hover:border-sky-400 hover:text-sky-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:border-sky-400"
                   >
                     <Icon paths={I.calendar} size={13} />
                     <span>{preset.label}</span>
@@ -2971,9 +2842,7 @@ export function StudentsPage() {
                   type="date"
                   min={freezeForm.startDate}
                   value={freezeForm.endDate}
-                  onChange={(e) =>
-                    setFreezeForm((prev) => ({ ...prev, endDate: e.target.value }))
-                  }
+                  onChange={(e) => setFreezeForm((prev) => ({ ...prev, endDate: e.target.value }))}
                   required
                 />
               </GlassField>
@@ -2989,16 +2858,17 @@ export function StudentsPage() {
             </GlassField>
 
             <div className="flex flex-wrap gap-1.5">
-              {[
-                "Tibbiy sabab / Kasallik ma'lumotnomasi (Medical leave)",
-                "Oilaviy safar / Ta'til sababli",
-                "Maktab imtihonlari / Olimpiada yig'ini",
-              ].map((reasonPreset) => (
+              {FREEZE_REASONS.map((reasonPreset) => (
                 <button
                   key={reasonPreset}
                   type="button"
                   onClick={() => setFreezeForm((prev) => ({ ...prev, reason: reasonPreset }))}
-                  className="rounded-lg border border-slate-200/70 bg-slate-100/70 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                  className={cx(
+                    'rounded-lg border px-2.5 py-1 text-[11px] font-medium transition',
+                    freezeForm.reason === reasonPreset
+                      ? 'border-sky-400/50 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                      : 'border-slate-200/70 bg-slate-100/70 text-slate-600 hover:bg-slate-200/70 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300',
+                  )}
                 >
                   {reasonPreset}
                 </button>
@@ -3023,17 +2893,11 @@ export function StudentsPage() {
       </GlassModal>
 
       {/* ═══ 7 · COMMAND PALETTE ═══ */}
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        actions={paletteActions}
-      />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
 
-      {/* ═══ 8 · ROW HOVER PEEK (Desktop) ═══ */}
+      {/* ═══ 8 · ROW HOVER PEEK ═══ */}
       <AnimatePresence>
-        {hoveredStudent && (
-          <RowHoverPeek student={hoveredStudent.student} anchorRect={hoveredStudent.rect} />
-        )}
+        {hoveredStudent && <RowHoverPeek student={hoveredStudent.student} anchorRect={hoveredStudent.rect} />}
       </AnimatePresence>
 
       <UniversityAdmissionPathfinder
@@ -3042,10 +2906,7 @@ export function StudentsPage() {
         students={rawStudentList}
       />
 
-      <ReferralGrowthEngineModal
-        isOpen={isReferralEngineOpen}
-        onClose={() => setIsReferralEngineOpen(false)}
-      />
+      <ReferralGrowthEngineModal isOpen={isReferralEngineOpen} onClose={() => setIsReferralEngineOpen(false)} />
 
       <StudentMilestoneCelebrationModal
         isOpen={isMilestoneCelebrationOpen}
@@ -3058,10 +2919,7 @@ export function StudentsPage() {
         onClose={() => setIsRetentionCockpitOpen(false)}
       />
 
-      <SmartDiscountClusterModal
-        isOpen={isSmartDiscountOpen}
-        onClose={() => setIsSmartDiscountOpen(false)}
-      />
+      <SmartDiscountClusterModal isOpen={isSmartDiscountOpen} onClose={() => setIsSmartDiscountOpen(false)} />
 
       {toastNode}
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -33,8 +33,14 @@ export function QuickAttendanceModal() {
     staleTime: 60000,
   });
 
-  const rawGroups = Array.isArray(groupsData) ? groupsData : (groupsData?.items || []);
-  const groups = rawGroups.filter((g: any) => g.isActive !== false);
+  const rawGroups = useMemo(
+    () => (Array.isArray(groupsData) ? groupsData : groupsData?.items || []),
+    [groupsData],
+  );
+  const groups = useMemo(
+    () => rawGroups.filter((g: any) => g && g.isActive !== false),
+    [rawGroups],
+  );
 
   // Auto-select first group if none selected
   useEffect(() => {

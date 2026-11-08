@@ -167,18 +167,19 @@ export class TurnstileHardwareManager {
     if (typeof window !== 'undefined') {
       const localRelayUrl = localStorage.getItem('m_edu_turnstile_relay_url');
       if (localRelayUrl && /^https?:\/\//i.test(localRelayUrl)) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
         try {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 2000);
           await fetch(localRelayUrl, {
             method: 'POST',
             mode: 'no-cors',
             signal: controller.signal,
           });
-          clearTimeout(timer);
           anySuccess = true;
         } catch {
           // Local IP fallback
+        } finally {
+          clearTimeout(timer);
         }
       }
     }

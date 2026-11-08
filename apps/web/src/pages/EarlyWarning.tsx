@@ -496,7 +496,7 @@ export function EarlyWarningPage() {
   /* ── Loading & Error States ── */
   if (warningsQuery.isLoading && !warnings.length) {
     return (
-      <div className="relative min-h-screen px-4 py-8 sm:px-6 lg:px-8">
+      <div className="relative min-h-full px-4 py-8 sm:px-6 lg:px-8">
         <AuroraMesh />
         <div className="mx-auto max-w-7xl">
           <EarlyWarningSkeleton />
@@ -506,7 +506,7 @@ export function EarlyWarningPage() {
   }
 
   return (
-    <div className="relative min-h-screen px-4 py-6 sm:px-6 lg:px-8 pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full px-4 py-6 sm:px-6 lg:px-8 pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
 
       <motion.div

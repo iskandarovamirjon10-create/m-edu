@@ -12,6 +12,7 @@ import {
 import { Slot } from '@radix-ui/react-slot';
 import { GlassSpinner } from './GlassSpinner';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { cn } from '@/lib/design';
 
 
 
@@ -412,20 +413,13 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
     const variantClass = VARIANT_CLASSES[variant] ?? VARIANT_CLASSES.primary;
     const sizeClass = SIZE_CLASSES[size] ?? SIZE_CLASSES.md;
 
-    const computedClass = [
-      BASE_CLASSES,
-      variantClass,
-      sizeClass,
-      className,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const computedClass = cn(BASE_CLASSES, variantClass, sizeClass, className);
 
     const gap = SIZE_GAP[size];
 
     
     const content = buildContent({
-      iconEl: icon,
+      iconEl: isIconSize ? (icon ?? children) : icon,
       iconEndEl: iconEnd,
       childrenNode: !isIconSize ? children : null,
       showLoading,
@@ -472,14 +466,12 @@ export const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
       }>;
 
       const childProps = child.props ?? {};
-      const mergedClassName = [computedClass, childProps.className]
-        .filter(Boolean)
-        .join(' ');
+      const mergedClassName = cn(computedClass, childProps.className);
 
-      // Preserve child's own children as the visible label
+      // Preserve child's own children as the visible label or icon
       const labelContent = isIconSize ? null : childProps.children;
       const childAwareContent = buildContent({
-        iconEl: icon,
+        iconEl: isIconSize ? (icon ?? childProps.children) : icon,
         iconEndEl: iconEnd,
         childrenNode: labelContent,
         showLoading,

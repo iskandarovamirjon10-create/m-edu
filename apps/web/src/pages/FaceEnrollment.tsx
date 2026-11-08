@@ -1,20 +1,35 @@
+'use client';
+
 /**
- * M-EDU FaceEnrollmentPage —  Spatial 
+ * ============================================================================
+ * M-EDU FaceEnrollmentPage — iOS 27 / visionOS "Spatial Biometric Studio"
+ * ============================================================================
  *
- * Module Features:
- *  - Multi-layered ambient volumetric plasma orbs & refractive  Liquid Glass surfaces
- *  - Specular rim highlights, inner optical lens borders & deep backdrop-saturate-[200%]
- *  - Hero header with 3D squircle biometric scanner emblem + live neural telemetry pill
- *  - Animated KPI statistics bento with radial progress ring & specular edge glow
- *  - Guided 3-step Biometric Enrollment Studio with live step progression
- *  - Live Apple Face ID LiDAR HUD Viewfinder frame & Dynamic Island session bar
- *  - Spring-animated segmented filter pill & spatial directory cards
- *  - 100% preservation of all API contracts, regression tests, and i18n
+ * Module Features & Fixes:
+ *  • Multi-layered ambient volumetric plasma orbs (respects reduced-motion)
+ *  • Refractive iOS 27 Liquid Glass surfaces with chromatic specular rims
+ *  • Hero header with 3D squircle biometric scanner emblem + live LiDAR pill
+ *  • Animated KPI bento with radial SVG progress ring & specular edge glow
+ *  • Guided 3-step Biometric Enrollment Studio with completion checkmarks
+ *  • Live Apple Face ID LiDAR HUD Viewfinder with scanning laser beam
+ *  • Deduplicated error alerts + automatic mutation reset on student switch
+ *  • Safe timer cleanup on unmount & unique student coverage calculation
+ *  • 100% preservation of all API contracts, regression tests, and i18n
+ * ============================================================================
  */
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+  memo,
+  type ChangeEvent,
+} from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup, type Variants } from 'framer-motion';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { faceApi, studentsApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
@@ -35,7 +50,13 @@ import { WebcamCapture } from '@/components/WebcamCapture';
 import { formatDate } from '@/lib/format';
 import { friendlyFaceError } from '@/lib/faceErrors';
 import { getErrorMessage } from '@/lib/errorMessages';
-import type { Paginated, Student, FaceEnrollment, FaceEnrollmentStatus } from '@/lib/types';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
+import type {
+  Paginated,
+  Student,
+  FaceEnrollment,
+  FaceEnrollmentStatus,
+} from '@/lib/types';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { translate } from '@/i18n';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -44,50 +65,59 @@ import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 
 /* ============================================================================
- * MOTION TOKENS —  Fluid Spring Physics
+ * MOTION TOKENS — iOS 27 Fluid Spring Physics
  * ========================================================================== */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 520, damping: 32, mass: 0.65 },
-  smooth: { type: 'spring', stiffness: 360, damping: 30, mass: 0.85 },
-  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
-  float:  { duration: 14, repeat: Infinity, repeatType: 'mirror' as const, ease: 'easeInOut' as const },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 32, mass: 0.65 },
+  smooth: { type: 'spring' as const, stiffness: 380, damping: 31, mass: 0.82 },
+  soft: { type: 'spring' as const, stiffness: 240, damping: 28, mass: 0.95 },
+  gel: { type: 'spring' as const, stiffness: 740, damping: 25, mass: 0.34 },
+  float: {
+    duration: 14,
+    repeat: Infinity,
+    repeatType: 'mirror' as const,
+    ease: 'easeInOut' as const,
+  },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.055, delayChildren: 0.03 },
+    transition: { staggerChildren: 0.05, delayChildren: 0.02 },
   },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 18, scale: 0.985 },
+  hidden: { opacity: 0, y: 16, scale: 0.988 },
   visible: { opacity: 1, y: 0, scale: 1, transition: SPRING.smooth },
 };
 
 /* ============================================================================
- *  LIQUID GLASS DESIGN TOKENS (Tailwind Utility Compositions)
+ * iOS 27 LIQUID GLASS DESIGN TOKENS
  * ========================================================================== */
 
-const LIQUID_PANEL =
-  'relative overflow-hidden rounded-[2rem] border border-white/75 dark:border-white/[0.11] ' +
-  'bg-white/[0.68] dark:bg-[#0B0F1A]/[0.68] backdrop-blur-3xl backdrop-saturate-[200%] ' +
-  'shadow-[0_24px_60px_-15px_rgba(15,23,42,0.07),0_4px_20px_-2px_rgba(15,23,42,0.03),inset_0_1px_1px_rgba(255,255,255,0.85)] ' +
-  'dark:shadow-[0_28px_70px_-15px_rgba(0,0,0,0.65),inset_0_1px_0.5px_rgba(255,255,255,0.16)]';
+const LIQUID_PANEL = cn(
+  'relative isolate overflow-hidden rounded-[2.15rem]',
+  'border border-white/75 dark:border-white/[0.13]',
+  'bg-white/[0.72] dark:bg-[#0B0F1A]/[0.74] backdrop-blur-3xl backdrop-saturate-[205%]',
+  'shadow-[0_24px_60px_-15px_rgba(15,23,42,0.07),0_4px_20px_-2px_rgba(15,23,42,0.03),inset_0_1.5px_1px_rgba(255,255,255,0.9),inset_0_-1px_1px_rgba(16,185,129,0.08)]',
+  'dark:shadow-[0_28px_70px_-15px_rgba(0,0,0,0.68),inset_0_1.5px_0.5px_rgba(255,255,255,0.2),inset_0_-1px_1px_rgba(16,185,129,0.14)]',
+);
 
-const LIQUID_INSET =
-  'rounded-[1.35rem] border border-black/[0.06] dark:border-white/[0.08] ' +
-  'bg-white/[0.55] dark:bg-white/[0.03] backdrop-blur-xl ' +
-  'shadow-[inset_0_1px_2px_rgba(15,23,42,0.03),0_1px_0_rgba(255,255,255,0.7)] ' +
-  'dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]';
+const LIQUID_INSET = cn(
+  'rounded-[1.35rem] border border-black/[0.06] dark:border-white/[0.09]',
+  'bg-white/[0.58] dark:bg-white/[0.035] backdrop-blur-xl',
+  'shadow-[inset_0_1px_2px_rgba(15,23,42,0.03),0_1px_0_rgba(255,255,255,0.75)]',
+  'dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.38)]',
+);
 
 /* ============================================================================
  * CUSTOM SVG ICONS
  * ========================================================================== */
 
-const ICON_STROKE = 1.85;
+const ICON_STROKE = 1.9;
 
 const I = {
   faceId: [
@@ -141,9 +171,7 @@ const I = {
     'M21 21l-4.35-4.35',
     'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
   ],
-  activity: [
-    'M22 12h-4l-3 9L9 3l-3 9H2',
-  ],
+  activity: ['M22 12h-4l-3 9L9 3l-3 9H2'],
   cpu: [
     'M4 4h16v16H4z',
     'M9 9h6v6H9z',
@@ -160,7 +188,40 @@ const I = {
     'M3 3h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',
     'M15 3v18',
   ],
-};
+  download: [
+    'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4',
+    'M7 10l5 5 5-5',
+    'M12 15V3',
+  ],
+} as const;
+
+function SafeLink({
+  to,
+  className,
+  children,
+  onClick,
+  ...rest
+}: {
+  to: string;
+  className?: string;
+  children: React.ReactNode;
+  onClick?: (e: React.MouseEvent) => void;
+  [key: string]: unknown;
+}) {
+  const inRouter = useInRouterContext();
+  if (inRouter) {
+    return (
+      <Link to={to} className={className} onClick={onClick} {...(rest as any)}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={to} className={className} onClick={onClick} {...(rest as any)}>
+      {children}
+    </a>
+  );
+}
 
 function Icon({
   paths,
@@ -168,7 +229,7 @@ function Icon({
   className = '',
   strokeWidth = ICON_STROKE,
 }: {
-  paths: string[];
+  paths: readonly string[];
   size?: number;
   className?: string;
   strokeWidth?: number;
@@ -194,79 +255,118 @@ function Icon({
 }
 
 /* ============================================================================
- *  VOLUMETRIC AMBIENT PLASMA ORBS & SPECULAR RIM
+ * VOLUMETRIC AMBIENT PLASMA ORBS & SPECULAR RIM
  * ========================================================================== */
 
-function AmbientOrbs() {
+const AmbientOrbs = memo(function AmbientOrbs({ reduced }: { reduced: boolean }) {
   return (
     <>
       <AuroraMesh variant="security" />
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none"
+        className="pointer-events-none fixed inset-0 -z-10 select-none overflow-hidden"
       >
-        {/* Top-left Biometric Emerald Plasma */}
         <motion.div
-          animate={{ x: [0, 35, -20, 0], y: [0, -25, 15, 0], scale: [1, 1.08, 0.96, 1] }}
+          animate={
+            reduced
+              ? undefined
+              : { x: [0, 35, -20, 0], y: [0, -25, 15, 0], scale: [1, 1.08, 0.96, 1] }
+          }
           transition={SPRING.float}
           className="absolute -left-32 -top-32 h-[440px] w-[440px] rounded-full bg-gradient-to-br from-[#10B981]/20 via-[#34D399]/10 to-transparent blur-[110px] dark:from-[#10B981]/18 dark:via-[#059669]/8"
         />
-        {/* Top-right Neural Ultramarine Plasma */}
         <motion.div
-          animate={{ x: [0, -40, 25, 0], y: [0, 30, -20, 0], scale: [1, 0.94, 1.06, 1] }}
+          animate={
+            reduced
+              ? undefined
+              : { x: [0, -40, 25, 0], y: [0, 30, -20, 0], scale: [1, 0.94, 1.06, 1] }
+          }
           transition={{ ...SPRING.float, duration: 18 }}
           className="absolute -right-28 top-12 h-[480px] w-[480px] rounded-full bg-gradient-to-bl from-[#2563EB]/18 via-[#6366F1]/12 to-transparent blur-[120px] dark:from-[#3B82F6]/16 dark:via-[#6366F1]/10"
         />
-        {/* Bottom-center Cyan Caustic Glow */}
         <motion.div
-          animate={{ x: [0, 20, -30, 0], y: [0, -20, 25, 0] }}
+          animate={reduced ? undefined : { x: [0, 20, -30, 0], y: [0, -20, 25, 0] }}
           transition={{ ...SPRING.float, duration: 22 }}
           className="absolute bottom-[-140px] left-1/3 h-[380px] w-[520px] rounded-full bg-gradient-to-tr from-[#06B6D4]/12 via-[#10B981]/8 to-transparent blur-[110px] dark:from-[#06B6D4]/10"
         />
       </div>
     </>
   );
-}
+});
 
-function SpecularRim() {
+const SpecularRim = memo(function SpecularRim() {
   return (
     <>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-6 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/30"
+        className="pointer-events-none absolute inset-x-6 top-0 z-10 h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/35"
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-white/35 via-white/5 to-transparent dark:from-white/[0.05] dark:to-transparent"
+        className="pointer-events-none absolute inset-x-10 top-[1px] z-10 h-[0.5px] bg-gradient-to-r from-transparent via-[#34D399]/35 to-transparent dark:via-[#34D399]/25"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-28 bg-gradient-to-b from-white/35 via-white/5 to-transparent dark:from-white/[0.05] dark:to-transparent"
       />
     </>
   );
-}
+});
 
 /* ============================================================================
- * ENGLISH FALLBACK
+ * STABLE TRANSLATION & HELPERS
  * ========================================================================== */
 
 const FACE_ENROLLMENT_EN_FALLBACK: Record<string, string> = {
+  'faceEnrollment.title': 'Face ID Biometric Enrollment',
+  'faceEnrollment.subtitle':
+    'Enroll and manage encrypted 128-D neural facial vectors for instant turnstile and classroom attendance.',
+  'faceEnrollment.newEnrollment': 'Biometric Enrollment Studio',
+  'faceEnrollment.student': 'Student',
+  'faceEnrollment.selectStudent': 'Select a student…',
+  'faceEnrollment.selectStudentError': 'Please select a student first',
   'faceEnrollment.startEnrollment': 'Start enrollment',
   'faceEnrollment.starting': 'Starting…',
   'faceEnrollment.inProgress': 'Enrollment in progress: {id}',
+  'faceEnrollment.captureFace': 'Capture Face ID',
+  'faceEnrollment.pipelineHint':
+    'Facial templates are converted into irreversible AES-256 mathematical vectors. Raw photos are never exposed.',
+  'faceEnrollment.listTitle': 'Enrolled Biometric Directory',
+  'faceEnrollment.loading': 'Loading biometric records…',
+  'faceEnrollment.loadError': 'Failed to load enrollments',
+  'faceEnrollment.empty': 'No Face ID enrollments found',
+  'faceEnrollment.emptyHint': 'Select a student on the left to register their first biometric template.',
+  'faceEnrollment.revoke': 'Revoke',
+  'faceEnrollment.revoking': 'Revoking…',
+  'faceEnrollment.revokeConfirm':
+    'Are you sure you want to revoke this Face ID template? The student will need to be re-enrolled.',
+  'faceEnrollment.startedToast': 'Enrollment session initialized',
+  'faceEnrollment.capturedToast': 'Face ID vector encrypted and saved',
+  'faceEnrollment.revokedToast': 'Biometric record revoked',
+  'faceEnrollment.cancelledToast': 'Enrollment session cancelled',
+  'faceEnrollment.noActiveSession': 'No active enrollment session',
+  'face.biometricEnrollment': 'Biometric Studio',
+  'face.appleNeuralBiometrics': 'Neural Engine',
+  'common.cancel': 'Cancel',
 };
 
 function useT(): (key: string, vars?: Record<string, string | number>) => string {
   const { t } = useSafeI18n();
-  return (key: string, vars?: Record<string, string | number>) => {
-    const res = t(key, vars);
-    if (res && res !== key) return res;
-    const viaEn = translate('en', key, vars);
-    if (viaEn !== key) return viaEn;
-    const template = FACE_ENROLLMENT_EN_FALLBACK[key];
-    if (!template) return key;
-    if (!vars) return template;
-    return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-      name in vars ? String(vars[name]) : match,
-    );
-  };
+  return useCallback(
+    (key: string, vars?: Record<string, string | number>) => {
+      const res = t(key, vars);
+      if (typeof res === 'string' && res.trim().length > 0 && res !== key) return res;
+      const viaEn = translate('en', key, vars);
+      if (typeof viaEn === 'string' && viaEn.trim().length > 0 && viaEn !== key) return viaEn;
+      const template = FACE_ENROLLMENT_EN_FALLBACK[key];
+      if (!template) return key;
+      if (!vars) return template;
+      return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in vars ? String(vars[name]) : match,
+      );
+    },
+    [t],
+  );
 }
 
 interface EnrollmentFormState {
@@ -286,7 +386,10 @@ function formatStudentName(
     | undefined,
 ): string {
   if (!student) return '—';
-  const nested = 'user' in student ? (student as { user?: { firstName?: string; lastName?: string } }).user : undefined;
+  const nested =
+    'user' in student
+      ? (student as { user?: { firstName?: string; lastName?: string } }).user
+      : undefined;
   const direct = student as { firstName?: string; lastName?: string };
   const firstName = nested?.firstName ?? direct.firstName;
   const lastName = nested?.lastName ?? direct.lastName;
@@ -294,7 +397,7 @@ function formatStudentName(
 }
 
 function getInitials(name?: string | null): string {
-  if (!name || typeof name !== 'string') return '—';
+  if (!name || typeof name !== 'string' || name === '—') return '—';
   return (
     name
       .trim()
@@ -313,7 +416,7 @@ const AVATAR_PALETTES = [
   ['#6366F1', '#EC4899'],
   ['#F59E0B', '#EF4444'],
   ['#0EA5E9', '#2563EB'],
-];
+] as const;
 
 function getAvatarGradient(name: string): string {
   let hash = 0;
@@ -329,7 +432,10 @@ const FACE_ENROLLMENT_STATUS_KEYS: Record<FaceEnrollmentStatus, string> = {
   EXPIRED: 'faceEnrollment.status.EXPIRED',
 };
 
-function getEnrollmentStatusBadge(status: FaceEnrollmentStatus): { color: string; labelKey: string } {
+function getEnrollmentStatusBadge(status: FaceEnrollmentStatus): {
+  color: string;
+  labelKey: string;
+} {
   return {
     color: statusColor(status),
     labelKey: FACE_ENROLLMENT_STATUS_KEYS[status] ?? '',
@@ -341,10 +447,10 @@ function truncateEnrollmentId(id: string, maxLength = 8): string {
 }
 
 /* ============================================================================
- *  LIQUID GLASS KPI CARD COMPONENT
+ * LIQUID GLASS KPI CARD COMPONENT (with Radial Ring Gauge)
  * ========================================================================== */
 
-function KpiCard({
+const KpiCard = memo(function KpiCard({
   label,
   value,
   secondary,
@@ -355,16 +461,20 @@ function KpiCard({
   label: string;
   value: string | number;
   secondary?: string;
-  icon: string[];
+  icon: readonly string[];
   progress?: number;
   color: { fg: string; bg: string; border: string; glow: string };
 }) {
+  const clampedProgress =
+    typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : undefined;
+  const circumference = 2 * Math.PI * 14;
+
   return (
     <motion.div
       variants={cardVariants}
-      whileHover={{ y: -3, scale: 1.01 }}
+      whileHover={{ y: -3, scale: 1.008 }}
       transition={SPRING.snappy}
-      className={`${LIQUID_PANEL} group p-4 sm:p-5`}
+      className={cn(LIQUID_PANEL, 'group p-4 sm:p-5')}
     >
       <SpecularRim />
 
@@ -389,17 +499,40 @@ function KpiCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <div className="text-[24px] font-extrabold leading-none tracking-tight text-[#0F172A] dark:text-[#F8FAFC] tabular-nums">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-mono text-[24px] font-extrabold leading-none tracking-tight tabular-nums text-[#0F172A] dark:text-[#F8FAFC]">
               {value}
             </div>
-            {typeof progress === 'number' && (
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase"
-                style={{ background: color.bg, color: color.fg, border: `1px solid ${color.border}` }}
-              >
-                Live
-              </span>
+            {typeof clampedProgress === 'number' && (
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                <svg className="h-8 w-8 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    className="text-black/[0.08] dark:text-white/[0.1]"
+                  />
+                  <motion.circle
+                    cx="18"
+                    cy="18"
+                    r="14"
+                    fill="none"
+                    stroke={color.fg}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    initial={{ strokeDashoffset: circumference }}
+                    animate={{
+                      strokeDashoffset:
+                        circumference - (clampedProgress / 100) * circumference,
+                    }}
+                    transition={{ duration: 0.9, ease: 'easeOut' }}
+                  />
+                </svg>
+              </div>
             )}
           </div>
 
@@ -415,11 +548,11 @@ function KpiCard({
         </div>
       </div>
 
-      {typeof progress === 'number' && (
+      {typeof clampedProgress === 'number' && (
         <div className="relative mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
           <motion.div
             initial={{ width: 0 }}
-            animate={{ width: `${Math.max(4, Math.min(100, progress))}%` }}
+            animate={{ width: `${Math.max(4, clampedProgress)}%` }}
             transition={{ duration: 0.9, ease: 'easeOut' }}
             className="h-full rounded-full"
             style={{
@@ -431,7 +564,7 @@ function KpiCard({
       )}
     </motion.div>
   );
-}
+});
 
 /* ============================================================================
  * MAIN COMPONENT
@@ -440,33 +573,61 @@ function KpiCard({
 export function FaceEnrollmentPage() {
   const t = useT();
   usePageTitle(t('faceEnrollment.title'));
+  const reduced = usePrefersReducedMotion();
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
-  const { playTick, playError, playCelebration, playDelete } = usePremiumSound();
+  const sound = usePremiumSound();
   const voice = useVoiceFeedback();
   const haptics = useHaptics();
 
-  // Form state
+  // Ref-stabilized feedback hooks
+  const soundRef = useRef(sound);
+  const voiceRef = useRef(voice);
+  const hapticsRef = useRef(haptics);
+  const pushRef = useRef(push);
+  useEffect(() => {
+    soundRef.current = sound;
+    voiceRef.current = voice;
+    hapticsRef.current = haptics;
+    pushRef.current = push;
+  }, [sound, voice, haptics, push]);
+
+  // Form & UI state
   const [form, setForm] = useState<EnrollmentFormState>(INITIAL_FORM);
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED'>('ALL');
   const [captureSucceeded, setCaptureSucceeded] = useState(false);
+  const [lastCaptureStats, setLastCaptureStats] = useState<{
+    qualityScore?: number;
+    livenessResult?: string;
+  } | null>(null);
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof EnrollmentFormState, string>>
   >({});
 
-  const enrollmentStartedRef = useRef(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearResetTimer = useCallback(() => {
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => clearResetTimer();
+  }, [clearResetTimer]);
 
   // Invalidation helper
-  const invalidateFaceQueries = () => {
+  const invalidateFaceQueries = useCallback(() => {
     qc.invalidateQueries({ queryKey: queryKeys.face.enrollments() });
     qc.invalidateQueries({ queryKey: queryKeys.face.studentEnrollments() });
     qc.invalidateQueries({ queryKey: queryKeys.students.faces() });
     qc.invalidateQueries({ queryKey: queryKeys.students.details() });
     qc.invalidateQueries({ queryKey: queryKeys.students.all() });
-  };
+  }, [qc]);
 
   // Data fetching
   const students = useQuery({
@@ -504,25 +665,41 @@ export function FaceEnrollmentPage() {
     [enrollments.data],
   );
 
-  // Selected student object
   const selectedStudent = useMemo(
     () => studentList.find((s) => s.id === form.studentId),
     [studentList, form.studentId],
   );
 
-  // Statistics
+  // Accurate Statistics (counts unique active students for coverage%)
   const stats = useMemo(() => {
     const total = enrollmentList.length;
-    const active = enrollmentList.filter((e) => e.status === 'ACTIVE').length;
-    const revoked = enrollmentList.filter((e) => e.status === 'REVOKED').length;
-    const totalStudents = studentList.length || 1;
-    const coverage = Math.min(100, Math.round((active / totalStudents) * 100));
-    return { total, active, revoked, coverage };
-  }, [enrollmentList, studentList]);
+    let active = 0;
+    let revoked = 0;
+    const activeStudentIds = new Set<string>();
 
-  // Guided 3-step studio progress state
+    for (const e of enrollmentList) {
+      if (e.status === 'ACTIVE') {
+        active += 1;
+        const sid = e.student?.id ?? e.studentId;
+        if (sid) activeStudentIds.add(sid);
+      } else if (e.status === 'REVOKED') {
+        revoked += 1;
+      }
+    }
+
+    const totalStudents = studentList.length;
+    const uniqueEnrolledCount = activeStudentIds.size || active;
+    const coverage =
+      totalStudents > 0
+        ? Math.min(100, Math.round((uniqueEnrolledCount / totalStudents) * 100))
+        : 0;
+
+    return { total, active, revoked, coverage };
+  }, [enrollmentList, studentList.length]);
+
+  // Guided 3-step studio progress state (4 = all 3 steps completed with ✓)
   const currentStep = useMemo(() => {
-    if (captureSucceeded) return 3;
+    if (captureSucceeded) return 4;
     if (form.enrollmentId) return 3;
     if (form.studentId) return 2;
     return 1;
@@ -533,40 +710,50 @@ export function FaceEnrollmentPage() {
     mutationFn: () => faceApi.startEnrollment(form.studentId),
     onSuccess: (res) => {
       const enrollment = res as FaceEnrollment;
-      setForm((prev) => ({ ...prev, enrollmentId: enrollment.enrollmentId ?? enrollment.id }));
-      enrollmentStartedRef.current = true;
+      clearResetTimer();
+      setForm((prev) => ({
+        ...prev,
+        enrollmentId: enrollment.enrollmentId ?? enrollment.id,
+      }));
       setCaptureSucceeded(false);
-      playTick();
-      haptics.light();
-      push('success', t('faceEnrollment.startedToast'));
+      soundRef.current.playTick?.();
+      hapticsRef.current.light?.();
+      pushRef.current('success', t('faceEnrollment.startedToast'));
       invalidateFaceQueries();
     },
     onError: (e: Error) => {
-      playError();
-      haptics.error();
-      push('error', friendlyFaceError(e));
+      soundRef.current.playError?.();
+      hapticsRef.current.error?.();
+      pushRef.current('error', friendlyFaceError(e));
     },
   });
 
   // Capture face mutation
   const capture = useMutation({
     mutationFn: (b64: string) => faceApi.capture(form.enrollmentId, b64),
-    onSuccess: () => {
-      playCelebration();
-      haptics.heavy();
-      voice.speakEnrollmentSuccess();
+    onSuccess: (res: any) => {
+      soundRef.current.playCelebration?.();
+      hapticsRef.current.heavy?.();
+      voiceRef.current.speakEnrollmentSuccess?.();
+      setLastCaptureStats({
+        qualityScore: typeof res?.qualityScore === 'number' ? res.qualityScore : undefined,
+        livenessResult: typeof res?.livenessResult === 'string' ? res.livenessResult : undefined,
+      });
       setCaptureSucceeded(true);
-      push('success', t('faceEnrollment.capturedToast'));
+      pushRef.current('success', t('faceEnrollment.capturedToast'));
       invalidateFaceQueries();
-      setTimeout(() => {
+
+      clearResetTimer();
+      resetTimerRef.current = setTimeout(() => {
         setCaptureSucceeded(false);
+        setLastCaptureStats(null);
         setForm(INITIAL_FORM);
-      }, 2500);
+      }, 3000);
     },
     onError: (e: Error) => {
-      playError();
-      haptics.error();
-      push('error', friendlyFaceError(e));
+      soundRef.current.playError?.();
+      hapticsRef.current.error?.();
+      pushRef.current('error', friendlyFaceError(e));
     },
   });
 
@@ -574,72 +761,84 @@ export function FaceEnrollmentPage() {
   const revoke = useMutation({
     mutationFn: (id: string) => faceApi.revoke(id, 'operator_revoked'),
     onSuccess: () => {
-      playDelete();
-      haptics.medium();
-      push('success', t('faceEnrollment.revokedToast'));
+      soundRef.current.playDelete?.();
+      hapticsRef.current.medium?.();
+      pushRef.current('success', t('faceEnrollment.revokedToast'));
       invalidateFaceQueries();
     },
     onError: (e: Error) => {
-      playError();
-      haptics.error();
-      push('error', friendlyFaceError(e));
+      soundRef.current.playError?.();
+      hapticsRef.current.error?.();
+      pushRef.current('error', friendlyFaceError(e));
     },
   });
 
+  const resetCaptureError = capture.reset;
+
   // Form handlers
   const handleStudentChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
+    (e: ChangeEvent<HTMLSelectElement>) => {
+      clearResetTimer();
+      resetCaptureError();
       const selectedId = e.target.value;
       const existingPending = enrollmentList.find(
-        (enr) => enr.student?.id === selectedId && enr.status === 'PENDING',
+        (enr) =>
+          (enr.student?.id === selectedId || enr.studentId === selectedId) &&
+          enr.status === 'PENDING',
       );
-      setForm((prev) => ({
-        ...prev,
+      setForm({
         studentId: selectedId,
-        enrollmentId: existingPending ? (existingPending.enrollmentId ?? existingPending.id) : '',
-      }));
+        enrollmentId: existingPending
+          ? (existingPending.enrollmentId ?? existingPending.id)
+          : '',
+      });
       setFormErrors((prev) => ({ ...prev, studentId: undefined }));
       setCaptureSucceeded(false);
-      enrollmentStartedRef.current = Boolean(existingPending);
     },
-    [enrollmentList],
+    [enrollmentList, clearResetTimer, resetCaptureError],
   );
 
   const handleStartEnrollment = useCallback(() => {
     if (!form.studentId) {
       setFormErrors({ studentId: t('faceEnrollment.selectStudentError') });
-      haptics.error();
+      hapticsRef.current.error?.();
       return;
     }
+    resetCaptureError();
     start.mutate();
-  }, [form.studentId, start, t, haptics]);
+  }, [form.studentId, start, t, resetCaptureError]);
+
+  const isCapturePending = capture.isPending;
+  const mutateCapture = capture.mutate;
 
   const handleCapture = useCallback(
     (b64: string) => {
       if (!form.enrollmentId) {
-        push('error', t('faceEnrollment.noActiveSession'));
+        pushRef.current('error', t('faceEnrollment.noActiveSession'));
         return;
       }
-      if (capture.isPending) return;
-      capture.mutate(b64);
+      if (isCapturePending) return;
+      mutateCapture(b64);
     },
-    [form.enrollmentId, capture, push, t],
+    [form.enrollmentId, isCapturePending, mutateCapture, t],
   );
 
   const handleCancelEnrollment = useCallback(async () => {
-    if (form.enrollmentId) {
+    clearResetTimer();
+    resetCaptureError();
+    const activeId = form.enrollmentId;
+    if (activeId) {
       try {
-        await faceApi.cancelPending(form.enrollmentId);
+        await faceApi.cancelPending(activeId);
       } catch (err) {
         console.error('Failed to cancel pending enrollment', err);
       }
     }
     setForm((prev) => ({ ...prev, enrollmentId: '' }));
     setCaptureSucceeded(false);
-    enrollmentStartedRef.current = false;
-    playTick();
-    push('info', t('faceEnrollment.cancelledToast'));
-  }, [form.enrollmentId, push, t, playTick]);
+    soundRef.current.playTick?.();
+    pushRef.current('info', t('faceEnrollment.cancelledToast'));
+  }, [form.enrollmentId, clearResetTimer, resetCaptureError, t]);
 
   const handleRevoke = useCallback((enrollmentId: string) => {
     setRevokeTarget(enrollmentId);
@@ -658,6 +857,7 @@ export function FaceEnrollmentPage() {
 
   const handleOpenEnrollmentSidecar = useCallback(
     (enrollment: FaceEnrollment) => {
+      soundRef.current.playTick?.();
       const studentName = formatStudentName(enrollment.student);
       const sidecarData: QuickLookData = {
         id: enrollment.id,
@@ -673,14 +873,18 @@ export function FaceEnrollmentPage() {
           color: '#10B981',
         },
         metrics: [
-          { label: "O'quvchi", value: studentName },
+          { label: 'O‘quvchi', value: studentName },
           { label: 'Holati', value: enrollment.status },
-          { label: "Ro'yxatdan o'tgan", value: formatDate(enrollment.enrolledAt) },
+          { label: 'Ro‘yxatdan o‘tgan', value: formatDate(enrollment.enrolledAt) },
           { label: 'Biometrik ID', value: enrollment.id.slice(0, 8) },
         ],
         details: [
           { label: 'Enrollment ID', value: enrollment.id, copyable: true },
-          { label: 'Talaba ID', value: enrollment.studentId || '—', copyable: true },
+          {
+            label: 'Talaba ID',
+            value: enrollment.student?.id || enrollment.studentId || '—',
+            copyable: true,
+          },
           { label: 'Holati', value: enrollment.status },
           { label: 'Sana', value: formatDate(enrollment.enrolledAt) },
         ],
@@ -699,38 +903,78 @@ export function FaceEnrollmentPage() {
 
   // Filtered enrollments
   const filteredEnrollments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return enrollmentList.filter((item) => {
       const name = formatStudentName(item.student).toLowerCase();
-      const matchesSearch = !searchQuery || name.includes(searchQuery.toLowerCase());
+      const idMatch = item.id.toLowerCase().includes(q);
+      const matchesSearch = !q || name.includes(q) || idMatch;
       const matchesStatus =
         statusFilter === 'ALL'
           ? true
           : statusFilter === 'ACTIVE'
-          ? item.status === 'ACTIVE'
-          : item.status === 'REVOKED';
+            ? item.status === 'ACTIVE'
+            : item.status === 'REVOKED';
       return matchesSearch && matchesStatus;
     });
   }, [enrollmentList, searchQuery, statusFilter]);
 
+  // CSV Export with UTF-8 BOM
+  const handleExportCsv = useCallback(() => {
+    if (!filteredEnrollments.length) return;
+    const headers = ['ID', 'F.I.SH', 'Status', 'Talaba ID', 'Ro‘yxatdan o‘tgan sana'];
+    const rows = filteredEnrollments.map((e) => [
+      e.id,
+      formatStudentName(e.student),
+      e.status,
+      e.student?.studentId || '—',
+      formatDate(e.enrolledAt),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows]
+        .map((row) =>
+          row
+            .map((cell) => {
+              const str = cell === null || cell === undefined ? '' : String(cell);
+              return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+            })
+            .join(','),
+        )
+        .join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download',
+      `Face_Enrollment_Directory_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [filteredEnrollments]);
+
   const isStartPending = start.isPending;
-  const isCapturePending = capture.isPending;
   const isRevoking = revoke.isPending;
+  const displayedStepNumber = Math.min(3, currentStep);
 
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="page-container relative space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
+      className="page-container relative isolate space-y-6 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      <AmbientOrbs />
+      <AmbientOrbs reduced={reduced} />
       {toastNode}
 
       {/* ============================================================
           HERO BANNER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div className={`${LIQUID_PANEL} liquid-glass-surface p-6 sm:p-8`}>
+        <div className={cn(LIQUID_PANEL, 'liquid-glass-surface p-6 sm:p-8')}>
           <SpecularRim />
 
           {/* Ambient prism glow inside hero */}
@@ -756,7 +1000,6 @@ export function FaceEnrollmentPage() {
                   }}
                 >
                   <Icon paths={I.faceId} size={34} strokeWidth={1.95} />
-                  {/* Live LiDAR corner ticks */}
                   <span className="pointer-events-none absolute inset-1.5 rounded-[1.05rem] border border-white/25" />
                 </div>
               </div>
@@ -773,7 +1016,7 @@ export function FaceEnrollmentPage() {
                   </span>
                 </div>
 
-                <h1 className="mt-2.5 text-2xl font-extrabold tracking-tight text-[#0F172A] dark:text-[#F8FAFC] sm:text-[30px] sm:leading-tight">
+                <h1 className="mt-2.5 text-2xl font-extrabold tracking-tight text-[#0F172A] sm:text-[30px] sm:leading-tight dark:text-[#F8FAFC]">
                   {t('faceEnrollment.title')}
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13.5px] font-medium leading-relaxed text-[#64748B] dark:text-[#94A3B8]">
@@ -782,9 +1025,23 @@ export function FaceEnrollmentPage() {
               </div>
             </div>
 
-            {/* Live Neural Telemetry Pill (Dynamic Status Capsule) */}
+            {/* Live Neural Telemetry & Hub Mode Switcher */}
             <div className="flex flex-wrap items-center gap-3 self-stretch sm:self-auto">
-              <div className={`${LIQUID_INSET} flex items-center gap-3.5 px-4 py-3`}>
+              <div className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5">
+                <SafeLink
+                  to="/face"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl px-3.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  <Icon paths={I.camera} size={14} />
+                  <span>Face ID Terminal</span>
+                </SafeLink>
+                <div className="inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3.5 text-xs font-bold text-[var(--text-primary)] shadow-sm dark:bg-white/15">
+                  <Icon paths={I.sparkles} size={14} className="text-[#10B981] dark:text-[#34D399]" />
+                  <span>Ro‘yxatga Olish</span>
+                </div>
+              </div>
+
+              <div className={cn(LIQUID_INSET, 'flex items-center gap-3.5 px-4 py-3')}>
                 <div className="relative flex h-3 w-3 items-center justify-center">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#10B981] opacity-75" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#10B981] shadow-[0_0_8px_#10B981]" />
@@ -806,9 +1063,12 @@ export function FaceEnrollmentPage() {
       {/* ============================================================
           KPI SUMMARY BENTO BAR
       ============================================================ */}
-      <motion.div variants={containerVariants} className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      <motion.div
+        variants={containerVariants}
+        className="grid grid-cols-2 gap-3.5 sm:grid-cols-4"
+      >
         <KpiCard
-          label="Jami Ro'yxatdan O'tganlar"
+          label="Jami Ro‘yxatdan O‘tganlar"
           value={stats.total}
           secondary="Barcha biometrik yozuvlar"
           icon={I.users}
@@ -847,7 +1107,7 @@ export function FaceEnrollmentPage() {
         <KpiCard
           label="Bekor Qilingan"
           value={stats.revoked}
-          secondary="Operator tomonidan o'chirilgan"
+          secondary="Operator tomonidan o‘chirilgan"
           icon={I.xCircle}
           color={{
             fg: '#EF4444',
@@ -863,8 +1123,8 @@ export function FaceEnrollmentPage() {
       ============================================================ */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* LEFT COLUMN: Biometric Capture Studio */}
-        <motion.div variants={cardVariants} className="lg:col-span-6 space-y-4">
-          <div className={`${LIQUID_PANEL} p-6 sm:p-7`}>
+        <motion.div variants={cardVariants} className="space-y-4 lg:col-span-6">
+          <div className={cn(LIQUID_PANEL, 'p-6 sm:p-7')}>
             <SpecularRim />
 
             {/* Studio Header */}
@@ -885,14 +1145,14 @@ export function FaceEnrollmentPage() {
                     {t('faceEnrollment.newEnrollment')}
                   </h2>
                   <p className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">
-                    Yuz ma&apos;lumotlarini yuqori aniqlikda skanerlash va shifrlash
+                    Yuz ma’lumotlarini yuqori aniqlikda skanerlash va shifrlash
                   </p>
                 </div>
               </div>
 
               {/* Step Pill */}
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/70 px-3 py-1 text-[11px] font-bold text-[#0F172A] shadow-2xs dark:border-white/10 dark:bg-white/[0.06] dark:text-white">
-                Bosqich {currentStep} / 3
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/75 px-3 py-1 text-[11px] font-bold text-[#0F172A] shadow-xs dark:border-white/10 dark:bg-white/[0.06] dark:text-white">
+                Bosqich {displayedStepNumber} / 3
               </span>
             </div>
 
@@ -904,26 +1164,29 @@ export function FaceEnrollmentPage() {
                 { step: 3, title: '3. Scan' },
               ].map((item) => {
                 const active = currentStep >= item.step;
-                const isCurrent = currentStep === item.step;
+                const isCompleted = currentStep > item.step;
+                const isCurrent = displayedStepNumber === item.step && !captureSucceeded;
                 return (
                   <div
                     key={item.step}
-                    className={`flex items-center gap-1.5 sm:gap-2 rounded-xl border px-2 py-1.5 sm:px-3 sm:py-2 text-[10.5px] sm:text-[11.5px] font-bold transition-all ${
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-xl border px-2 py-1.5 text-[10.5px] font-bold transition-all sm:gap-2 sm:px-3 sm:py-2 sm:text-[11.5px]',
                       isCurrent
                         ? 'border-[#10B981]/45 bg-[#10B981]/12 text-[#059669] shadow-[0_4px_14px_-4px_rgba(16,185,129,0.25)] dark:text-[#34D399]'
                         : active
-                        ? 'border-[#10B981]/25 bg-[#10B981]/[0.06] text-[#10B981]'
-                        : 'border-black/[0.05] bg-black/[0.02] text-[#64748B] dark:border-white/[0.06] dark:bg-white/[0.02]'
-                    }`}
+                          ? 'border-[#10B981]/25 bg-[#10B981]/[0.06] text-[#10B981]'
+                          : 'border-black/[0.05] bg-black/[0.02] text-[#64748B] dark:border-white/[0.06] dark:bg-white/[0.02]',
+                    )}
                   >
                     <span
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${
+                      className={cn(
+                        'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px]',
                         active
                           ? 'bg-[#10B981] text-white'
-                          : 'bg-black/10 text-[#64748B] dark:bg-white/10'
-                      }`}
+                          : 'bg-black/10 text-[#64748B] dark:bg-white/10',
+                      )}
                     >
-                      {active && currentStep > item.step ? '✓' : item.step}
+                      {isCompleted ? '✓' : item.step}
                     </span>
                     <span className="truncate">{item.title}</span>
                   </div>
@@ -933,15 +1196,20 @@ export function FaceEnrollmentPage() {
 
             <div className="relative mt-5 space-y-4">
               {/* Student selector */}
-              <GlassField label={t('faceEnrollment.student')} required error={formErrors.studentId}>
+              <GlassField
+                label={t('faceEnrollment.student')}
+                required
+                error={formErrors.studentId}
+              >
                 {studentList.length > 5 && !form.enrollmentId && (
-                  <div className="mb-2 relative">
+                  <div className="relative mb-2">
                     <input
-                      type="search"
+                      type="text"
+                      role="searchbox"
                       value={studentSearchQuery}
                       onChange={(e) => setStudentSearchQuery(e.target.value)}
-                      placeholder="O'quvchi ismini tezkor qidirish..."
-                      className="w-full rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-black/[0.025] dark:bg-white/[0.035] px-3 py-1.5 text-xs text-[#0F172A] dark:text-[#F8FAFC] placeholder-[#94A3B8] outline-none focus:border-[#10B981] transition-colors"
+                      placeholder="O‘quvchi ismini tezkor qidirish..."
+                      className="w-full rounded-xl border border-black/[0.08] bg-black/[0.025] px-3 py-1.5 text-xs text-[#0F172A] placeholder-[#94A3B8] outline-none transition-colors focus:border-[#10B981] dark:border-white/[0.1] dark:bg-white/[0.035] dark:text-[#F8FAFC]"
                     />
                   </div>
                 )}
@@ -981,7 +1249,10 @@ export function FaceEnrollmentPage() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className={`${LIQUID_INSET} flex items-center justify-between gap-3 p-3.5`}
+                    className={cn(
+                      LIQUID_INSET,
+                      'flex items-center justify-between gap-3 p-3.5',
+                    )}
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -998,7 +1269,9 @@ export function FaceEnrollmentPage() {
                           {formatStudentName(selectedStudent)}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-[11px] font-semibold text-[#64748B] dark:text-[#94A3B8]">
-                          <span className="font-mono">ID: {selectedStudent.id.slice(0, 12)}…</span>
+                          <span className="font-mono">
+                            ID: {selectedStudent.id.slice(0, 12)}…
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1018,14 +1291,6 @@ export function FaceEnrollmentPage() {
                   className="w-full justify-center py-3.5 text-[13.5px] font-bold shadow-[0_12px_28px_-8px_rgba(37,99,235,0.45)]"
                   onClick={handleStartEnrollment}
                   disabled={!form.studentId || isStartPending}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e: any) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.currentTarget.click();
-                    }
-                  }}
                 >
                   <span className="inline-flex items-center gap-2">
                     {isStartPending ? (
@@ -1049,7 +1314,7 @@ export function FaceEnrollmentPage() {
                 <div className="space-y-4 pt-1">
                   {/* Dynamic Island Active Telemetric Bar */}
                   <div className="flex items-center justify-between gap-2 rounded-2xl border border-[#10B981]/35 bg-gradient-to-r from-[#10B981]/15 via-[#10B981]/[0.07] to-transparent px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2.5">
                       <span className="relative flex h-2.5 w-2.5 shrink-0">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#10B981] opacity-75" />
                         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#10B981]" />
@@ -1067,14 +1332,6 @@ export function FaceEnrollmentPage() {
                       aria-label={t('common.cancel')}
                       onClick={handleCancelEnrollment}
                       disabled={isCapturePending}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e: any) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.currentTarget.click();
-                        }
-                      }}
                     >
                       {t('common.cancel')}
                     </GlassButton>
@@ -1085,47 +1342,66 @@ export function FaceEnrollmentPage() {
                     {/* LiDAR HUD Corner Reticles */}
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute left-4 top-4 z-20 h-6 w-6 rounded-tl-xl border-l-2 border-t-2 border-[#10B981]/80"
+                      className="pointer-events-none absolute left-4 top-4 z-20 h-6 w-6 rounded-tl-xl border-l-2 border-t-2 border-[#10B981]/85 shadow-[0_0_12px_rgba(16,185,129,0.5)]"
                     />
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute right-4 top-4 z-20 h-6 w-6 rounded-tr-xl border-r-2 border-t-2 border-[#10B981]/80"
+                      className="pointer-events-none absolute right-4 top-4 z-20 h-6 w-6 rounded-tr-xl border-r-2 border-t-2 border-[#10B981]/85 shadow-[0_0_12px_rgba(16,185,129,0.5)]"
                     />
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute bottom-4 left-4 z-20 h-6 w-6 rounded-bl-xl border-b-2 border-l-2 border-[#10B981]/80"
+                      className="pointer-events-none absolute bottom-4 left-4 z-20 h-6 w-6 rounded-bl-xl border-b-2 border-l-2 border-[#10B981]/85 shadow-[0_0_12px_rgba(16,185,129,0.5)]"
                     />
                     <span
                       aria-hidden="true"
-                      className="pointer-events-none absolute bottom-4 right-4 z-20 h-6 w-6 rounded-br-xl border-b-2 border-r-2 border-[#10B981]/80"
+                      className="pointer-events-none absolute bottom-4 right-4 z-20 h-6 w-6 rounded-br-xl border-b-2 border-r-2 border-[#10B981]/85 shadow-[0_0_12px_rgba(16,185,129,0.5)]"
                     />
+
+                    {/* TrueDepth Laser Sweep during capture */}
+                    {isCapturePending && !reduced && (
+                      <motion.div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-4 z-20 h-0.5 bg-gradient-to-r from-transparent via-[#10B981] to-transparent shadow-[0_0_16px_#10B981]"
+                        initial={{ top: '10%' }}
+                        animate={{ top: ['10%', '88%', '10%'] }}
+                        transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                    )}
+
+                    {/* Apple TrueDepth Biometric Oval Guide */}
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                      <div
+                        className={cn(
+                          'h-48 w-40 rounded-[50%] border-2 border-dashed transition-all duration-300',
+                          isCapturePending
+                            ? 'border-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.55)] animate-pulse'
+                            : 'border-white/35 shadow-[0_0_15px_rgba(255,255,255,0.15)]'
+                        )}
+                      />
+                    </div>
 
                     <WebcamCapture
                       onCapture={handleCapture}
                       busy={isCapturePending}
                       label={t('faceEnrollment.captureFace')}
                     />
-                    {capture.isError && (
-                      <div className="mt-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-center text-xs font-semibold text-rose-500 dark:text-rose-400">
-                        {friendlyFaceError(capture.error)}
-                      </div>
-                    )}
 
                     {/* Success celebratory Liquid Glass overlay */}
                     <AnimatePresence>
                       {captureSucceeded && (
                         <motion.div
+                          key="enrollment-success-overlay"
                           initial={{ opacity: 0, scale: 0.92 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.96 }}
                           transition={SPRING.smooth}
-                          className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[2.25rem] bg-[#0B0F1A]/80 p-6 text-center text-white backdrop-blur-2xl"
+                          className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[2.25rem] bg-[#0B0F1A]/85 p-6 text-center text-white backdrop-blur-2xl"
                         >
                           <motion.div
                             initial={{ scale: 0.5, rotate: -10 }}
                             animate={{ scale: 1, rotate: 0 }}
                             transition={SPRING.snappy}
-                            className="mb-3.5 flex h-18 w-18 items-center justify-center rounded-[1.5rem] bg-gradient-to-tr from-[#059669] to-[#10B981] text-white shadow-[0_14px_34px_-6px_rgba(16,185,129,0.65),inset_0_1.5px_1px_rgba(255,255,255,0.6)]"
+                            className="mb-3.5 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[1.5rem] bg-gradient-to-tr from-[#059669] to-[#10B981] text-white shadow-[0_14px_34px_-6px_rgba(16,185,129,0.65),inset_0_1.5px_1px_rgba(255,255,255,0.6)]"
                           >
                             <Icon paths={I.checkCircle} size={34} strokeWidth={2.5} />
                           </motion.div>
@@ -1133,8 +1409,22 @@ export function FaceEnrollmentPage() {
                             Face ID Muvaffaqiyatli Saqlandi!
                           </h3>
                           <p className="mt-1 max-w-xs text-[13px] font-medium text-white/80">
-                            Biometrik xususiyatlar shifrlanib, o&apos;quvchi profiliga biriktirildi.
+                            Biometrik xususiyatlar shifrlanib, o‘quvchi profiliga biriktirildi.
                           </p>
+                          {lastCaptureStats && (
+                            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                              {lastCaptureStats.qualityScore !== undefined && (
+                                <span className="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-3 py-1 text-[11.5px] font-bold text-emerald-300 backdrop-blur-md">
+                                  Sifat: {Math.round(lastCaptureStats.qualityScore * 100)}%
+                                </span>
+                              )}
+                              {lastCaptureStats.livenessResult && (
+                                <span className="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-3 py-1 text-[11.5px] font-bold text-emerald-300 backdrop-blur-md">
+                                  Anti-Spoof: {lastCaptureStats.livenessResult}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -1144,10 +1434,11 @@ export function FaceEnrollmentPage() {
                   <div className="flex items-center gap-2.5 rounded-2xl border border-[#2563EB]/25 bg-[#2563EB]/[0.08] px-3.5 py-2.5 text-[12px] font-semibold text-[#1D4ED8] dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/12 dark:text-[#93C5FD]">
                     <Icon paths={I.sparkles} size={15} className="shrink-0" strokeWidth={2.2} />
                     <span>
-                      Kameraga to&apos;g&apos;ri qarang, yuz yaxshi yoritilgan bo&apos;lsin (50–70 sm masofada).
+                      Kameraga to‘g‘ri qarang, yuz yaxshi yoritilgan bo‘lsin (50–70 sm masofada).
                     </span>
                   </div>
 
+                  {/* Single Unified Error Alert with Liveness Guidance */}
                   {capture.isError && (
                     <div
                       className="space-y-1.5 rounded-2xl border border-[#EF4444]/35 bg-[#EF4444]/10 px-4 py-3 text-[12.5px] font-semibold leading-5 text-[#EF4444] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]"
@@ -1169,8 +1460,8 @@ export function FaceEnrollmentPage() {
                           .toLowerCase()
                           .includes('liveness')) && (
                         <p className="pl-6 text-[11.5px] font-medium text-[#EF4444]/85">
-                          Tavsiya: Xona yorug&apos;ligini yaxshilang, ekranga juda yaqin turmang va
-                          kameraga to&apos;g&apos;ridan-to&apos;g&apos;ri qarang.
+                          Tavsiya: Xona yorug‘ligini yaxshilang, ekranga juda yaqin turmang va
+                          kameraga to‘g‘ridan-to‘g‘ri qarang.
                         </p>
                       )}
                     </div>
@@ -1180,7 +1471,7 @@ export function FaceEnrollmentPage() {
             </div>
 
             {/* Privacy & Safety Note */}
-            <div className={`${LIQUID_INSET} mt-5 p-3.5`}>
+            <div className={cn(LIQUID_INSET, 'mt-5 p-3.5')}>
               <div className="flex items-start gap-2.5 text-[12px] font-medium leading-5 text-[#64748B] dark:text-[#94A3B8]">
                 <Icon
                   paths={I.shieldCheck}
@@ -1195,8 +1486,8 @@ export function FaceEnrollmentPage() {
         </motion.div>
 
         {/* RIGHT COLUMN: Enrolled Face Directory */}
-        <motion.div variants={cardVariants} className="lg:col-span-6 space-y-4">
-          <div className={`${LIQUID_PANEL} flex h-full flex-col p-6 sm:p-7`}>
+        <motion.div variants={cardVariants} className="space-y-4 lg:col-span-6">
+          <div className={cn(LIQUID_PANEL, 'flex h-full flex-col p-6 sm:p-7')}>
             <SpecularRim />
 
             {/* Header + Search bar */}
@@ -1218,10 +1509,24 @@ export function FaceEnrollmentPage() {
                       {t('faceEnrollment.listTitle')}
                     </h2>
                     <p className="text-[12px] font-medium text-[#64748B] dark:text-[#94A3B8]">
-                      Ro&apos;yxatdan o&apos;tgan o&apos;quvchilar ({filteredEnrollments.length})
+                      Ro‘yxatdan o‘tgan o‘quvchilar ({filteredEnrollments.length})
                     </p>
                   </div>
                 </div>
+
+                <motion.button
+                  type="button"
+                  whileTap={reduced ? undefined : { scaleX: 1.05, scaleY: 0.92 }}
+                  transition={SPRING.gel}
+                  onClick={handleExportCsv}
+                  disabled={filteredEnrollments.length === 0}
+                  aria-label="CSV Eksport"
+                  title="CSV Eksport"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-2xl border border-black/[0.08] bg-white/75 px-3.5 py-2 text-xs font-bold text-[#0F172A] shadow-xs backdrop-blur-xl transition-all hover:bg-white hover:text-[#2563EB] disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.04] dark:text-[#F8FAFC] dark:hover:bg-white/[0.08]"
+                >
+                  <Icon paths={I.download} size={14} strokeWidth={2.2} />
+                  <span>CSV Eksport</span>
+                </motion.button>
               </div>
 
               {/* Search & Segmented Filter Pills */}
@@ -1232,6 +1537,7 @@ export function FaceEnrollmentPage() {
                   </div>
                   <input
                     type="text"
+                    role="searchbox"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Talabani qidirish..."
@@ -1239,46 +1545,45 @@ export function FaceEnrollmentPage() {
                   />
                 </div>
 
-                {/* Segmented Control */}
-                <div className="relative inline-flex items-center rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05]">
-                  {(['ALL', 'ACTIVE', 'REVOKED'] as const).map((tab) => {
-                    const isSelected = statusFilter === tab;
-                    return (
-                      <button
-                        key={tab}
-                        type="button"
-                        onClick={() => setStatusFilter(tab)}
-                        className={`relative z-10 rounded-xl px-3 py-1.5 text-[11px] font-bold transition-colors ${
-                          isSelected
-                            ? 'text-[#0F172A] dark:text-white'
-                            : 'text-[#64748B] hover:text-[#0F172A] dark:text-[#94A3B8] dark:hover:text-white'
-                        }`}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e: any) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            e.currentTarget.click();
-                          }
-                        }}
-                      >
-                        {isSelected && (
-                          <motion.span
-                            layoutId="statusFilterPill"
-                            transition={SPRING.snappy}
-                            className="absolute inset-0 -z-10 rounded-xl border border-white/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-white/15 dark:bg-[#1E2536]"
-                          />
-                        )}
-                        {tab === 'ALL' ? 'Barchasi' : tab === 'ACTIVE' ? 'Faol' : 'Bekor'}
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* Segmented Control with Isolated LayoutGroup */}
+                <LayoutGroup id="face-enrollment-status-tabs">
+                  <div className="relative inline-flex items-center rounded-2xl border border-black/[0.06] bg-black/[0.04] p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05]">
+                    {(['ALL', 'ACTIVE', 'REVOKED'] as const).map((tab) => {
+                      const isSelected = statusFilter === tab;
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          onClick={() => {
+                            soundRef.current.playTick?.();
+                            setStatusFilter(tab);
+                          }}
+                          className={cn(
+                            'relative z-10 rounded-xl px-3 py-1.5 text-[11px] font-bold transition-colors',
+                            isSelected
+                              ? 'text-[#0F172A] dark:text-white'
+                              : 'text-[#64748B] hover:text-[#0F172A] dark:text-[#94A3B8] dark:hover:text-white',
+                          )}
+                        >
+                          {isSelected && (
+                            <motion.span
+                              layoutId="statusFilterPill"
+                              transition={SPRING.snappy}
+                              aria-hidden="true"
+                              className="absolute inset-0 -z-10 rounded-xl border border-white/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-white/15 dark:bg-[#1E2536]"
+                            />
+                          )}
+                          {tab === 'ALL' ? 'Barchasi' : tab === 'ACTIVE' ? 'Faol' : 'Bekor'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </LayoutGroup>
               </div>
             </div>
 
             {/* List content */}
-            <div className="relative mt-4 flex-1 overflow-y-auto max-h-[560px] pr-0.5">
+            <div className="relative mt-4 max-h-[560px] flex-1 overflow-y-auto pr-0.5">
               {enrollments.isLoading && !enrollments.data ? (
                 <div className="py-12">
                   <GlassPageLoader label={t('faceEnrollment.loading')} />
@@ -1310,7 +1615,7 @@ export function FaceEnrollmentPage() {
                         key={enrollment.id}
                         whileHover={{ y: -1.5, scale: 1.004 }}
                         transition={SPRING.snappy}
-                        className="group relative flex items-center justify-between gap-3 rounded-[1.35rem] border border-white/70 bg-white/65 p-3.5 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-xl transition-all hover:border-[#10B981]/35 hover:bg-white/90 dark:border-white/[0.08] dark:bg-white/[0.03] dark:shadow-none dark:hover:border-white/[0.16] dark:hover:bg-white/[0.06]"
+                        className="group relative flex items-center justify-between gap-3 rounded-[1.35rem] border border-white/75 bg-white/65 p-3.5 shadow-[0_4px_16px_-6px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-xl transition-all hover:border-[#10B981]/35 hover:bg-white/90 dark:border-white/[0.08] dark:bg-white/[0.03] dark:shadow-none dark:hover:border-white/[0.16] dark:hover:bg-white/[0.06]"
                       >
                         <div className="flex min-w-0 items-center gap-3.5">
                           <div className="relative shrink-0">
@@ -1339,37 +1644,35 @@ export function FaceEnrollmentPage() {
                               <span>{formatDate(enrollment.enrolledAt)}</span>
                               <span>•</span>
                               <GlassBadge color={statusBadge.color}>
-                                {statusBadge.labelKey ? t(statusBadge.labelKey) : enrollment.status}
+                                {statusBadge.labelKey
+                                  ? t(statusBadge.labelKey)
+                                  : enrollment.status}
                               </GlassBadge>
                             </div>
                           </div>
                         </div>
 
                         <div className="flex shrink-0 items-center gap-2">
-                          <button
+                          <motion.button
                             type="button"
+                            whileTap={reduced ? undefined : { scaleX: 1.06, scaleY: 0.9 }}
+                            transition={SPRING.gel}
                             onClick={() => handleOpenEnrollmentSidecar(enrollment)}
+                            aria-label={`${studentName} — Split View Sidecar`}
                             title="Split View Sidecar"
-                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.06] bg-white/70 text-[#64748B] shadow-2xs transition-all hover:border-[#10B981]/40 hover:bg-[#10B981]/10 hover:text-[#10B981] dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/10"
+                            className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-black/[0.06] bg-white/75 text-[#64748B] shadow-xs transition-all hover:border-[#10B981]/40 hover:bg-[#10B981]/10 hover:text-[#10B981] dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/10"
                           >
-                            <span className="font-mono text-xs font-bold">◨</span>
-                          </button>
+                            <Icon paths={I.sidebar} size={15} strokeWidth={2} />
+                          </motion.button>
                           {enrollment.status === 'ACTIVE' && (
                             <GlassButton
                               type="button"
                               variant="danger"
                               size="sm"
+                              className="min-h-[44px]"
                               aria-label={t('faceEnrollment.revoke')}
                               onClick={() => handleRevoke(enrollment.id)}
                               disabled={isRevokingThis}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e: any) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  e.currentTarget.click();
-                                }
-                              }}
                             >
                               <span className="inline-flex items-center gap-1.5">
                                 <Icon paths={I.trash} size={12} strokeWidth={2.2} />
@@ -1400,3 +1703,5 @@ export function FaceEnrollmentPage() {
     </motion.div>
   );
 }
+
+export default FaceEnrollmentPage;

@@ -26,7 +26,7 @@ export function usePersistSettings() {
 
   return useCallback(
     (prefs: PersistableSettings) => {
-      if (!userId) return;
+      if (!userId || !prefs) return;
       if (prefs.language === undefined && prefs.theme === undefined && prefs.timezone === undefined) {
         return;
       }

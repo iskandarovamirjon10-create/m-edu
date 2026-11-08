@@ -196,15 +196,12 @@ function LiquidGlassCard({
       )}
 
       {caustic && (
-        <motion.span
+        <span
           aria-hidden
-          className="pointer-events-none absolute -top-24 left-1/2 h-32 w-2/3 -translate-x-1/2 rounded-full"
+          className="pointer-events-none absolute -top-24 left-1/2 h-32 w-2/3 -translate-x-1/2 rounded-full blur-xl opacity-70 transform-gpu"
           style={{
             background: `radial-gradient(ellipse at center, ${causticColor} 0%, transparent 70%)`,
-            filter: 'blur(20px)',
           }}
-          animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.9, 0.5] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
 
@@ -259,25 +256,12 @@ function Magnetic({
  * ════════════════════════════════════════════════════════════════════════ */
 
 function AuroraBackdrop() {
-  const reduced = usePrefersReducedMotion();
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-indigo-50/20 dark:from-[#04060C] dark:via-[#0A0F1A] dark:to-[#080A14]" />
-      <motion.div
-        animate={reduced ? undefined : { x: [0, 30, 0], y: [0, -20, 0], scale: [1, 1.08, 1] }}
-        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-emerald-400/12 blur-[140px] dark:bg-emerald-500/10"
-      />
-      <motion.div
-        animate={reduced ? undefined : { x: [0, -25, 0], y: [0, 25, 0], scale: [1, 1.05, 1] }}
-        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-indigo-400/12 blur-[140px] dark:bg-indigo-500/10"
-      />
-      <motion.div
-        animate={reduced ? undefined : { x: [0, 20, 0], y: [0, -15, 0] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -bottom-32 left-1/3 h-[480px] w-[480px] rounded-full bg-violet-400/10 blur-[140px] dark:bg-violet-500/10"
-      />
+      <div className="absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-emerald-400/10 blur-[120px] dark:bg-emerald-500/08" />
+      <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-indigo-400/10 blur-[120px] dark:bg-indigo-500/08" />
+      <div className="absolute -bottom-32 left-1/3 h-[480px] w-[480px] rounded-full bg-violet-400/08 blur-[120px] dark:bg-violet-500/08" />
       <div
         className="absolute inset-0 opacity-[0.015] dark:opacity-[0.022]"
         style={{
@@ -327,8 +311,8 @@ function Odometer({
       {digits.map((d, i) => (
         <motion.span
           key={`${i}-${d}`}
-          initial={reduced ? false : { y: 8, opacity: 0, filter: 'blur(3px)' }}
-          animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+          initial={reduced ? false : { y: 8, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
           transition={{ ...SPRING.snappy, delay: reduced ? 0 : i * 0.015 }}
           className="inline-block"
         >
@@ -501,14 +485,11 @@ function AttendanceRing({ summary }: { summary: ParentAttendanceSummary }) {
   return (
     <div className="flex flex-col items-center gap-6 px-2 py-4 sm:flex-row sm:items-center">
       <div className="relative flex shrink-0 justify-center">
-        <motion.div
+        <div
           aria-hidden
-          className="absolute inset-0 rounded-full"
-          animate={reduced ? undefined : { opacity: [0.4, 0.7, 0.4], scale: [1, 1.08, 1] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute inset-0 rounded-full blur-xl opacity-60 transform-gpu"
           style={{
             background: 'radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%)',
-            filter: 'blur(20px)',
           }}
         />
         <svg width={120} height={120} viewBox="0 0 120 120" className="relative -rotate-90 drop-shadow-md">
@@ -555,8 +536,8 @@ function AttendanceRing({ summary }: { summary: ParentAttendanceSummary }) {
         {segments.map((s, idx) => (
           <motion.div
             key={s.status}
-            initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-            animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+            initial={reduced ? false : { opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
             transition={{ ...SPRING.smooth, delay: 0.3 + idx * 0.06 }}
             className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/60 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.03]"
           >
@@ -605,12 +586,10 @@ function StatCard({
     <Magnetic intensity={4}>
       <motion.div whileHover={{ y: -3 }} transition={SPRING.smooth}>
         <LiquidGlassCard elevated tint={color === 'rose' ? 'violet' : 'emerald'}>
-          <motion.div
+          <div
             aria-hidden
-            className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full opacity-25"
-            style={{ background: c.fg, filter: 'blur(28px)' }}
-            animate={{ scale: [1, 1.2, 1], opacity: [0.25, 0.4, 0.25] }}
-            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+            className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full opacity-25 blur-2xl transform-gpu"
+            style={{ background: c.fg }}
           />
           <div className="relative p-4">
             <p
@@ -761,7 +740,7 @@ export function ParentPortalPage() {
   /* ── Loading ──────────────────────────────────────────────────────── */
   if (childrenQuery.isLoading) {
     return (
-      <div className="relative min-h-screen pb-12">
+      <div className="relative min-h-full pb-12">
         <AuroraBackdrop />
         <div className="mx-auto max-w-[1400px] px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
           <div className="mb-6 h-16" />
@@ -777,7 +756,7 @@ export function ParentPortalPage() {
   /* ── Error ────────────────────────────────────────────────────────── */
   if (childrenQuery.isError) {
     return (
-      <div className="relative min-h-screen pb-12">
+      <div className="relative min-h-full pb-12">
         <AuroraBackdrop />
         <div className="mx-auto max-w-3xl px-4 pt-16 sm:px-6">
           <LiquidGlassCard elevated>
@@ -796,7 +775,7 @@ export function ParentPortalPage() {
   /* ── No children ──────────────────────────────────────────────────── */
   if (children.length === 0) {
     return (
-      <div className="relative min-h-screen pb-12">
+      <div className="relative min-h-full pb-12">
         <AuroraBackdrop />
         <div className="mx-auto max-w-3xl px-4 pt-16 sm:px-6">
           <GlassPageHeader title={t('parentPortal.title')} subtitle={t('parentPortal.overview')} />
@@ -829,7 +808,7 @@ export function ParentPortalPage() {
 
   /* ── Main Render ──────────────────────────────────────────────────── */
   return (
-    <div className="relative min-h-screen pb-[max(6rem,env(safe-area-inset-bottom))] selection:bg-emerald-500/30">
+    <div className="relative min-h-full pb-[max(6rem,env(safe-area-inset-bottom))] selection:bg-emerald-500/30">
       <AuroraBackdrop />
 
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
@@ -1033,8 +1012,8 @@ export function ParentPortalPage() {
                             return (
                               <motion.li
                                 key={rec.id}
-                                initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-                                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                initial={reduced ? false : { opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
                                 transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
                                 className="px-5 py-3.5 transition-colors hover:bg-slate-50/60 dark:hover:bg-white/[0.03]"
                               >
@@ -1117,8 +1096,8 @@ export function ParentPortalPage() {
                                 {gradesData.grades.map((g: ParentGrade, idx: number) => (
                                   <motion.div
                                     key={g.id ?? idx}
-                                    initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-                                    animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                    initial={reduced ? false : { opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
                                     transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
                                     className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/60 p-3 transition-all hover:border-indigo-500/30 dark:border-white/[0.06] dark:bg-white/[0.03]"
                                   >
@@ -1157,8 +1136,8 @@ export function ParentPortalPage() {
                                 {(gradesData.examResults ?? []).map((er: ParentExamResult, idx: number) => (
                                   <motion.div
                                     key={er.id ?? idx}
-                                    initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-                                    animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                    initial={reduced ? false : { opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
                                     transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
                                     className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/60 p-3 transition-all hover:border-indigo-500/30 dark:border-white/[0.06] dark:bg-white/[0.03]"
                                   >
@@ -1240,8 +1219,8 @@ export function ParentPortalPage() {
                             return (
                               <motion.div
                                 key={s.id ?? idx}
-                                initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-                                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                initial={reduced ? false : { opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
                                 transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
                                 className="flex items-center justify-between rounded-xl border border-slate-200/60 bg-white/60 p-3 transition-all hover:border-purple-500/30 dark:border-white/[0.06] dark:bg-white/[0.03]"
                               >
@@ -1333,8 +1312,8 @@ export function ParentPortalPage() {
                                   {invoicesData.invoices.map((inv: ParentInvoice, idx: number) => (
                                     <motion.li
                                       key={inv.id ?? idx}
-                                      initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-                                      animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                      initial={reduced ? false : { opacity: 0, x: -8 }}
+                                      animate={{ opacity: 1, x: 0 }}
                                       transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
                                       className="flex items-center justify-between p-3.5 transition-colors hover:bg-slate-100/60 dark:hover:bg-white/[0.04]"
                                     >
@@ -1384,8 +1363,8 @@ export function ParentPortalPage() {
                                   {(invoicesData.payments ?? []).slice(0, 10).map((pay: ParentPayment, idx: number) => (
                                     <motion.li
                                       key={pay.id ?? idx}
-                                      initial={reduced ? false : { opacity: 0, x: -8, filter: 'blur(3px)' }}
-                                      animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                      initial={reduced ? false : { opacity: 0, x: -8 }}
+                                      animate={{ opacity: 1, x: 0 }}
                                       transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
                                       className="flex items-center justify-between p-3.5 transition-colors hover:bg-slate-100/60 dark:hover:bg-white/[0.04]"
                                     >

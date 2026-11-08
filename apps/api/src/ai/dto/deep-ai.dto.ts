@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -20,6 +21,7 @@ export class DraftParentMessageDto {
   studentId?: string;
 
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
   @MaxLength(100)
   studentName!: string;
@@ -45,6 +47,7 @@ export class DraftParentMessageDto {
 
 export class GenerateQuizDto {
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(2)
   @MaxLength(150)
   topic!: string;
@@ -76,6 +79,7 @@ export class GenerateQuizDto {
 
 export class GenerateLessonPlanDto {
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(2)
   @MaxLength(150)
   topic!: string;
@@ -163,10 +167,15 @@ export class AnalyzeDocumentDto {
 export class SpeechToTextDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(15_000_000)
   audioBase64!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  @Matches(/^(audio\/(webm|mp3|mpeg|wav|ogg|m4a|mp4|aac|x-wav|vnd.wave)|video\/webm)$/, {
+    message: 'Unsupported audio format',
+  })
   mimeType?: string;
 
   @IsOptional()
@@ -205,6 +214,7 @@ export class DraftDebtRecoveryCampaignDto {
 
 export class GenerateAssessmentRubricDto {
   @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(2)
   @MaxLength(150)
   topic!: string;
@@ -220,3 +230,55 @@ export class GenerateAssessmentRubricDto {
   @Max(100)
   maxScore?: number;
 }
+
+export class GenerateSocialPostDto {
+  @IsString()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @MinLength(2)
+  @MaxLength(150)
+  topic!: string;
+
+  @IsOptional()
+  @IsIn(['TELEGRAM', 'INSTAGRAM', 'FACEBOOK', 'SMS'])
+  platform?: 'TELEGRAM' | 'INSTAGRAM' | 'FACEBOOK' | 'SMS';
+
+  @IsOptional()
+  @IsIn(['NEW_GROUP', 'DISCOUNT_OFFER', 'EVENT', 'EXAM_RESULTS', 'PARENT_NOTICE', 'GENERAL'])
+  goal?: 'NEW_GROUP' | 'DISCOUNT_OFFER' | 'EVENT' | 'EXAM_RESULTS' | 'PARENT_NOTICE' | 'GENERAL';
+
+  @IsOptional()
+  @IsIn(['exciting', 'professional', 'urgent', 'friendly'])
+  tone?: 'exciting' | 'professional' | 'urgent' | 'friendly';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  targetAudience?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  keyBenefits?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  priceOffer?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  callToAction?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  contactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  centerAddress?: string;
+}
+

@@ -20,10 +20,17 @@ export interface Student {
   parentName?: string | null;
   parentPhone?: string | null;
   parentEmail?: string | null;
+  balance?: number;
   createdAt: string;
   updatedAt: string;
   user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'phone' | 'isActive'>;
-  groups?: { group: { id: string; name: string; room?: string | null }; isActive: boolean }[];
+  groups?: Array<{
+    id?: string;
+    groupId?: string;
+    name?: string;
+    group?: { id: string; name: string; room?: string | null };
+    isActive?: boolean;
+  }>;
   payments?: Payment[];
   attendance?: Attendance[];
   _count?: { payments?: number; faceEnrollments?: number; attendance?: number };

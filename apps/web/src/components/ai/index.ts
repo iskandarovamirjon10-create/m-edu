@@ -55,5 +55,7 @@ export { AiExecutiveBriefingCard } from './AiExecutiveBriefingCard';
 export { AiStudentDiagnosticWidget } from './AiStudentDiagnosticWidget';
 export { AiParentMessageModal } from './AiParentMessageModal';
 export { AiLessonQuizStudioModal } from './AiLessonQuizStudioModal';
+export { AiLessonPlanStudio, type AiLessonPlanStudioProps } from './AiLessonPlanStudio';
+export { AiSocialPostStudioModal, type AiSocialPostStudioModalProps } from './AiSocialPostStudioModal';
 export { LessonCopilotPanel, type LessonCopilotPanelProps } from './LessonCopilotPanel';
-export { AiExecutiveSuperStudio } from './AiExecutiveSuperStudio';
+export { AiExecutiveSuperStudio, type StudioTabId } from './AiExecutiveSuperStudio';

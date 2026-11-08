@@ -12,6 +12,13 @@ export interface AppleWalletPassModalProps {
 
 export function AppleWalletPassModal({ open, onClose, data }: AppleWalletPassModalProps) {
   const [downloading, setDownloading] = React.useState(false);
+  const downloadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
+    };
+  }, []);
 
   const studentName = data.fullName || 'Talaba';
   const orgName = data.orgName || data.organizationName || "M-EDU Ta'lim Akademiyasi";
@@ -107,7 +114,8 @@ export function AppleWalletPassModal({ open, onClose, data }: AppleWalletPassMod
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    setTimeout(() => {
+    if (downloadTimerRef.current) clearTimeout(downloadTimerRef.current);
+    downloadTimerRef.current = setTimeout(() => {
       setDownloading(false);
     }, 900);
   };

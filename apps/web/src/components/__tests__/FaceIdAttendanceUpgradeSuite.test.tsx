@@ -112,29 +112,31 @@ describe('Face ID & Biometric Camera Upgrade Test Suite', () => {
     it('renders high-speed rush-hour parallel processor', () => {
       render(<RushHourBatchAttendanceProcessor />);
       expect(
-        screen.getByText(/Tig'iz Vaqt Ommaviy Davomat Konveyeri/i)
+        screen.getByText(/Ommaviy Davomat Konveyeri/i)
       ).toBeInTheDocument();
-      expect(screen.getAllByText(/Alisher Qodirov/i)[0]).toBeInTheDocument();
+      // Demo o'quvchi ro'yxati olib tashlangan
+      expect(screen.queryByText(/Alisher Qodirov/i)).not.toBeInTheDocument();
     });
 
     it('triggers batch arrival simulation', async () => {
       render(<RushHourBatchAttendanceProcessor />);
-      const simBtn = screen.getByText(/Tig'iz Oqim Impulsini Sinash/i);
+      const simBtn = screen.getByText(/Oqim Impulsini Sinash/i);
       fireEvent.click(simBtn);
       await waitFor(() => {
-        expect(screen.getByText(/Diyora Xoliqova/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Diyora Xoliqova/i)).not.toBeInTheDocument();
       });
     });
   });
 
   describe('4. BiometricVoiceGreetingConsole', () => {
-    it('renders biometric voice greeting console with student card', () => {
+    it('renders the console with an honest empty state when no students exist', () => {
       render(<BiometricVoiceGreetingConsole />);
       expect(
         screen.getByText(/Biometrik Ovozli Salomlashish & Hologramma HUD/i)
       ).toBeInTheDocument();
-      expect(screen.getAllByText(/Dilshod Rahmatov/i)[0]).toBeInTheDocument();
-      expect(screen.getAllByText(/304-Auditoriya/i)[0]).toBeInTheDocument();
+      // Demo o'quvchi va o'ylab topilgan xona ko'rsatilmaydi
+      expect(screen.queryByText(/Dilshod Rahmatov/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/304-Auditoriya/i)).not.toBeInTheDocument();
     });
 
     it('allows switching speech language between UZ, RU, EN', () => {
@@ -144,13 +146,13 @@ describe('Face ID & Biometric Camera Upgrade Test Suite', () => {
       expect(ruBtn).toBeInTheDocument();
     });
 
-    it('simulates a new student greeting arrival', async () => {
+    it('does not invent a greeting when no student can be greeted', async () => {
       render(<BiometricVoiceGreetingConsole />);
-      const simBtn = screen.getByText(/Simulyatsiya/i);
-      fireEvent.click(simBtn);
+      fireEvent.click(screen.getByText(/Simulyatsiya/i));
       await waitFor(() => {
-        expect(screen.getByText(/Ovozli Xabar Matni/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Ovozli Xabar Matni/i)).not.toBeInTheDocument();
       });
+      expect(screen.getByText(/Hozircha kutib olingan talabalar yo/i)).toBeInTheDocument();
     });
   });
 
@@ -164,13 +166,15 @@ describe('Face ID & Biometric Camera Upgrade Test Suite', () => {
       expect(screen.getByText(/M-EDU Smart Attendance Bot/i)).toBeInTheDocument();
     });
 
-    it('triggers instant test pass push notification', async () => {
+    it('sends a real system test push without inventing a student', async () => {
       render(<TurnstileTelegramNotificationBridge />);
       const pushBtn = screen.getByText(/Turniket Test Push/i);
       fireEvent.click(pushBtn);
       await waitFor(() => {
-        expect(screen.getAllByText(/Farzandingiz/i)[0]).toBeInTheDocument();
+        // O'quvchi ma'lumoti yo'q bo'lsa ham soxta ism ishlatilmaydi
+        expect(screen.getAllByText(/Tizim sinovi/i)[0]).toBeInTheDocument();
       });
+      expect(screen.queryByText(/Farzandingiz/i)).not.toBeInTheDocument();
     });
   });
 

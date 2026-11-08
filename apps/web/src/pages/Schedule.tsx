@@ -21,13 +21,16 @@ import {
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Schedule, Group, DayOfWeek } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useAuth } from '@/auth/AuthContext';
+import { isStaffRole } from '@/lib/roles';
 import { useSafeI18n } from '@/i18n/I18nProvider';
-import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { SmartScheduleClashMatrix } from '@/components/schedule/SmartScheduleClashMatrix';
 import { ScheduleOptimizerModal } from '@/components/schedule/ScheduleOptimizerModal';
+import { TimetableConflictMatrix } from '@/components/schedule/TimetableConflictMatrix';
+import { ClassroomResourceFloorMap } from '@/components/schedule/ClassroomResourceFloorMap';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
@@ -105,6 +108,11 @@ const I: Record<string, string[]> = {
   chevronLeft: ['M15 18l-6-6 6-6'],
   chevronRight: ['M9 18l6-6-6-6'],
   filterX: ['M3 6h18', 'M7 12h10', 'M10 18h4'],
+  printer: ['M6 9V2h12v7', 'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2', 'M6 14h12v8H6z'],
+  download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
+  shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'],
+  map: ['M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z', 'M8 2v16', 'M16 6v16'],
+  search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.35-4.35'],
 };
 
 function Icon({
@@ -184,7 +192,7 @@ function durationMinutes(start: string, end: string): number {
  * TYPES
  * ════════════════════════════════════════════════════════════════════════ */
 
-type ViewMode = 'grid' | 'list' | 'heatmap' | 'optimizer';
+type ViewMode = 'grid' | 'list' | 'heatmap' | 'conflicts' | 'floormap' | 'optimizer';
 
 interface ScheduleFilters {
   page: number;
@@ -214,20 +222,13 @@ const INITIAL_FORM: ScheduleFormState = {
  * ════════════════════════════════════════════════════════════════════════ */
 
 function AuroraBackdrop() {
-  const reduced = usePrefersReducedMotion();
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-indigo-50/25 dark:from-[#04060C] dark:via-[#0A0F1A] dark:to-[#080A14]" />
       <div className="absolute -left-40 -top-40 h-[580px] w-[580px] rounded-full bg-blue-400/10 blur-[140px] dark:bg-sky-500/10" />
       <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-violet-400/10 blur-[140px] dark:bg-violet-500/10" />
       <div className="absolute -bottom-32 left-1/3 h-[460px] w-[460px] rounded-full bg-emerald-400/08 blur-[140px] dark:bg-emerald-500/08" />
-      {!reduced && (
-        <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-violet-500/[0.02] to-emerald-500/[0.03] blur-[160px]"
-        />
-      )}
+      <div className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-violet-500/[0.02] to-emerald-500/[0.03] blur-[140px] opacity-70 transform-gpu" />
       <div
         className="absolute inset-0 opacity-[0.015] dark:opacity-[0.022]"
         style={{
@@ -294,15 +295,17 @@ function GridView({
   onEdit,
   onDelete,
   onSidecar,
+  onQuickAdd,
   deletePending,
   deleteTarget,
   t,
 }: {
   entries: Schedule[];
   conflictIds: Set<string>;
-  onEdit: (s: Schedule) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (s: Schedule) => void;
+  onDelete?: (id: string) => void;
   onSidecar: (s: Schedule) => void;
+  onQuickAdd?: (day: DayOfWeek) => void;
   deletePending: boolean;
   deleteTarget: string | null;
   t: (k: string, vars?: Record<string, string | number>) => string;
@@ -365,6 +368,17 @@ function GridView({
                     </p>
                   </div>
                 </div>
+                {onQuickAdd && (
+                  <button
+                    type="button"
+                    onClick={() => onQuickAdd(day)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white/80 text-[var(--text-secondary)] shadow-sm backdrop-blur-sm transition-all hover:border-blue-500/40 hover:bg-blue-50 hover:text-blue-600 active:scale-95 dark:border-white/10 dark:bg-white/10 dark:text-white/80 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
+                    title={t('schedule.new')}
+                    aria-label={`${t('schedule.new')} - ${dayLabel}`}
+                  >
+                    <Icon paths={I.plus} size={13} strokeWidth={2.5} />
+                  </button>
+                )}
               </div>
 
               {/* Entries Stack */}
@@ -452,33 +466,37 @@ function GridView({
                           >
                             <span className="text-sm font-black leading-none">◨</span>
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onEdit(s)}
-                            className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-[#2563EB] transition-all hover:bg-blue-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-[#38BDF8]"
-                            aria-label={t('common.edit')}
-                            title={t('common.edit')}
-                          >
-                            <Icon paths={I.edit} size={15} strokeWidth={2.2} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(s.id)}
-                            disabled={isDeleting}
-                            className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/10 text-[#EF4444] transition-all hover:bg-rose-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 disabled:opacity-50"
-                            aria-label={t('schedule.remove')}
-                            title={t('schedule.remove')}
-                          >
-                            {isDeleting ? (
-                              <motion.span
-                                className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
-                                animate={{ rotate: 360 }}
-                                transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                              />
-                            ) : (
-                              <Icon paths={I.trash} size={15} strokeWidth={2.2} />
-                            )}
-                          </button>
+                          {onEdit && (
+                            <button
+                              type="button"
+                              onClick={() => onEdit(s)}
+                              className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-[#2563EB] transition-all hover:bg-blue-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-[#38BDF8]"
+                              aria-label={t('common.edit')}
+                              title={t('common.edit')}
+                            >
+                              <Icon paths={I.edit} size={15} strokeWidth={2.2} />
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              type="button"
+                              onClick={() => onDelete(s.id)}
+                              disabled={isDeleting}
+                              className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/10 text-[#EF4444] transition-all hover:bg-rose-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 disabled:opacity-50"
+                              aria-label={t('schedule.remove')}
+                              title={t('schedule.remove')}
+                            >
+                              {isDeleting ? (
+                                <motion.span
+                                  className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
+                                  animate={{ rotate: 360 }}
+                                  transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                                />
+                              ) : (
+                                <Icon paths={I.trash} size={15} strokeWidth={2.2} />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </motion.div>
                     );
@@ -509,8 +527,8 @@ function ListView({
 }: {
   entries: Schedule[];
   conflictIds: Set<string>;
-  onEdit: (s: Schedule) => void;
-  onDelete: (id: string) => void;
+  onEdit?: (s: Schedule) => void;
+  onDelete?: (id: string) => void;
   onSidecar: (s: Schedule) => void;
   deletePending: boolean;
   deleteTarget: string | null;
@@ -615,33 +633,37 @@ function ListView({
               >
                 <span className="text-sm font-black leading-none">◨</span>
               </button>
-              <button
-                type="button"
-                onClick={() => onEdit(s)}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-[#2563EB] transition-all hover:bg-blue-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-[#38BDF8]"
-                aria-label={t('common.edit')}
-                title={t('common.edit')}
-              >
-                <Icon paths={I.edit} size={15} strokeWidth={2.2} />
-              </button>
-              <button
-                type="button"
-                onClick={() => onDelete(s.id)}
-                disabled={isDeleting}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/10 text-[#EF4444] transition-all hover:bg-rose-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 disabled:opacity-50"
-                aria-label={t('schedule.remove')}
-                title={t('schedule.remove')}
-              >
-                {isDeleting ? (
-                  <motion.span
-                    className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                  />
-                ) : (
-                  <Icon paths={I.trash} size={15} strokeWidth={2.2} />
-                )}
-              </button>
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(s)}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-[#2563EB] transition-all hover:bg-blue-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-[#38BDF8]"
+                  aria-label={t('common.edit')}
+                  title={t('common.edit')}
+                >
+                  <Icon paths={I.edit} size={15} strokeWidth={2.2} />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(s.id)}
+                  disabled={isDeleting}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/10 text-[#EF4444] transition-all hover:bg-rose-500/20 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 disabled:opacity-50"
+                  aria-label={t('schedule.remove')}
+                  title={t('schedule.remove')}
+                >
+                  {isDeleting ? (
+                    <motion.span
+                      className="h-3.5 w-3.5 rounded-full border-2 border-current/30 border-t-current"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                    />
+                  ) : (
+                    <Icon paths={I.trash} size={15} strokeWidth={2.2} />
+                  )}
+                </button>
+              )}
             </div>
           </motion.div>
         );
@@ -870,6 +892,8 @@ function ScheduleSkeleton() {
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function SchedulePage() {
+  const { user } = useAuth();
+  const canManage = isStaffRole(user?.role);
   const { t } = useSafeI18n();
   usePageTitle(t('nav.schedule'));
   const { push, toastNode } = useToast();
@@ -878,6 +902,10 @@ export function SchedulePage() {
   const [page, setPage] = useState(1);
   const [groupFilter, setGroupFilter] = useState('');
   const [dayFilter, setDayFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
+  const [shiftFilter, setShiftFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all');
+  const [conflictsOnly, setConflictsOnly] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [modalOpen, setModalOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<Schedule | null>(null);
@@ -886,8 +914,14 @@ export function SchedulePage() {
   const { playPop, playTick } = usePremiumSound();
 
   useEffect(() => {
+    if (!canManage && viewMode === 'optimizer') {
+      setViewMode('grid');
+    }
+  }, [canManage, viewMode]);
+
+  useEffect(() => {
     setPage(1);
-  }, [groupFilter, dayFilter, viewMode]);
+  }, [groupFilter, dayFilter, viewMode, searchQuery, roomFilter, shiftFilter, conflictsOnly]);
 
   const utilizationQ = useQuery({
     queryKey: ['schedule-room-utilization'],
@@ -955,6 +989,43 @@ export function SchedulePage() {
     return set;
   }, [items]);
 
+  const uniqueRoomNames = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((s) => {
+      const r = (s.room || s.group?.room)?.trim();
+      if (r) set.add(r);
+    });
+    return Array.from(set).sort();
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter((s) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const gName = (s.group?.name ?? '').toLowerCase();
+        const tName = ((s.group as any)?.teacher?.name ?? (s.group as any)?.teacherName ?? '').toLowerCase();
+        const rName = (s.room || s.group?.room || '').toLowerCase();
+        if (!gName.includes(q) && !tName.includes(q) && !rName.includes(q)) {
+          return false;
+        }
+      }
+      if (roomFilter) {
+        const r = (s.room || s.group?.room)?.trim().toLowerCase();
+        if (r !== roomFilter.toLowerCase()) return false;
+      }
+      if (shiftFilter !== 'all') {
+        const startMins = timeToMinutes(s.startTime);
+        if (shiftFilter === 'morning' && startMins >= 12 * 60) return false;
+        if (shiftFilter === 'afternoon' && (startMins < 12 * 60 || startMins >= 18 * 60)) return false;
+        if (shiftFilter === 'evening' && startMins < 18 * 60) return false;
+      }
+      if (conflictsOnly && !conflictIds.has(s.id)) {
+        return false;
+      }
+      return true;
+    });
+  }, [items, searchQuery, roomFilter, shiftFilter, conflictsOnly, conflictIds]);
+
   /* ── Mutations ─────────────────────────────────────────────── */
   const createMut = useMutation({
     mutationFn: (d: ScheduleFormState) =>
@@ -1007,13 +1078,78 @@ export function SchedulePage() {
 
   /* ── Handlers ──────────────────────────────────────────────── */
   const openCreate = useCallback(() => {
+    if (!canManage) return;
     setEditEntry(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
     setModalOpen(true);
+  }, [canManage]);
+
+  const openCreateForDay = useCallback(
+    (day: DayOfWeek) => {
+      if (!canManage) return;
+      setEditEntry(null);
+      setForm({ ...INITIAL_FORM, dayOfWeek: day });
+      setFormErrors({});
+      setModalOpen(true);
+    },
+    [canManage],
+  );
+
+  const clearAllFilters = useCallback(() => {
+    setDayFilter('');
+    setGroupFilter('');
+    setSearchQuery('');
+    setRoomFilter('');
+    setShiftFilter('all');
+    setConflictsOnly(false);
+    setPage(1);
   }, []);
 
+  const handlePrintSchedule = useCallback(() => {
+    window.print();
+  }, []);
+
+  const handleExportCSV = useCallback(() => {
+    const listToExport = filteredItems.length > 0 ? filteredItems : items;
+    if (listToExport.length === 0) return;
+    const headers = [
+      t('schedule.dayOfWeek'),
+      t('schedule.startTime'),
+      t('schedule.endTime'),
+      t('exams.form.group'),
+      t('groups.form.room'),
+      t('schedule.conflict'),
+    ];
+    const rows = listToExport.map((s) => {
+      const gName = s.group?.name ?? '';
+      const rName = s.room || s.group?.room || '';
+      const hasConf = conflictIds.has(s.id) ? 'Ha' : 'Yo‘q';
+      const day = t(formatDay(s.dayOfWeek));
+      return [
+        `"${day.replace(/"/g, '""')}"`,
+        s.startTime,
+        s.endTime,
+        `"${gName.replace(/"/g, '""')}"`,
+        `"${rName.replace(/"/g, '""')}"`,
+        hasConf,
+      ];
+    });
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `m-edu-schedule-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    push('success', t('schedule.export.csv'));
+  }, [filteredItems, items, conflictIds, t, push]);
+
   const openEdit = useCallback((s: Schedule) => {
+    if (!canManage) return;
     setEditEntry(s);
     setForm({
       groupId: s.groupId,
@@ -1024,7 +1160,7 @@ export function SchedulePage() {
     });
     setFormErrors({});
     setModalOpen(true);
-  }, []);
+  }, [canManage]);
 
   const closeModal = useCallback(() => {
     setModalOpen(false);
@@ -1032,8 +1168,9 @@ export function SchedulePage() {
   }, []);
 
   const handleDelete = useCallback((id: string) => {
+    if (!canManage) return;
     setDeleteTarget(id);
-  }, []);
+  }, [canManage]);
 
   const confirmDelete = useCallback(() => {
     if (!deleteTarget) return;
@@ -1070,20 +1207,25 @@ export function SchedulePage() {
         { label: t('schedule.sidecar.day'), value: dayLabel },
         { label: t('schedule.sidecar.room'), value: effectiveRoom || t('schedule.sidecar.unassigned') },
       ],
-      primaryAction: {
-        label: t('schedule.sidecar.edit'),
-        onExecute: () => openEdit(s),
-      },
-      secondaryAction: {
-        label: t('schedule.sidecar.delete'),
-        onExecute: () => handleDelete(s.id),
-      },
+      primaryAction: canManage
+        ? {
+            label: t('schedule.sidecar.edit'),
+            onExecute: () => openEdit(s),
+          }
+        : undefined,
+      secondaryAction: canManage
+        ? {
+            label: t('schedule.sidecar.delete'),
+            onExecute: () => handleDelete(s.id),
+          }
+        : undefined,
     };
     openSidecar(sidecarData);
-  }, [t, openEdit, handleDelete]);
+  }, [canManage, t, openEdit, handleDelete]);
 
-  /* Keyboard shortcut 'c' to create */
+  /* Keyboard shortcut 'c' to create (staff only) */
   useEffect(() => {
+    if (!canManage) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
       if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
@@ -1094,7 +1236,7 @@ export function SchedulePage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [openCreate, playPop]);
+  }, [canManage, openCreate, playPop]);
 
   const validate = (): boolean => {
     const errs: Partial<Record<keyof ScheduleFormState, string>> = {};
@@ -1123,8 +1265,8 @@ export function SchedulePage() {
     rowIdPrefix: 'schedule-row-',
     onSelect: (s) => { playTick(); handleOpenScheduleSidecar(s); },
     onQuickLook: (s) => { playTick(); handleOpenScheduleSidecar(s); },
-    onEdit: (s) => openEdit(s),
-    onDelete: (sList) => { if (sList && sList[0]) handleDelete(sList[0].id); },
+    onEdit: canManage ? (s) => openEdit(s) : undefined,
+    onDelete: canManage ? (sList) => { if (sList && sList[0]) handleDelete(sList[0].id); } : undefined,
   });
 
   const stats = useMemo(() => {
@@ -1213,9 +1355,16 @@ export function SchedulePage() {
                   { id: 'grid', icon: I.grid, label: t('schedule.view.grid') },
                   { id: 'list', icon: I.list, label: t('schedule.view.list') },
                   { id: 'heatmap', icon: I.flame, label: t('schedule.view.heatmap') },
-                  { id: 'optimizer', icon: I.calendarCheck, label: "Xonalar Matritsasi" },
+                  ...(canManage
+                    ? [
+                        { id: 'conflicts' as const, icon: I.shield, label: t('schedule.view.conflicts') },
+                        { id: 'floormap' as const, icon: I.map, label: t('schedule.view.floormap') },
+                        { id: 'optimizer' as const, icon: I.calendarCheck, label: t('schedule.view.optimizer') },
+                      ]
+                    : []),
                 ] as const).map((v) => {
                   const active = viewMode === v.id;
+                  const hasBadge = v.id === 'conflicts' && conflictIds.size > 0;
                   return (
                     <button
                       key={v.id}
@@ -1225,7 +1374,7 @@ export function SchedulePage() {
                       onClick={() => { playTick(); setViewMode(v.id); }}
                       aria-label={v.label}
                       title={v.label}
-                      className={`flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                      className={`relative flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
                         active
                           ? 'bg-white text-[var(--text-primary)] shadow-sm dark:bg-white/[0.14]'
                           : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
@@ -1233,40 +1382,71 @@ export function SchedulePage() {
                     >
                       <Icon paths={v.icon} size={14} strokeWidth={2.2} />
                       <span className="hidden sm:inline">{v.label}</span>
+                      {hasBadge && (
+                        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-black text-white">
+                          {conflictIds.size}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Pro Glass Segmented Capsule */}
-              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+              {/* Quick Export & Print Actions (Touch targets >= 44px) */}
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsOptimizerOpen(true)}
-                  title="AI Ziddiyatlar & Optimizator (O)"
-                  aria-label="AI Ziddiyatlar & Optimizator"
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  onClick={handleExportCSV}
+                  title={t('schedule.export.csv')}
+                  aria-label={t('schedule.export.csv')}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-slate-100 hover:text-[var(--text-primary)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:border-white/[0.08] dark:bg-white/[0.05]"
                 >
-                  <span className="text-sm">⚡</span>
-                  <span className="text-xs font-semibold hidden md:inline">Optimizator</span>
-                  <span className="sr-only">AI Ziddiyatlar & Optimizator</span>
-                  <kbd className="hidden lg:inline-block rounded bg-cyan-500/20 px-1 py-0.2 text-[10px] text-cyan-600 dark:text-cyan-300">O</kbd>
+                  <Icon paths={I.download} size={16} strokeWidth={2.2} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintSchedule}
+                  title={t('schedule.export.print')}
+                  aria-label={t('schedule.export.print')}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-slate-100 hover:text-[var(--text-primary)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:border-white/[0.08] dark:bg-white/[0.05]"
+                >
+                  <Icon paths={I.printer} size={16} strokeWidth={2.2} />
                 </button>
               </div>
 
+              {/* Pro Glass Segmented Capsule */}
+              {canManage && (
+                <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setIsOptimizerOpen(true)}
+                    title="AI Ziddiyatlar & Optimizator (O)"
+                    aria-label="AI Ziddiyatlar & Optimizator"
+                    className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-cyan-500"
+                  >
+                    <span className="text-sm">⚡</span>
+                    <span className="text-xs font-semibold hidden md:inline">Optimizator</span>
+                    <span className="sr-only">AI Ziddiyatlar & Optimizator</span>
+                    <kbd className="hidden lg:inline-block rounded bg-cyan-500/20 px-1 py-0.2 text-[10px] text-cyan-600 dark:text-cyan-300">O</kbd>
+                  </button>
+                </div>
+              )}
+
               {/* 1 Primary Solid Gradient CTA */}
-              <GlassButton
-                variant="primary"
-                size="md"
-                onClick={openCreate}
-                className="min-h-[44px] px-4 font-bold shadow-md shadow-blue-500/20 active:scale-95 !rounded-2xl"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Icon paths={I.plus} size={16} strokeWidth={2.5} />
-                  <span>{t('schedule.addEntry')}</span>
-                  <kbd className="hidden sm:inline-block rounded bg-white/20 px-1 py-0.2 text-[10px] text-white/90">N</kbd>
-                </span>
-              </GlassButton>
+              {canManage && (
+                <GlassButton
+                  variant="primary"
+                  size="md"
+                  onClick={openCreate}
+                  className="min-h-[44px] px-4 font-bold shadow-md shadow-blue-500/20 active:scale-95 !rounded-2xl"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Icon paths={I.plus} size={16} strokeWidth={2.5} />
+                    <span>{t('schedule.addEntry')}</span>
+                    <kbd className="hidden sm:inline-block rounded bg-white/20 px-1 py-0.2 text-[10px] text-white/90">N</kbd>
+                  </span>
+                </GlassButton>
+              )}
             </div>
           </div>
         </motion.div>
@@ -1279,11 +1459,82 @@ export function SchedulePage() {
           <StatPill label={t('schedule.kpi.roomsUsed')} value={stats.uniqueRooms} icon={I.door} tone="purple" />
         </div>
 
+        {/* ═══ COLLISION ALERT BANNER ═══ */}
+        {conflictIds.size > 0 && viewMode !== 'conflicts' && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 backdrop-blur-xl dark:border-amber-500/20 dark:bg-amber-500/[0.08]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                <Icon paths={I.alertTriangle} size={20} strokeWidth={2.2} />
+              </div>
+              <div>
+                <p className="text-[13px] font-bold text-amber-900 dark:text-amber-200">
+                  {t('schedule.banner.conflictsFound', { count: conflictIds.size })}
+                </p>
+                <p className="text-[11.5px] font-medium text-amber-800/80 dark:text-amber-300/80">
+                  {t('schedule.conflictWarning')}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { playTick(); setViewMode('conflicts'); }}
+                className="flex min-h-[38px] items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm transition-all hover:bg-amber-600 active:scale-95"
+              >
+                <Icon paths={I.shield} size={14} strokeWidth={2.2} />
+                <span>{t('schedule.banner.openConflicts')}</span>
+              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => { playPop(); setIsOptimizerOpen(true); }}
+                  className="flex min-h-[38px] items-center gap-1.5 rounded-xl border border-amber-500/40 bg-white/60 px-3 py-1.5 text-[12px] font-bold text-amber-900 backdrop-blur-md transition-all hover:bg-white active:scale-95 dark:border-white/10 dark:bg-white/10 dark:text-amber-200 dark:hover:bg-white/20"
+                >
+                  <span>⚡</span>
+                  <span>{t('schedule.banner.autoResolve')}</span>
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+
         {/* ═══ 3. SPLIT PANE ARCHITECTURE ═══ */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[250px_1fr]">
           {/* ── LEFT RAIL FILTERS (Desktop Sticky) ── */}
           <aside className="hidden lg:sticky lg:top-24 lg:block lg:self-start">
             <div className="space-y-3.5">
+              {/* Search Filter */}
+              <div className="liquid-glass-card rounded-2xl border border-black/[0.06] bg-white/80 p-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+                <p className="px-1 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                  {t('schedule.filter.search')}
+                </p>
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <Icon paths={I.search} size={14} strokeWidth={2} />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t('schedule.filter.search')}
+                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-white/70 pl-8 pr-3 text-[12px] font-medium text-[var(--text-primary)] placeholder-slate-400 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-white/[0.04]"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Day Filter */}
               <div className="liquid-glass-card rounded-2xl border border-black/[0.06] bg-white/80 p-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
                 <p className="px-1 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
@@ -1348,11 +1599,81 @@ export function SchedulePage() {
                 />
               </div>
 
-              {/* Reset Filters CTA (Touch Target >= 44px) */}
-              {(dayFilter || groupFilter) && (
+              {/* Room Filter */}
+              {uniqueRoomNames.length > 0 && (
+                <div className="liquid-glass-card rounded-2xl border border-black/[0.06] bg-white/80 p-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+                  <p className="px-1 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                    {t('schedule.filter.room')}
+                  </p>
+                  <GlassSelect
+                    value={roomFilter}
+                    onChange={(e) => setRoomFilter(e.target.value)}
+                    options={[
+                      { value: '', label: `${t('schedule.filter.room')} (${t('schedule.allDays')})` },
+                      ...uniqueRoomNames.map((r) => ({ value: r, label: r })),
+                    ]}
+                    placeholder={t('schedule.filter.room')}
+                  />
+                </div>
+              )}
+
+              {/* Shift Filter */}
+              <div className="liquid-glass-card rounded-2xl border border-black/[0.06] bg-white/80 p-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+                <p className="px-1 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                  Smena
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'all' as const, label: t('schedule.filter.allShifts') },
+                    { id: 'morning' as const, label: t('schedule.filter.morning') },
+                    { id: 'afternoon' as const, label: t('schedule.filter.afternoon') },
+                    { id: 'evening' as const, label: t('schedule.filter.evening') },
+                  ].map((s) => {
+                    const active = shiftFilter === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setShiftFilter(s.id)}
+                        className={`flex min-h-[36px] items-center justify-center rounded-lg px-2 text-[11px] font-bold transition-all ${
+                          active
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-[var(--text-secondary)] hover:bg-slate-200 dark:bg-white/[0.05] dark:hover:bg-white/[0.1]'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Conflicts Only Toggle */}
+              {conflictIds.size > 0 && (
                 <button
                   type="button"
-                  onClick={() => { setDayFilter(''); setGroupFilter(''); setPage(1); }}
+                  onClick={() => setConflictsOnly((v) => !v)}
+                  className={`flex min-h-[44px] w-full items-center justify-between rounded-2xl border p-3 text-[12px] font-bold transition-all ${
+                    conflictsOnly
+                      ? 'border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                      : 'border-slate-200/80 bg-white/80 text-[var(--text-secondary)] hover:bg-slate-50 dark:border-white/[0.08] dark:bg-surface-900/80'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Icon paths={I.alertTriangle} size={14} strokeWidth={2.4} />
+                    <span>{t('schedule.filter.conflictsOnly')}</span>
+                  </span>
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-black text-white">
+                    {conflictIds.size}
+                  </span>
+                </button>
+              )}
+
+              {/* Reset Filters CTA (Touch Target >= 44px) */}
+              {(dayFilter || groupFilter || searchQuery || roomFilter || shiftFilter !== 'all' || conflictsOnly) && (
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
                   className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/[0.06] px-3.5 py-2.5 text-[12px] font-bold text-[#2563EB] transition-all hover:bg-blue-500/[0.12] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-[#38BDF8]"
                 >
                   <Icon paths={I.filterX} size={14} strokeWidth={2.4} />
@@ -1364,9 +1685,30 @@ export function SchedulePage() {
 
           {/* ── RIGHT CANVAS PANE ── */}
           <div className="min-w-0 space-y-4">
-            {/* Mobile Filter Strip (Horizontal chips with touch targets >= 44px) */}
+            {/* Mobile Filter Strip */}
             <div className="lg:hidden">
-              <div className="liquid-glass-card rounded-2xl border border-black/[0.06] bg-white/80 p-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+              <div className="liquid-glass-card rounded-2xl border border-black/[0.06] bg-white/80 p-3.5 backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card space-y-2.5">
+                <div className="relative">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                    <Icon paths={I.search} size={14} strokeWidth={2} />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t('schedule.filter.search')}
+                    className="h-10 w-full rounded-xl border border-slate-200/80 bg-white/70 pl-8 pr-3 text-[12px] font-medium text-[var(--text-primary)] placeholder-slate-400 transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-white/[0.04]"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                   <button
                     type="button"
@@ -1401,7 +1743,7 @@ export function SchedulePage() {
                     );
                   })}
                 </div>
-                <div className="mt-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <GlassSelect
                     value={groupFilter}
                     onChange={(e) => { setGroupFilter(e.target.value); setPage(1); }}
@@ -1411,7 +1753,28 @@ export function SchedulePage() {
                     ]}
                     placeholder={t('students.allGroups')}
                   />
+                  {uniqueRoomNames.length > 0 && (
+                    <GlassSelect
+                      value={roomFilter}
+                      onChange={(e) => setRoomFilter(e.target.value)}
+                      options={[
+                        { value: '', label: `${t('schedule.filter.room')} (${t('schedule.allDays')})` },
+                        ...uniqueRoomNames.map((r) => ({ value: r, label: r })),
+                      ]}
+                      placeholder={t('schedule.filter.room')}
+                    />
+                  )}
                 </div>
+                {(dayFilter || groupFilter || searchQuery || roomFilter || shiftFilter !== 'all' || conflictsOnly) && (
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-blue-500/10 text-[12px] font-bold text-blue-600 dark:text-blue-400"
+                  >
+                    <Icon paths={I.filterX} size={14} strokeWidth={2.4} />
+                    <span>{t('common.clear')}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1426,6 +1789,26 @@ export function SchedulePage() {
                   transition={SPRING.smooth}
                 >
                   <SmartScheduleClashMatrix />
+                </motion.div>
+              ) : viewMode === 'conflicts' ? (
+                <motion.div
+                  key="conflicts"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={SPRING.smooth}
+                >
+                  <TimetableConflictMatrix />
+                </motion.div>
+              ) : viewMode === 'floormap' ? (
+                <motion.div
+                  key="floormap"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={SPRING.smooth}
+                >
+                  <ClassroomResourceFloorMap />
                 </motion.div>
               ) : viewMode === 'heatmap' ? (
                 <motion.div
@@ -1455,18 +1838,50 @@ export function SchedulePage() {
                     <p className="mt-1 max-w-sm text-[13px] font-medium text-[var(--text-muted)]">
                       {t('schedule.emptyHint')}
                     </p>
+                    {canManage && (
+                      <div className="mt-5">
+                        <GlassButton
+                          variant="primary"
+                          size="md"
+                          onClick={openCreate}
+                          className="min-h-[44px] px-5 active:scale-95"
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                            <span>{t('schedule.addEntry')}</span>
+                          </span>
+                        </GlassButton>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ) : filteredItems.length === 0 ? (
+                <motion.div
+                  key="no-filter-match"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={SPRING.smooth}
+                >
+                  <div className="liquid-glass-card flex flex-col items-center rounded-2xl border border-dashed border-slate-300/80 bg-white/60 p-12 text-center backdrop-blur-xl dark:border-white/[0.10] dark:bg-white/[0.03]">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 shadow-[0_8px_24px_-12px_rgba(245,158,11,0.4)]">
+                      <Icon paths={I.filterX} size={26} strokeWidth={2} />
+                    </div>
+                    <p className="mt-4 text-[16px] font-bold text-[var(--text-primary)]">
+                      {t('schedule.empty')}
+                    </p>
+                    <p className="mt-1 max-w-sm text-[13px] font-medium text-[var(--text-muted)]">
+                      {t('schedule.emptyHint')}
+                    </p>
                     <div className="mt-5">
-                      <GlassButton
-                        variant="primary"
-                        size="md"
-                        onClick={openCreate}
-                        className="min-h-[44px] px-5 active:scale-95"
+                      <button
+                        type="button"
+                        onClick={clearAllFilters}
+                        className="flex min-h-[44px] items-center gap-2 rounded-xl bg-blue-600 px-5 text-[12.5px] font-bold text-white shadow-md transition-all hover:bg-blue-700 active:scale-95"
                       >
-                        <span className="inline-flex items-center gap-2">
-                          <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                          <span>{t('schedule.addEntry')}</span>
-                        </span>
-                      </GlassButton>
+                        <Icon paths={I.filterX} size={15} strokeWidth={2.4} />
+                        <span>{t('common.clear')}</span>
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -1479,11 +1894,12 @@ export function SchedulePage() {
                   transition={SPRING.smooth}
                 >
                   <GridView
-                    entries={items}
+                    entries={filteredItems}
                     conflictIds={conflictIds}
-                    onEdit={openEdit}
-                    onDelete={handleDelete}
+                    onEdit={canManage ? openEdit : undefined}
+                    onDelete={canManage ? handleDelete : undefined}
                     onSidecar={handleOpenScheduleSidecar}
+                    onQuickAdd={canManage ? openCreateForDay : undefined}
                     deletePending={deleteMut.isPending}
                     deleteTarget={deleteTarget}
                     t={t}
@@ -1503,10 +1919,10 @@ export function SchedulePage() {
                   }}
                 >
                   <ListView
-                    entries={items}
+                    entries={filteredItems}
                     conflictIds={conflictIds}
-                    onEdit={openEdit}
-                    onDelete={handleDelete}
+                    onEdit={canManage ? openEdit : undefined}
+                    onDelete={canManage ? handleDelete : undefined}
                     onSidecar={handleOpenScheduleSidecar}
                     deletePending={deleteMut.isPending}
                     deleteTarget={deleteTarget}
@@ -1549,21 +1965,24 @@ export function SchedulePage() {
       </motion.div>
 
       {/* ═══ 4. DELETE CONFIRM DIALOG ═══ */}
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-        description={t('schedule.removeConfirm')}
-        loading={deleteMut.isPending}
-      />
+      {canManage && (
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+          description={t('schedule.removeConfirm')}
+          loading={deleteMut.isPending}
+        />
+      )}
 
       {/* ═══ 5. CREATE / EDIT MODAL (WCAG Day pickers >= 44px) ═══ */}
-      <GlassModal
-        open={modalOpen}
-        onClose={closeModal}
-        title={editEntry ? t('schedule.editTitle') : t('schedule.newTitle')}
-        wide
-        footer={
+      {canManage && (
+        <GlassModal
+          open={modalOpen}
+          onClose={closeModal}
+          title={editEntry ? t('schedule.editTitle') : t('schedule.newTitle')}
+          wide
+          footer={
           <>
             <GlassButton
               variant="secondary"
@@ -1710,11 +2129,14 @@ export function SchedulePage() {
           />
         </form>
       </GlassModal>
+      )}
 
-      <ScheduleOptimizerModal
-        isOpen={isOptimizerOpen}
-        onClose={() => setIsOptimizerOpen(false)}
-      />
+      {canManage && (
+        <ScheduleOptimizerModal
+          isOpen={isOptimizerOpen}
+          onClose={() => setIsOptimizerOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -17,16 +17,18 @@ describe('CalendarService (Double-Booking Conflict Detection)', () => {
         create: vi.fn(),
         delete: vi.fn(),
       },
+      student: {
+        findUnique: vi.fn(),
+      },
+      studentGroup: {
+        findMany: vi.fn(),
+      },
+      parentStudent: {
+        findMany: vi.fn(),
+      },
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CalendarService,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-
-    service = module.get<CalendarService>(CalendarService);
+    service = new CalendarService(prisma as unknown as PrismaService);
   });
 
   it('rejects event creation when room/location has an overlapping booking', async () => {
@@ -63,5 +65,84 @@ describe('CalendarService (Double-Booking Conflict Detection)', () => {
         teacherId: 'teacher-1',
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  describe('findAll (Confidential Staff Event Filtering)', () => {
+    it('filters out confidential staff/admin events when accessed by STUDENT', async () => {
+      prisma.student.findUnique.mockResolvedValue({
+        id: 'student-1',
+        organizationId: 'org-1',
+      });
+      prisma.studentGroup.findMany.mockResolvedValue([{ groupId: 'group-1' }]);
+      prisma.calendarEvent.findMany.mockResolvedValue([
+        {
+          id: 'ev-1',
+          title: 'Math Exam',
+          type: 'EXAM',
+          Group: { id: 'group-1', name: 'Math 101' },
+          Teacher: null,
+          User: { firstName: 'Admin', lastName: 'User' },
+        },
+      ]);
+
+      const res = await service.findAll(
+        'org-1',
+        {},
+        { id: 'user-student-1', role: 'STUDENT' },
+      );
+
+      expect(res).toHaveLength(1);
+      const queryWhere = prisma.calendarEvent.findMany.mock.calls[0][0].where;
+      expect(queryWhere.type).toEqual({ notIn: ['TEACHER_MEETING', 'MEETING'] });
+    });
+
+    it('returns empty array when student explicitly requests confidential staff event type', async () => {
+      const res = await service.findAll(
+        'org-1',
+        { type: 'TEACHER_MEETING' },
+        { id: 'user-student-1', role: 'STUDENT' },
+      );
+
+      expect(res).toEqual([]);
+      expect(prisma.calendarEvent.findMany).not.toHaveBeenCalled();
+    });
+
+    it('filters out confidential staff events when accessed by PARENT', async () => {
+      prisma.parentStudent.findMany.mockResolvedValue([{ studentId: 'student-child-1' }]);
+      prisma.studentGroup.findMany.mockResolvedValue([{ groupId: 'group-1' }]);
+      prisma.calendarEvent.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        'org-1',
+        {},
+        { id: 'user-parent-1', role: 'PARENT' },
+      );
+
+      const queryWhere = prisma.calendarEvent.findMany.mock.calls[0][0].where;
+      expect(queryWhere.type).toEqual({ notIn: ['TEACHER_MEETING', 'MEETING'] });
+    });
+
+    it('allows staff members (TEACHER) to receive staff meetings', async () => {
+      prisma.calendarEvent.findMany.mockResolvedValue([
+        {
+          id: 'meeting-1',
+          title: 'Staff Weekly Sync',
+          type: 'TEACHER_MEETING',
+          Group: null,
+          Teacher: null,
+          User: { firstName: 'Principal', lastName: 'Lead' },
+        },
+      ]);
+
+      const res = await service.findAll(
+        'org-1',
+        { type: 'TEACHER_MEETING' },
+        { id: 'user-teacher-1', role: 'TEACHER' },
+      );
+
+      expect(res).toHaveLength(1);
+      const queryWhere = prisma.calendarEvent.findMany.mock.calls[0][0].where;
+      expect(queryWhere.type).toBe('TEACHER_MEETING');
+    });
   });
 });

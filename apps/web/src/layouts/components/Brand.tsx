@@ -53,9 +53,9 @@ const BADGE_TONES: Record<BrandBadgeTone, string> = {
   danger: 'border-apple-red/25 bg-apple-red/10 text-apple-red',
 };
 
-const SIZES: Record<BrandSize, { gap: string; wordmark: string; badgeX: string }> = {
-  sm: { gap: 'gap-2', wordmark: 'text-[17px] tracking-[-0.02em]', badgeX: 'px-1.5' },
-  md: { gap: 'gap-2.5', wordmark: 'text-[19px] tracking-[-0.024em]', badgeX: 'px-2' },
+const SIZES: Record<BrandSize, { gap: string; mark: string; wordmark: string; badgeX: string }> = {
+  sm: { gap: 'gap-2', mark: 'rounded-[10px]', wordmark: 'text-[16.5px] tracking-[-0.022em]', badgeX: 'px-1.5' },
+  md: { gap: 'gap-2.5', mark: 'rounded-xl', wordmark: 'text-[18.5px] tracking-[-0.026em]', badgeX: 'px-2' },
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -114,7 +114,8 @@ export const Brand = forwardRef<HTMLAnchorElement, BrandProps>(function Brand(
   const logoMark = (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-xl',
+        'inline-flex shrink-0 items-center justify-center',
+        styles.mark,
         !reduced &&
           'transition-transform duration-150 ease-apple-spring hover:scale-[1.03] active:scale-95 motion-reduce:transition-none',
       )}
@@ -130,7 +131,7 @@ export const Brand = forwardRef<HTMLAnchorElement, BrandProps>(function Brand(
   const wordmark = !compact ? (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 font-semibold leading-none text-primary',
+        'inline-flex items-center gap-1.5 whitespace-nowrap font-semibold leading-none text-primary',
         styles.wordmark,
       )}
     >
@@ -156,7 +157,7 @@ export const Brand = forwardRef<HTMLAnchorElement, BrandProps>(function Brand(
       to={to}
       aria-label={ariaLabel ?? 'M-EDU — Bosh sahifa'}
       className={cn(
-        'group inline-flex select-none items-center rounded-xl no-underline outline-none',
+        'group inline-flex max-w-full select-none items-center rounded-xl no-underline outline-none',
         styles.gap,
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)]',
         !reduced && 'transition-transform duration-150 ease-apple-spring active:scale-[0.98]',

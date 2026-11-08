@@ -1,11 +1,19 @@
 /**
  * M-EDU CORS Origin Validation Utility
- * Supports production allowlists and dynamic local development (localhost, 127.0.0.1, LAN IPs).
+ * Supports production allowlists, Telegram WebApp origins, and dynamic local development (localhost, 127.0.0.1, LAN IPs, Tunnels).
  */
 
 export function isAllowedOrigin(origin: string | undefined, configuredList: string[] = []): boolean {
   if (!origin) return true;
   if (configuredList.includes(origin)) return true;
+
+  // Allow the configured Telegram WebApp URL origin if set
+  const webAppUrl = process.env.TELEGRAM_WEBAPP_URL;
+  if (webAppUrl) {
+    try {
+      if (new URL(webAppUrl).origin === origin) return true;
+    } catch {}
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     // In development mode, allow localhost, 127.0.0.1, and private LAN IP ranges:
@@ -15,6 +23,12 @@ export function isAllowedOrigin(origin: string | undefined, configuredList: stri
         origin,
       );
     if (isDevLanOrLocal) return true;
+
+    // Allow development tunneling services (Cloudflare Tunnel, ngrok, localtunnel)
+    const isDevTunnel = /^https:\/\/[a-z0-9-]+\.(trycloudflare\.com|loca\.lt|ngrok-free\.app|ngrok\.io)$/i.test(
+      origin,
+    );
+    if (isDevTunnel) return true;
   }
 
   return false;

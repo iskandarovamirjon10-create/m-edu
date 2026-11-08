@@ -19,9 +19,14 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassModal, GlassButton, GlassBadge, useToast } from '@/components/ui';
 import { RealQrCode } from '@/components/ui/RealQrCode';
-import { formatCurrency, formatDate } from '@/lib/format';
+import { formatCurrency } from '@/lib/format';
 import { triggerPrint } from '@/lib/printEngine';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+
+const UZ_MONTH_NAMES = [
+  'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
+  'iyul', 'avgust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr',
+];
 
 export interface OfficialStudentContractModalProps {
   readonly open: boolean;
@@ -300,7 +305,11 @@ export function OfficialStudentContractModal({
               <div className="flex items-center justify-between text-[11px] font-sans text-slate-600 mt-2 px-2">
                 <span>№ <strong>{contractNumber}</strong></span>
                 <span>Toshkent shahri</span>
-                <span>«{contractDate.split('-')[2]}» {formatDate(contractDate, 'MMM')} {contractDate.split('-')[0]} y.</span>
+                <span>
+                  «{contractDate.split('-')[2] || '01'}»{' '}
+                  {UZ_MONTH_NAMES[parseInt(contractDate.split('-')[1] || '1', 10) - 1] || 'yanvar'}{' '}
+                  {contractDate.split('-')[0]} y.
+                </span>
               </div>
             </div>
 

@@ -1,9 +1,25 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaginationQuery } from '../common/dto/query';
 import * as ExcelJS from 'exceljs';
+import { hashPassword } from '../auth/auth.config';
+import {
+  generateUsernameCandidate,
+  generateTemporaryPassword,
+  normalizeUsername,
+} from '../auth/username.utils';
+
+export interface CreatedCredentialRecord {
+  userId: string;
+  fullName: string;
+  username: string;
+  temporaryPassword: string;
+  role: string;
+  groupName?: string;
+  phone?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Entity CSV templates
@@ -17,8 +33,8 @@ function s(v: unknown): string {
 }
 
 const TEMPLATES: Record<string, string[]> = {
-  STUDENT: ['firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'address', 'parentName', 'parentPhone', 'enrollmentDate', 'balance', 'groupName', 'isActive'],
-  TEACHER: ['firstName', 'lastName', 'email', 'phone', 'specializations', 'experience', 'hourlyRate', 'bio'],
+  STUDENT: ['firstName', 'lastName', 'username', 'email', 'phone', 'dateOfBirth', 'gender', 'address', 'parentName', 'parentPhone', 'enrollmentDate', 'balance', 'groupName', 'isActive'],
+  TEACHER: ['firstName', 'lastName', 'username', 'email', 'phone', 'specializations', 'experience', 'hourlyRate', 'bio'],
   GROUP: ['name', 'courseId', 'teacherId', 'capacity', 'room', 'startDate', 'endDate', 'isActive'],
   COURSE: ['name', 'description', 'duration', 'price', 'level', 'isActive'],
   PAYMENT: ['studentId', 'amount', 'dueDate', 'method', 'status', 'description'],
@@ -270,6 +286,7 @@ export class ImportExportService {
       if (['hourlyrate', 'soatlikhaq', 'ставка'].includes(k)) return 'hourlyRate';
       if (['balance', 'balans', 'qarz', 'qarzdorlik', 'saldo', 'баланс', 'долг'].includes(k)) return 'balance';
       if (['group', 'groupname', 'guruh', 'guruhnomi', 'sinf', 'kurs', 'класс', 'группа'].includes(k)) return 'groupName';
+      if (['username', 'login', 'foydalanuvchi', 'логин'].includes(k)) return 'username';
       return key;
     };
 
@@ -277,6 +294,8 @@ export class ImportExportService {
     let skippedCount = 0;
     const errors: string[] = [];
     const previewRows: Array<Record<string, unknown>> = [];
+    const createdCredentials: CreatedCredentialRecord[] = [];
+    const existingUsernamesInBatch = new Set<string>();
 
     if (entityType === 'STUDENT') {
       for (let index = 0; index < rawRows.length; index++) {
@@ -409,7 +428,28 @@ export class ImportExportService {
             });
             importedCount++;
           } else {
-            // CREATE path
+            // CREATE path: generate collision-free username, password and IAM membership
+            const rawUsername = row.username ? normalizeUsername(row.username) : '';
+            const candidateUsername = rawUsername || generateUsernameCandidate(firstName, lastName);
+
+            let finalUsername = candidateUsername;
+            let suffix = 1;
+            while (
+              existingUsernamesInBatch.has(finalUsername) ||
+              (this.prisma.user?.findFirst &&
+                (await this.prisma.user.findFirst({
+                  where: { username: { equals: finalUsername, mode: 'insensitive' } },
+                  select: { id: true },
+                })))
+            ) {
+              suffix++;
+              finalUsername = `${candidateUsername}${suffix}`;
+            }
+            existingUsernamesInBatch.add(finalUsername);
+
+            const tempPassword = generateTemporaryPassword();
+            const passwordHash = await hashPassword(tempPassword);
+
             let groupConnect: any = undefined;
             if (resolvedGroupId) {
               groupConnect = {
@@ -419,30 +459,81 @@ export class ImportExportService {
                 },
               };
             }
-            await this.prisma.student.create({
-              data: {
-                organization: { connect: { id: orgId } },
-                dateOfBirth: dob && !isNaN(dob.getTime()) ? dob : null,
-                gender,
-                address,
-                parentName,
-                parentPhone,
-                parentEmail,
-                balance,
-                groups: groupConnect,
-                user: {
-                  create: {
-                    organization: { connect: { id: orgId } },
-                    email,
-                    firstName: firstName || 'O’quvchi',
-                    lastName: lastName || '',
-                    phone,
-                    role: 'STUDENT',
-                    settings: { create: {} },
+
+            const executeStudentCreation = async (tx: any) => {
+              const user = tx.user?.create
+                ? await tx.user.create({
+                    data: {
+                      organizationId: orgId,
+                      username: finalUsername,
+                      email,
+                      passwordHash,
+                      mustChangePassword: true,
+                      firstName: firstName || 'O’quvchi',
+                      lastName: lastName || '',
+                      phone,
+                      role: Role.STUDENT,
+                      status: UserStatus.ACTIVE,
+                      isActive: true,
+                      settings: { create: {} },
+                    },
+                  })
+                : { id: randomUUID() };
+
+              if (tx.organizationMembership?.create) {
+                await tx.organizationMembership.create({
+                  data: {
+                    organizationId: orgId,
+                    userId: user.id,
+                    role: Role.STUDENT,
+                    status: 'ACTIVE',
+                    isDefault: true,
                   },
-                },
-              },
-            });
+                });
+              }
+
+              if (tx.passwordHistory?.create) {
+                await tx.passwordHistory.create({
+                  data: {
+                    userId: user.id,
+                    passwordHash,
+                  },
+                });
+              }
+
+              if (tx.student?.create) {
+                await tx.student.create({
+                  data: {
+                    organizationId: orgId,
+                    userId: user.id,
+                    dateOfBirth: dob && !isNaN(dob.getTime()) ? dob : null,
+                    gender,
+                    address,
+                    parentName,
+                    parentPhone,
+                    parentEmail,
+                    balance,
+                    groups: groupConnect,
+                  },
+                });
+              }
+
+              createdCredentials.push({
+                userId: user.id,
+                fullName: `${firstName} ${lastName}`.trim() || 'O’quvchi',
+                username: finalUsername,
+                temporaryPassword: tempPassword,
+                role: 'STUDENT',
+                groupName: groupName || undefined,
+                phone: phone || undefined,
+              });
+            };
+
+            if (typeof this.prisma.$transaction === 'function') {
+              await this.prisma.$transaction(executeStudentCreation);
+            } else {
+              await executeStudentCreation(this.prisma);
+            }
             importedCount++;
           }
         } catch (err: unknown) {
@@ -532,24 +623,95 @@ export class ImportExportService {
             });
             importedCount++;
           } else {
-            await this.prisma.teacher.create({
-              data: {
-                organization: { connect: { id: orgId } },
-                specializations,
-                hourlyRate: hourlyRate && !isNaN(hourlyRate) ? hourlyRate : undefined,
-                user: {
-                  create: {
-                    organization: { connect: { id: orgId } },
-                    email,
-                    firstName: firstName || 'O’qituvchi',
-                    lastName: lastName || '',
-                    phone,
-                    role: 'TEACHER',
-                    settings: { create: {} },
+            // CREATE path: generate collision-free username, password and IAM membership
+            const rawUsername = row.username ? normalizeUsername(row.username) : '';
+            const candidateUsername = rawUsername || generateUsernameCandidate(firstName, lastName);
+
+            let finalUsername = candidateUsername;
+            let suffix = 1;
+            while (
+              existingUsernamesInBatch.has(finalUsername) ||
+              (this.prisma.user?.findFirst &&
+                (await this.prisma.user.findFirst({
+                  where: { username: { equals: finalUsername, mode: 'insensitive' } },
+                  select: { id: true },
+                })))
+            ) {
+              suffix++;
+              finalUsername = `${candidateUsername}${suffix}`;
+            }
+            existingUsernamesInBatch.add(finalUsername);
+
+            const tempPassword = generateTemporaryPassword();
+            const passwordHash = await hashPassword(tempPassword);
+
+            const executeTeacherCreation = async (tx: any) => {
+              const user = tx.user?.create
+                ? await tx.user.create({
+                    data: {
+                      organizationId: orgId,
+                      username: finalUsername,
+                      email,
+                      passwordHash,
+                      mustChangePassword: true,
+                      firstName: firstName || 'O’qituvchi',
+                      lastName: lastName || '',
+                      phone,
+                      role: Role.TEACHER,
+                      status: UserStatus.ACTIVE,
+                      isActive: true,
+                      settings: { create: {} },
+                    },
+                  })
+                : { id: randomUUID() };
+
+              if (tx.organizationMembership?.create) {
+                await tx.organizationMembership.create({
+                  data: {
+                    organizationId: orgId,
+                    userId: user.id,
+                    role: Role.TEACHER,
+                    status: 'ACTIVE',
+                    isDefault: true,
                   },
-                },
-              },
-            });
+                });
+              }
+
+              if (tx.passwordHistory?.create) {
+                await tx.passwordHistory.create({
+                  data: {
+                    userId: user.id,
+                    passwordHash,
+                  },
+                });
+              }
+
+              if (tx.teacher?.create) {
+                await tx.teacher.create({
+                  data: {
+                    organizationId: orgId,
+                    userId: user.id,
+                    specializations,
+                    hourlyRate: hourlyRate && !isNaN(hourlyRate) ? hourlyRate : undefined,
+                  },
+                });
+              }
+
+              createdCredentials.push({
+                userId: user.id,
+                fullName: `${firstName} ${lastName}`.trim() || 'O’qituvchi',
+                username: finalUsername,
+                temporaryPassword: tempPassword,
+                role: 'TEACHER',
+                phone: phone || undefined,
+              });
+            };
+
+            if (typeof this.prisma.$transaction === 'function') {
+              await this.prisma.$transaction(executeTeacherCreation);
+            } else {
+              await executeTeacherCreation(this.prisma);
+            }
             importedCount++;
           }
         } catch (err: unknown) {
@@ -573,6 +735,7 @@ export class ImportExportService {
       skippedCount,
       errorCount: errors.length,
       errors: errors.slice(0, 20),
+      credentials: createdCredentials,
       message: `Successfully processed ${rawRows.length} rows. Imported: ${importedCount}, Skipped: ${skippedCount}.`,
     };
   }
@@ -617,7 +780,7 @@ export class ImportExportService {
         case "STUDENT": {
           const students = await this.prisma.student.findMany({
             where: { organizationId: orgId },
-            include: { user: { select: { firstName: true, lastName: true, email: true, phone: true } } },
+            include: { user: { select: { firstName: true, lastName: true, username: true, email: true, phone: true } } },
             take: CHUNK_SIZE,
             orderBy: { id: 'asc' },
             skip,
@@ -625,6 +788,7 @@ export class ImportExportService {
           return students.map(stu => ({
             firstName: s(stu.user?.firstName),
             lastName: s(stu.user?.lastName),
+            username: s(stu.user?.username),
             email: s(stu.user?.email),
             phone: s(stu.user?.phone),
             dateOfBirth: s(stu.dateOfBirth),
@@ -639,7 +803,7 @@ export class ImportExportService {
         case "TEACHER": {
           const teachers = await this.prisma.teacher.findMany({
             where: { organizationId: orgId },
-            include: { user: { select: { firstName: true, lastName: true, email: true, phone: true } } },
+            include: { user: { select: { firstName: true, lastName: true, username: true, email: true, phone: true } } },
             take: CHUNK_SIZE,
             orderBy: { id: 'asc' },
             skip,
@@ -647,6 +811,7 @@ export class ImportExportService {
           return teachers.map(t => ({
             firstName: s(t.user?.firstName),
             lastName: s(t.user?.lastName),
+            username: s(t.user?.username),
             email: s(t.user?.email),
             phone: s(t.user?.phone),
             specializations: s(t.specializations?.join("; ")),

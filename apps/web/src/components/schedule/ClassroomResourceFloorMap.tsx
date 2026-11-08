@@ -69,23 +69,25 @@ export function ClassroomResourceFloorMap({ className }: ClassroomResourceFloorM
         const utilData = utilRes.status === 'fulfilled' ? (utilRes.value as any) : null;
         const schedData = schedRes.status === 'fulfilled' ? (schedRes.value as any) : null;
 
-        const rawRooms: string[] = Array.isArray(utilData?.rooms) ? utilData.rooms : [];
+        const rawRoomsList: any[] = Array.isArray(utilData?.rooms) ? utilData.rooms : [];
         const schedulesList: any[] = Array.isArray(schedData?.items) ? schedData.items : Array.isArray(schedData) ? schedData : [];
 
-        if (rawRooms.length > 0) {
-          const mapped: Classroom[] = rawRooms.map((roomName, idx) => {
+        if (rawRoomsList.length > 0) {
+          const mapped: Classroom[] = rawRoomsList.map((roomItem, idx) => {
+            const roomName = typeof roomItem === 'string' ? roomItem : (roomItem?.name || `Xona ${idx + 1}`);
+            const roomCap = (typeof roomItem === 'object' && roomItem?.capacity) ? roomItem.capacity : (20 + (idx % 3) * 10);
             const floor = ((idx % 3) + 1) as 1 | 2 | 3;
-            const code = `${floor}0${(idx % 9) + 1}`;
+            const code = (typeof roomItem === 'object' && roomItem?.code) ? String(roomItem.code) : `${floor}0${(idx % 9) + 1}`;
             const activeSched = schedulesList.find((s) => s.room === roomName || s.group?.room === roomName);
             const isBusy = Boolean(activeSched);
 
             return {
               id: `room-${idx + 1}`,
               code,
-              name: roomName,
+              name: String(roomName),
               floor,
-              capacity: 20 + (idx % 3) * 10,
-              currentOccupancy: isBusy ? 16 + (idx % 5) : 0,
+              capacity: roomCap,
+              currentOccupancy: isBusy ? Math.min(roomCap, 16 + (idx % 5)) : 0,
               status: isBusy ? 'BUSY' : 'AVAILABLE',
               currentSession: isBusy ? {
                 groupName: activeSched?.group?.name || 'Faol Dars Guruhi',
@@ -403,7 +405,7 @@ export function ClassroomResourceFloorMap({ className }: ClassroomResourceFloorM
 
             <GlassField label="Mas’ul Ustoz / Moderator" required>
               <GlassInput
-                placeholder="Masalan: Farrux Tursunov"
+                placeholder="Masalan: O'qituvchi F.I.Sh"
                 value={reserveTeacherName}
                 onChange={(e) => setReserveTeacherName(e.target.value)}
               />

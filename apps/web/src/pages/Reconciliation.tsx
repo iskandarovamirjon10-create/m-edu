@@ -1,6 +1,8 @@
 import { useState} from'react';
 import { useQuery} from'@tanstack/react-query';
 import { analyticsApi} from'@/lib/api';
+
+export type ReconciliationResult = any;
 import {
  GlassPageHeader,
  GlassPageLoader,
@@ -65,7 +67,7 @@ function OverviewTab({ t}: { t: (key: string) => string}) {
  staleTime: 60_000,
 });
 
- const report = data as any;
+ const report = data as ReconciliationResult | undefined;
 
  if (isLoading) return <GlassPageLoader label={t('common.loading')} />;
  if (isError) return <GlassErrorState title={t('common.error')} message={getErrorMessage(error)} onRetry={() => refetch()} />;
@@ -196,7 +198,7 @@ function OverviewTab({ t}: { t: (key: string) => string}) {
 
 function handleOpenDiscrepancySidecar(d: any) {
   const sidecarData: QuickLookData = {
-    id: d.id || 'discrepancy-' + Math.random(),
+    id: d.id || ['discrepancy', d.type, d.severity, d.amount].filter(Boolean).join('-'),
     type: 'payment',
     title: d.type ? d.type.replace(/_/g, ' ') : 'Tafovut',
     subtitle: `${d.severity} · Moliyaviy solishtirish`,
@@ -232,7 +234,7 @@ function DiscrepanciesTab({ t}: { t: (key: string) => string}) {
  staleTime: 60_000,
 });
 
- const result = data as any;
+ const result = data as ReconciliationResult | undefined;
 
  const severityColor = (s: string) => {
  if (s ==='CRITICAL') return'error' as const;
@@ -363,7 +365,7 @@ function StudentBalancesTab({ t}: { t: (key: string) => string}) {
  staleTime: 60_000,
 });
 
- const result = data as any;
+ const result = data as ReconciliationResult | undefined;
 
  if (isLoading) return <GlassPageLoader label={t('common.loading')} />;
  if (isError) return <GlassErrorState title={t('common.error')} message={getErrorMessage(error)} onRetry={() => refetch()} />;
@@ -428,7 +430,7 @@ function HistoryTab({ t}: { t: (key: string) => string}) {
  staleTime: 60_000,
 });
 
- const result = data as any;
+ const result = data as ReconciliationResult | undefined;
 
  if (isLoading) return <GlassPageLoader label={t('common.loading')} />;
  if (isError) return <GlassErrorState title={t('common.error')} message={getErrorMessage(error)} onRetry={() => refetch()} />;
@@ -525,7 +527,7 @@ export function ReconciliationPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-transparent pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full bg-transparent pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
       <div className="relative z-10 w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 liquid-glass-surface rounded-3xl">
         <GlassPageHeader

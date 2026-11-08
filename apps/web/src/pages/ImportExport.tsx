@@ -30,6 +30,7 @@ import { getErrorMessage } from '@/lib/errorMessages';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { cn } from '@/lib/design';
 import { ModmeExcelMigrationStudio } from '@/components/migration/ModmeExcelMigrationStudio';
+import { OnboardingSlipModal, type OnboardingCredentialRecord } from '@/components/iam/OnboardingSlipModal';
 
 function AuroraMesh() {
   return (
@@ -91,6 +92,8 @@ export function ImportExportPage() {
   const [entity, setEntity] = useState('STUDENT');
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv' | 'pdf'>('xlsx');
   const [isDragging, setIsDragging] = useState(false);
+  const [slipModalOpen, setSlipModalOpen] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState<OnboardingCredentialRecord[]>([]);
 
   const jobsQuery = useQuery({
     queryKey: ['import-jobs'],
@@ -151,6 +154,10 @@ export function ImportExportPage() {
       playSuccess();
       const msg = data?.message || t('importExport.jobStarted', { id: data?.id ?? '' });
       push('success', msg);
+      if (data?.credentials && Array.isArray(data.credentials) && data.credentials.length > 0) {
+        setGeneratedCredentials(data.credentials);
+        setSlipModalOpen(true);
+      }
       queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
@@ -227,7 +234,7 @@ export function ImportExportPage() {
   const failedJobs = jobs.filter((j) => j.status === 'FAILED').length;
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30 pb-[max(6rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30 pb-[max(6rem,env(safe-area-inset-bottom))]">
       <AuroraMesh />
 
       <motion.div
@@ -240,6 +247,18 @@ export function ImportExportPage() {
           <GlassPageHeader
             title={t('importExport.title')}
             subtitle={t('importExport.pageSubtitle')}
+            actions={
+              generatedCredentials.length > 0 ? (
+                <GlassButton
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setSlipModalOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
+                >
+                  <span className="mr-1.5">🖨️</span> Kvitansiyalar ({generatedCredentials.length})
+                </GlassButton>
+              ) : undefined
+            }
           />
         </motion.div>
 
@@ -580,6 +599,13 @@ export function ImportExportPage() {
           )}
         </motion.div>
       </motion.div>
+
+      <OnboardingSlipModal
+        open={slipModalOpen}
+        onClose={() => setSlipModalOpen(false)}
+        records={generatedCredentials}
+        title="Yuklangan Foydalanuvchilar Kirish Varaqalari (Onboarding Slips)"
+      />
     </div>
   );
 }

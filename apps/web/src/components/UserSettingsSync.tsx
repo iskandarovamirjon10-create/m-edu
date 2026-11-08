@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAuthState } from '@/auth/AuthContext';
-import { useI18n, isLocale } from '@/i18n/I18nProvider';
+import { useSafeI18n, isLocale } from '@/i18n/I18nProvider';
 import { useTheme } from '@/hooks/useTheme';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { useDeviceSyncSocket } from '@/hooks/useDeviceSyncSocket';
@@ -45,7 +45,7 @@ function readStorage(key: string): string | null {
 export function UserSettingsSync() {
   useDeviceSyncSocket();
   const { user } = useAuthState();
-  const { setLocale, locale } = useI18n();
+  const { setLocale, locale } = useSafeI18n();
   const { setTheme, theme } = useTheme();
   const persist = usePersistSettings();
 

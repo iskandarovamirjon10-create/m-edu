@@ -60,6 +60,7 @@ const READ_ONLY_AI_PERMISSIONS: AiPermission[] = [
 
 /** Role → AI permissions. Unknown/absent roles get nothing. */
 export const AiRolePermissions: Record<string, AiPermission[]> = {
+  PLATFORM_OWNER: ALL_AI_PERMISSIONS,
   SUPER_ADMIN: ALL_AI_PERMISSIONS,
   ORG_ADMIN: ALL_AI_PERMISSIONS,
   // Legacy alias kept for callers that still emit `ADMIN` (older JWTs/tests).

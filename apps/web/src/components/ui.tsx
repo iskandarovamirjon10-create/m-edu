@@ -1,66 +1,66 @@
 /**
  * M-EDU UI — Backward-compatible barrel re-export
- * Existing pages import from'@/components/ui'. We re-export the
+ * Existing pages import from '@/components/ui'. We re-export the
  * new glass components and a few legacy helpers so nothing breaks
  * during migration.
  */
-import { type ReactNode, forwardRef} from'react';
-import { useEffect, useRef, useCallback} from'react';
+import { type ReactNode, forwardRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import type { InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes} from'react';
+import type { InputHTMLAttributes, TextareaHTMLAttributes, SelectHTMLAttributes } from 'react';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useToast } from './ui/GlassToast';
 
 // Re-export new glass library (preferred)
-export * from'./ui/index';
+export * from './ui/index';
 
 // ==================== Legacy aliases (back-compat) ====================
-export { GlassButton as Button} from'./ui/index';
-export { GlassInput as Input} from'./ui/index';
-export { GlassTextArea as TextAreaNew} from'./ui/index';
-export { GlassSelect as SelectNew} from'./ui/index';
-export { GlassModal as ModalNew} from'./ui/index';
-export { GlassTable as Table, GlassTHead as THead, GlassTBody as TBody, GlassTR as TR, GlassTH as TH, GlassTD as TD} from'./ui/index';
-export { GlassCard as Card} from'./ui/index';
-export { GlassStatCard as StatCard} from'./ui/index';
-export { GlassPageHeader as PageHeader} from'./ui/index';
-export { GlassEmptyState as EmptyState} from'./ui/index';
-export { GlassErrorState as ErrorState} from'./ui/index';
-export { GlassSpinner as Spinner} from'./ui/index';
-export { GlassPageLoader as PageLoader} from'./ui/index';
-export { GlassBadge as Badge} from'./ui/index';
-export { GlassAvatar as Avatar} from'./ui/index';
-export { GlassTabs as Tabs} from'./ui/index';
+export { GlassButton as Button } from './ui/index';
+export { GlassInput as Input } from './ui/index';
+export { GlassTextArea as TextAreaNew } from './ui/index';
+export { GlassSelect as SelectNew } from './ui/index';
+export { GlassModal as ModalNew } from './ui/index';
+export { GlassTable as Table, GlassTHead as THead, GlassTBody as TBody, GlassTR as TR, GlassTH as TH, GlassTD as TD } from './ui/index';
+export { GlassCard as Card } from './ui/index';
+export { GlassStatCard as StatCard } from './ui/index';
+export { GlassPageHeader as PageHeader } from './ui/index';
+export { GlassEmptyState as EmptyState } from './ui/index';
+export { GlassErrorState as ErrorState } from './ui/index';
+export { GlassSpinner as Spinner } from './ui/index';
+export { GlassPageLoader as PageLoader } from './ui/index';
+export { GlassBadge as Badge } from './ui/index';
+export { GlassAvatar as Avatar } from './ui/index';
+export { GlassTabs as Tabs } from './ui/index';
 
 // ==================== Legacy aliases (back-compat) ====================
-export { GlassPagination as Pagination} from'./ui/index';
-export { GlassField as Field} from'./ui/index';
-export { GlassSwitch as Switch} from'./ui/index';
+export { GlassPagination as Pagination } from './ui/index';
+export { GlassField as Field } from './ui/index';
+export { GlassSwitch as Switch } from './ui/index';
 
 // ==================== Legacy TextInput / TextArea / Select ====================
 // forwardRef so pages can attach refs (e.g. autofocus on the search page).
 export const TextInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
- function TextInput(props, ref) {
- const { className ='', ...rest} = props;
-  return (
-    <input
-      ref={ref}
-      className={[
-        'w-full px-4 py-2.5',
-        'bg-[var(--bg-glass)] backdrop-blur-xl',
-        'border border-[var(--border-medium)] rounded-xl',
-        'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
-        'font-sans text-[0.9375rem] outline-none',
-        'transition-[border-color,box-shadow] duration-200',
-        'hover:border-[var(--border-strong)]',
-        'focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--focus-ring)]',
-        'disabled:opacity-45 disabled:cursor-not-allowed',
-        className,
-      ].filter(Boolean).join(' ')}
-      {...rest}
-    />
-  );
-},
+  function TextInput(props, ref) {
+    const { className = '', ...rest } = props;
+    return (
+      <input
+        ref={ref}
+        className={[
+          'w-full px-4 py-2.5',
+          'bg-[var(--bg-glass)] backdrop-blur-xl',
+          'border border-[var(--border-medium)] rounded-xl',
+          'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
+          'font-sans text-[0.9375rem] outline-none',
+          'transition-[border-color,box-shadow] duration-200',
+          'hover:border-[var(--border-strong)]',
+          'focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--focus-ring)]',
+          'disabled:opacity-45 disabled:cursor-not-allowed',
+          className,
+        ].filter(Boolean).join(' ')}
+        {...rest}
+      />
+    );
+  },
 );
 
 export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -115,24 +115,24 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
 // ==================== Legacy Modal ====================
 // Accepts both `open` and the legacy `isOpen` prop name.
 export function Modal({
- open: openProp,
- isOpen,
- onClose,
- title,
- children,
- footer,
- wide,
+  open: openProp,
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+  wide,
 }: {
- open?: boolean;
- /** Legacy alias for `open`. */
- isOpen?: boolean;
- onClose: () => void;
- title: string;
- children: ReactNode;
- footer?: ReactNode;
- wide?: boolean;
+  open?: boolean;
+  /** Legacy alias for `open`. */
+  isOpen?: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+  wide?: boolean;
 }) {
-const open = openProp ?? isOpen ?? false;
+  const open = openProp ?? isOpen ?? false;
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const { t } = useSafeI18n();
@@ -151,31 +151,31 @@ const open = openProp ?? isOpen ?? false;
     previousFocusRef.current = document.activeElement as HTMLElement;
     modalRef.current?.focus();
 
- const onKey = (e: KeyboardEvent) => {
- if (e.key ==='Escape') onClose();
- if (e.key ==='Tab' && modalRef.current) {
- const focusable = modalRef.current.querySelectorAll<HTMLElement>(
-'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
- );
- const first = focusable[0];
- const last = focusable[focusable.length - 1];
- if (e.shiftKey && document.activeElement === first) {
- e.preventDefault();
- last?.focus();
-} else if (!e.shiftKey && document.activeElement === last) {
- e.preventDefault();
- first?.focus();
-}
-}
-};
- document.addEventListener('keydown', onKey);
- return () => {
- document.removeEventListener('keydown', onKey);
- previousFocusRef.current?.focus();
-};
-}, [open, onClose]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previousFocusRef.current?.focus();
+    };
+  }, [open, onClose]);
 
- if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
     <div
@@ -228,22 +228,21 @@ const open = openProp ?? isOpen ?? false;
 // (moved to ui/GlassPagination.tsx)
 
 // ==================== Legacy statusColor ====================
-export function statusColor(status: string | null | undefined):'success' |'error' |'warning' |'primary' |'muted' {
- if (!status) return'muted';
- const s = status.toUpperCase();
- if (['ACTIVE','PAID','PRESENT','WON','ACTIVATED','PASSED','SUCCESS','IDENTIFIED','MATCH_FOUND','CONFIRMED'].some(k => s.includes(k))) return'success';
- if (['INACTIVE','REVOKED','CANCELLED','ABSENT','LOST','FAILED','ERROR','REJECTED','UNIDENTIFIED','OVERDUE','SPOOF','BLOCKED'].some(k => s.includes(k))) return'error';
- if (['PENDING','LATE','CONTACTED','TRIAL','UNCERTAIN','STARTED'].some(k => s.includes(k))) return'warning';
- return'primary';
+export function statusColor(status: string | null | undefined): 'success' | 'error' | 'warning' | 'primary' | 'muted' {
+  if (!status) return 'muted';
+  const s = status.toUpperCase();
+  if (['ACTIVE','PAID','PRESENT','WON','ACTIVATED','PASSED','SUCCESS','IDENTIFIED','MATCH_FOUND','CONFIRMED'].some(k => s.includes(k))) return 'success';
+  if (['INACTIVE','REVOKED','CANCELLED','ABSENT','LOST','FAILED','ERROR','REJECTED','UNIDENTIFIED','OVERDUE','SPOOF','BLOCKED'].some(k => s.includes(k))) return 'error';
+  if (['PENDING','LATE','CONTACTED','TRIAL','UNCERTAIN','STARTED'].some(k => s.includes(k))) return 'warning';
+  return 'primary';
 }
 
 // ==================== Legacy useToasts ====================
 interface LegacyToast {
- id: number;
- kind:'success' |'error' |'info';
- message: string;
+  id: number;
+  kind: 'success' | 'error' | 'info' | 'warning';
+  message: string;
 }
-
 
 export function useToasts() {
   const globalToast = useToast();
@@ -258,11 +257,11 @@ export function useToasts() {
       let title = '';
 
       if (typeof kindOrObject === 'object' && kindOrObject !== null) {
-        type = kindOrObject.type === 'error' ? 'error' : kindOrObject.type === 'success' ? 'success' : 'info';
+        type = kindOrObject.type === 'error' ? 'error' : kindOrObject.type === 'success' ? 'success' : kindOrObject.type === 'warning' ? 'warning' : 'info';
         message = kindOrObject.message;
         title = kindOrObject.title || message;
       } else {
-        type = kindOrObject === 'error' ? 'error' : kindOrObject === 'success' ? 'success' : 'info';
+        type = kindOrObject === 'error' ? 'error' : kindOrObject === 'success' ? 'success' : kindOrObject === 'warning' ? 'warning' : 'info';
         message = messageArg || '';
         title = message;
       }
@@ -274,8 +273,5 @@ export function useToasts() {
 
   return { push, toastNode: null };
 }
-
-
-
 
 export { AuroraMesh, type AuroraMeshProps, type AuroraVariant } from './ui/AuroraMesh';

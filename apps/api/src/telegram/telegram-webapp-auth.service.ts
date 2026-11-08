@@ -33,6 +33,7 @@ export interface ValidatedTelegramWebAppData {
 export class TelegramWebAppAuthService {
   private readonly logger = new Logger(TelegramWebAppAuthService.name);
   private readonly botToken: string;
+  private readonly sessionCache = new Map<string, { expiresAt: number; result: any }>();
 
   constructor(
     private readonly config: ConfigService,
@@ -100,15 +101,15 @@ export class TelegramWebAppAuthService {
       throw new UnauthorizedException('Invalid Telegram WebApp signature');
     }
 
-    // 6. Validate auth_date freshness (replay attack prevention: max 10 minutes default)
+    // 6. Validate auth_date freshness (replay attack prevention: 24h default for seamless mobile UX)
     const authDateStr = params.get('auth_date');
     const authDate = authDateStr ? parseInt(authDateStr, 10) : 0;
     const now = Math.floor(Date.now() / 1000);
     const configMaxAge = parseInt(this.config.get<string>('TELEGRAM_AUTH_MAX_AGE_SECONDS') || '', 10);
-    const MAX_AGE_SECONDS = Number.isFinite(configMaxAge) && configMaxAge > 0 ? configMaxAge : 600; // 10 minutes default
+    const MAX_AGE_SECONDS = Number.isFinite(configMaxAge) && configMaxAge > 0 ? configMaxAge : 86400; // 24 hours default
 
-    if (!authDate || now - authDate > MAX_AGE_SECONDS || authDate > now + 300) {
-      this.logger.warn(`Expired or future auth_date in Telegram WebApp: ${authDate}`);
+    if (!authDate || now - authDate > MAX_AGE_SECONDS || authDate > now + 3600) {
+      this.logger.warn(`Expired or future auth_date in Telegram WebApp: ${authDate} (now: ${now})`);
       throw new UnauthorizedException('Telegram WebApp session has expired');
     }
 
@@ -141,7 +142,14 @@ export class TelegramWebAppAuthService {
     initDataRaw: string,
     clientMeta?: { userAgent?: string; ipAddress?: string },
   ) {
+    // Return cached session if called within active freshness window
+    const cached = this.sessionCache.get(initDataRaw);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.result;
+    }
+
     const validated = this.validateInitData(initDataRaw);
+    const tgUserId = String(validated.user.id);
 
     // Replay attack prevention via Redis/limiter tryClaimOnce
     const configMaxAge = parseInt(this.config.get<string>('TELEGRAM_AUTH_MAX_AGE_SECONDS') || '', 10);
@@ -152,9 +160,15 @@ export class TelegramWebAppAuthService {
       throw new UnauthorizedException('Telegram WebApp session has already been used');
     }
 
-    const tgUserId = String(validated.user.id);
+    // Rate limit authentication attempts per Telegram user
+    const scope = `webapp-auth:${tgUserId}`;
+    if (await this.limiter.isBlocked(scope, 60)) {
+      this.logger.warn(`Rate limit exceeded for Telegram WebApp user: ${tgUserId}`);
+      throw new UnauthorizedException('Too many authentication requests. Please wait a moment.');
+    }
+    await this.limiter.hit(scope, 60);
 
-    // Look up active TelegramAccount mapping
+    // Look up active TelegramAccount mapping freshly from database
     const account = await this.prisma.telegramAccount.findFirst({
       where: {
         telegramUserId: tgUserId,
@@ -203,13 +217,20 @@ export class TelegramWebAppAuthService {
         data: { lastSeenAt: new Date() },
       });
 
-      return {
+      const result = {
         authenticated: true,
         accessToken,
         user: tokenUser,
         role: tokenUser.role,
         organization: dbUser.organization,
       };
+
+      this.sessionCache.set(initDataRaw, {
+        expiresAt: Date.now() + 60_000,
+        result,
+      });
+
+      return result;
     }
 
     // If mapped to a ParentAccount
@@ -232,13 +253,20 @@ export class TelegramWebAppAuthService {
         data: { lastSeenAt: new Date() },
       });
 
-      return {
+      const result = {
         authenticated: true,
         accessToken,
         user: tokenUser,
         role: 'PARENT',
         organization: parent.organization,
       };
+
+      this.sessionCache.set(initDataRaw, {
+        expiresAt: Date.now() + 60_000,
+        result,
+      });
+
+      return result;
     }
 
     return {
@@ -246,5 +274,18 @@ export class TelegramWebAppAuthService {
       telegramUser: validated.user,
       message: 'Ulanish ma\'lumotlari topilmadi.',
     };
+  }
+
+  private cacheSession(hash: string, result: any, ttlSeconds: number): void {
+    const now = Math.floor(Date.now() / 1000);
+    this.sessionCache.set(hash, {
+      expiresAt: now + ttlSeconds,
+      result,
+    });
+    if (this.sessionCache.size > 1000) {
+      for (const [k, v] of this.sessionCache.entries()) {
+        if (v.expiresAt <= now) this.sessionCache.delete(k);
+      }
+    }
   }
 }

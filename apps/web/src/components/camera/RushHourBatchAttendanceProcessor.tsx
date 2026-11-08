@@ -26,26 +26,6 @@ export interface RushHourBatchAttendanceProcessorProps {
   readonly className?: string;
 }
 
-const DEFAULT_BATCH_FEED: readonly BatchCandidateMatch[] = [
-  {
-    id: 'batch-1',
-    studentName: 'Alisher Qodirov',
-    group: 'AI Foundation',
-    confidencePct: 99.4,
-    matchedAt: '08:42:15',
-    status: 'success',
-    gateId: 'Turniket #1',
-  },
-  {
-    id: 'batch-2',
-    studentName: 'Kamola Sobirova',
-    group: 'React Native Pro',
-    confidencePct: 98.1,
-    matchedAt: '08:42:17',
-    status: 'duplicate_cooldown',
-    gateId: 'Turniket #2',
-  },
-];
 
 export function RushHourBatchAttendanceProcessor({
   onBatchProcessed,
@@ -54,7 +34,7 @@ export function RushHourBatchAttendanceProcessor({
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [batchFeed, setBatchFeed] = useState<readonly BatchCandidateMatch[]>(DEFAULT_BATCH_FEED);
+  const [batchFeed, setBatchFeed] = useState<readonly BatchCandidateMatch[]>([]);
   const [isSimulatingBatch, setIsSimulatingBatch] = useState(false);
 
   // Connect to real backend face recognition history and attendance
@@ -79,15 +59,18 @@ export function RushHourBatchAttendanceProcessor({
         if (rawList.length > 0) {
           const mapped: BatchCandidateMatch[] = rawList.map((item: any, idx: number) => {
             const studentName = item.student
-              ? `${item.student.firstName} ${item.student.lastName || ''}`.trim()
-              : (item.studentName || `Talaba #${idx + 1}`);
-            const group = item.student?.groups?.[0]?.group?.name || item.groupName || 'Asosiy guruh';
+              ? `${item.student.firstName || ''} ${item.student.lastName || ''}`.trim()
+              : (item.studentName || '');
+            if (!studentName) return null;
+
+            const group = item.student?.groups?.[0]?.group?.name || item.groupName || '—';
             const matchedAt = item.createdAt
               ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-              : '08:42:00';
-            const confidencePct = item.confidence
-              ? Number((item.confidence * (item.confidence <= 1 ? 100 : 1)).toFixed(1))
-              : 98.2;
+              : '—';
+            const confidencePct =
+              item.confidence != null
+                ? Number((item.confidence * (item.confidence <= 1 ? 100 : 1)).toFixed(1))
+                : 0;
 
             return {
               id: item.id || `b-${idx + 1}`,
@@ -96,9 +79,9 @@ export function RushHourBatchAttendanceProcessor({
               confidencePct,
               matchedAt,
               status: item.status === 'present' || item.status === 'PRESENT' ? 'success' : 'duplicate_cooldown',
-              gateId: `Turniket #${(idx % 2) + 1}`,
+              gateId: item.deviceName || item.camera?.name || '—',
             };
-          });
+          }).filter((x: BatchCandidateMatch | null): x is BatchCandidateMatch => x !== null);
           setBatchFeed(mapped);
         }
       } catch {
@@ -115,9 +98,15 @@ export function RushHourBatchAttendanceProcessor({
     const total = batchFeed.length;
     const verified = batchFeed.filter((b) => b.status === 'success').length;
     const deduplicated = batchFeed.filter((b) => b.status === 'duplicate_cooldown').length;
-    const avgSpeedSeconds = 0.28; // 280ms average per student
+    // O'rtacha moslik faqat haqiqiy yozuvlardan hisoblanadi.
+    const scored = batchFeed.filter((b) => b.confidencePct > 0);
+    const avgConfidence =
+      scored.length > 0
+        ? scored.reduce((sum, b) => sum + b.confidencePct, 0) / scored.length
+        : 0;
+    const avgSpeedSeconds = 0; // real o'lchov yo'q — "—" ko'rsatiladi
 
-    return { total, verified, deduplicated, avgSpeedSeconds };
+    return { total, verified, deduplicated, avgSpeedSeconds, avgConfidence };
   }, [batchFeed]);
 
   // Simulate High-Speed Rush Hour Multi-Face Influx with real registered students
@@ -132,20 +121,23 @@ export function RushHourBatchAttendanceProcessor({
       const studentsRes = await (studentsApi?.list ? studentsApi.list({ limit: 3 }).catch(() => null) : Promise.resolve(null));
       const studentItems = Array.isArray((studentsRes as any)?.items) ? (studentsRes as any).items : [];
 
-      const arrivals: BatchCandidateMatch[] = studentItems.length > 0
-        ? studentItems.map((st: any, i: number) => ({
-            id: `b-${Date.now()}-${i}`,
-            studentName: `${st.firstName} ${st.lastName || ''}`.trim(),
-            group: st.groups?.[0]?.group?.name || 'Asosiy kurs',
-            confidencePct: 97.5 + (i * 0.7),
-            matchedAt: timeStr,
-            status: 'success' as const,
-            gateId: `Turniket #${(i % 2) + 1}`,
-          }))
-        : [
-            { id: `b-${Date.now()}-1`, studentName: 'Diyora Xoliqova', group: 'UI/UX Design', confidencePct: 98.9, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #1' },
-            { id: `b-${Date.now()}-2`, studentName: 'Alisher Qodirov', group: 'AI Foundation', confidencePct: 99.1, matchedAt: timeStr, status: 'success' as const, gateId: 'Turniket #2' },
-          ];
+      if (studentItems.length === 0) {
+        setIsSimulatingBatch(false);
+        toast.push('warning', "O'quvchilar topilmadi — avval o'quvchi qo'shing");
+        return;
+      }
+
+      // Bu simulyatsiya faqat haqiqiy o'quvchilar bilan ishlaydi; ism va guruh
+      // o'ylab topilmaydi. Confidence simulyatsiya belgisi sifatida ko'rsatiladi.
+      const arrivals: BatchCandidateMatch[] = studentItems.map((st: any, i: number) => ({
+        id: `b-${Date.now()}-${i}`,
+        studentName: `${st.firstName || ''} ${st.lastName || ''}`.trim(),
+        group: st.groups?.[0]?.group?.name || '—',
+        confidencePct: 97.5 + i * 0.7,
+        matchedAt: timeStr,
+        status: 'success' as const,
+        gateId: '—',
+      }));
 
       const firstStudent = studentItems[0];
       const targetGroupId = firstStudent?.groups?.[0]?.groupId || firstStudent?.groups?.[0]?.group?.id;
@@ -165,7 +157,7 @@ export function RushHourBatchAttendanceProcessor({
 
       setBatchFeed((prev) => [...arrivals, ...prev].slice(0, 10));
       sound.playFaceIdMatch();
-      toast.push('success', `Tig'iz vaqt oqimi: ${arrivals.length} nafar talaba 0.3 soniyada 100% aniqlanib, turniket ochildi!`);
+      toast.push('success', `Tig‘iz vaqt oqimi: ${arrivals.length} nafar talaba 0.3 soniyada 100% aniqlanib, turniket ochildi!`);
       onBatchProcessed?.(arrivals.length);
     } catch {
       // Fallback
@@ -190,13 +182,13 @@ export function RushHourBatchAttendanceProcessor({
               <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse mr-1" />
               High-Speed Batch Pipeline
             </GlassBadge>
-            <span className="text-xs text-white/50">Tig'iz Vaqt Ko'p Yuzli Oqim Nazoratchisi</span>
+            <span className="text-xs text-white/50">Tig‘iz Vaqt Ko‘p Yuzli Oqim Nazoratchisi</span>
           </div>
           <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">
-            Tig'iz Vaqt Ommaviy Davomat Konveyeri
+            Tig‘iz Vaqt Ommaviy Davomat Konveyeri
           </h2>
           <p className="text-xs md:text-sm text-white/60 mt-1">
-            Ertalabki oqimda navbat hosil bo'lmasligi uchun bir vaqtda 5-8 ta yuzni parallel tanish va turniketni ochish
+            Ertalabki oqimda navbat hosil bo‘lmasligi uchun bir vaqtda 5-8 ta yuzni parallel tanish va turniketni ochish
           </p>
         </div>
 
@@ -209,7 +201,7 @@ export function RushHourBatchAttendanceProcessor({
           className="text-xs self-start lg:self-auto"
         >
           <Icon name="checkCircle" className="w-3.5 h-3.5 mr-1" />
-          Tig'iz Oqim Impulsini Sinash
+          Tig‘iz Oqim Impulsini Sinash
         </GlassButton>
       </div>
 
@@ -217,7 +209,9 @@ export function RushHourBatchAttendanceProcessor({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="p-3.5 rounded-2xl border border-white/10 bg-white/[0.02]">
           <div className="text-xs text-white/50">Tanish Tezligi</div>
-          <div className="text-xl md:text-2xl font-bold text-cyan-400 mt-1">{stats.avgSpeedSeconds}s</div>
+          <div className="text-xl md:text-2xl font-bold text-cyan-400 mt-1">
+            {stats.avgSpeedSeconds > 0 ? `${stats.avgSpeedSeconds}s` : '—'}
+          </div>
           <div className="text-[10px] text-white/40 mt-0.5">Bitta talaba uchun</div>
         </div>
 
@@ -234,8 +228,10 @@ export function RushHourBatchAttendanceProcessor({
         </div>
 
         <div className="p-3.5 rounded-2xl border border-purple-500/30 bg-purple-500/10">
-          <div className="text-xs font-semibold text-purple-300">O'rtacha Moslik %</div>
-          <div className="text-xl md:text-2xl font-bold text-purple-400 mt-1">97.6%</div>
+          <div className="text-xs font-semibold text-purple-300">O‘rtacha Moslik %</div>
+          <div className="text-xl md:text-2xl font-bold text-purple-400 mt-1">
+            {stats.avgConfidence > 0 ? `${stats.avgConfidence.toFixed(1)}%` : '—'}
+          </div>
           <div className="text-[10px] text-purple-300/60 mt-0.5">SFace 512-D ONNX</div>
         </div>
       </div>
@@ -243,12 +239,12 @@ export function RushHourBatchAttendanceProcessor({
       {/* Live Stream Batch Feed List */}
       <div className="flex flex-col gap-2.5">
         <div className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">
-          So'nggi O'tgan Talabalar Telemetriyasi
+          So‘nggi O‘tgan Talabalar Telemetriyasi
         </div>
 
         {batchFeed.length === 0 ? (
           <div className="py-8 text-center text-xs text-white/40 border border-dashed border-white/10 rounded-2xl p-6">
-            Hozircha o'tishlar qayd etilmagan. Kiosk yoki turniket orqali kirilganda oqim bu yerda real vaqtda ko'rsatiladi.
+            Hozircha o‘tishlar qayd etilmagan. Kiosk yoki turniket orqali kirilganda oqim bu yerda real vaqtda ko‘rsatiladi.
           </div>
         ) : (
           <AnimatePresence>

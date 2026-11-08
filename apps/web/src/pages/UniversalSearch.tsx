@@ -50,11 +50,10 @@ const containerVariants: Variants = {
 };
 
 const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 14, filter: 'blur(4px)' },
+  hidden: { opacity: 0, y: 12 },
   visible: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: SPRING.smooth,
   },
 };
@@ -251,7 +250,7 @@ export function UniversalSearchPage() {
   }, [results.results]);
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-brand-500/30">
+    <div className="relative min-h-full bg-transparent selection:bg-brand-500/30">
       {/* Ambient Aurora mesh backdrop */}
       <AuroraMesh variant="corporate" opacity={0.7} />
 

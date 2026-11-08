@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
 import {
   GamificationService,
   levelForXp,
@@ -22,16 +23,34 @@ function createMockPrisma() {
   return {
     $transaction: vi.fn((cb: (prismaTx: typeof tx) => Promise<unknown>) => cb(tx)),
     $queryRaw: vi.fn(),
+    student: {
+      findFirst: vi.fn(),
+    },
     gamificationXpEvent: {
       create: vi.fn(),
       findMany: vi.fn(),
     },
     studentGamification: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
       aggregate: vi.fn(),
       groupBy: vi.fn(),
       findMany: vi.fn(),
+    },
+    gamificationReward: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    rewardClaim: {
+      create: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     tx,
   };
@@ -385,4 +404,111 @@ describe('GamificationService', () => {
     });
   });
 
+  describe('getLeaderboard (Coins Privacy)', () => {
+    const rawRows = [
+      {
+        studentId: 'st-own',
+        first_name: 'John',
+        last_name: 'Doe',
+        avatar: null,
+        group_id: 'grp-1',
+        group_name: 'Group 1',
+        xp: 1500,
+        coins: 100,
+        level: 16,
+        rank: 1,
+      },
+      {
+        studentId: 'st-other',
+        first_name: 'Jane',
+        last_name: 'Smith',
+        avatar: null,
+        group_id: 'grp-1',
+        group_name: 'Group 1',
+        xp: 1200,
+        coins: 80,
+        level: 13,
+        rank: 2,
+      },
+    ];
+
+    it('ensures students only view their own coins (other students coins masked as 0)', async () => {
+      mockPrisma.$queryRaw.mockResolvedValue(rawRows);
+
+      const result = await service.getLeaderboard('org-1', {
+        requester: {
+          id: 'user-st-1',
+          role: 'STUDENT',
+          studentId: 'st-own',
+        },
+      });
+
+      expect(result).toHaveLength(2);
+      const ownEntry = result.find((r) => r.studentId === 'st-own');
+      const otherEntry = result.find((r) => r.studentId === 'st-other');
+
+      expect(ownEntry?.coins).toBe(100);
+      expect(otherEntry?.coins).toBe(0); // Masked
+    });
+
+    it('allows staff to view all students coins', async () => {
+      mockPrisma.$queryRaw.mockResolvedValue(rawRows);
+
+      const result = await service.getLeaderboard('org-1', {
+        requester: {
+          id: 'admin-user-1',
+          role: 'ORG_ADMIN',
+        },
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].coins).toBe(100);
+      expect(result[1].coins).toBe(80);
+    });
+  });
+
+  describe('claimReward (Spend Coins)', () => {
+    it('successfully debits coins and claims reward for student in organization', async () => {
+      mockPrisma.student.findFirst.mockResolvedValue({ id: 'st-1', organizationId: 'org-1' });
+      mockPrisma.studentGamification.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.studentGamification.findFirstOrThrow.mockResolvedValue({
+        coins: 50,
+        xp: 300,
+        level: 4,
+      });
+
+      const res = await service.claimReward('st-1', 'org-1', 'book-programming');
+
+      expect(res.success).toBe(true);
+      expect(res.remainingCoins).toBe(50);
+      expect(mockPrisma.studentGamification.updateMany).toHaveBeenCalledWith({
+        where: {
+          studentId: 'st-1',
+          organizationId: 'org-1',
+          coins: { gte: 100 },
+        },
+        data: {
+          coins: { decrement: 100 },
+        },
+      });
+    });
+
+    it('rejects claim if student does not belong to organization', async () => {
+      mockPrisma.student.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.claimReward('st-other-org', 'org-1', 'book-programming'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects claim if student does not have enough coins', async () => {
+      mockPrisma.student.findFirst.mockResolvedValue({ id: 'st-1', organizationId: 'org-1' });
+      mockPrisma.studentGamification.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.studentGamification.findFirst.mockResolvedValue({ coins: 20 });
+
+      await expect(
+        service.claimReward('st-1', 'org-1', 'book-programming'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

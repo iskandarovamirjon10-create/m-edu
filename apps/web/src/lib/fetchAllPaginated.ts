@@ -1,10 +1,10 @@
 import type { Paginated } from '@/lib/types';
 
 export async function fetchAllPaginated<T = unknown>(
-  fetchFn: (params: any) => Promise<any>,
-  baseParams: Record<string, any> = {},
+  fetchFn: (params: Record<string, unknown>) => Promise<unknown>,
+  baseParams: Record<string, unknown> = {},
 ): Promise<Paginated<T>> {
-  const limit = baseParams.limit || 100;
+  const limit = typeof baseParams.limit === 'number' ? baseParams.limit : 100;
   let page = 1;
   let allItems: T[] = [];
   const MAX_PAGES = 100; // safety valve against a misbehaving paginated API

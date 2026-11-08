@@ -17,6 +17,7 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './filters/http-exception.filter';
 import { RequestLoggerMiddleware } from './config/request-logger.middleware';
 import { SanitizeInputPipe } from './common/pipes/sanitize-input.pipe';
+import { FastCompressionMiddleware } from './common/compression.middleware';
 import { assertValidConfig, configWarnings } from './config/config.validate';
 import { createOAuthSessionMiddleware } from './auth/oauth-session';
 import {
@@ -72,6 +73,8 @@ async function bootstrap() {
     bodyParser: false,
     logger: isProd ? new JsonLogger() : ['log', 'error', 'warn', 'debug', 'verbose'],
   });
+  const compressionMiddleware = new FastCompressionMiddleware();
+  app.use(compressionMiddleware.use.bind(compressionMiddleware));
   app.use(cookieParser());
   // Tight, route-scoped parser for the Telegram webhook.
   //
@@ -179,6 +182,8 @@ async function bootstrap() {
       return callback(new Error('Not allowed by CORS'), false);
     },
     credentials: true,
+    maxAge: 86400,
+    exposedHeaders: ['X-Request-Id', 'X-Response-Time', 'Server-Timing', 'Content-Disposition'],
   });
 
   const requestLogger = new RequestLoggerMiddleware();

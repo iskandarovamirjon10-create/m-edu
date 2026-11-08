@@ -8,7 +8,7 @@
  *  · Keyboard: ⌘B collapse · ⌘K palette · ⌘E executive · ⌘/ shortcuts · / search
  *  · Auth redirect, persisted sidebar collapse, skip-link + `<main id="main-content">`
  */
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useAuth } from '@/auth/AuthContext';
@@ -25,8 +25,10 @@ import { LiquidGlassStudio } from '@/components/ui';
 import { FloatingPiPCamera } from '@/components/camera/FloatingPiPCamera';
 import { initials, fullName } from '@/lib/format';
 import { cn, usePrefersReducedMotion } from '@/lib/design';
+import { isAdminRole } from '@/lib/roles';
 
 import { DeviceProfileProvider, usePersistedState, useMediaQuery } from './core/singletons';
+import { SHELL, SHELL_SPRING } from './core/tokens';
 import { Sidebar, ALL_ITEMS_MAP } from './components/Sidebar';
 import { TopBar, MobileTopBar } from './components/TopBar';
 import {
@@ -235,13 +237,14 @@ function AppLayoutInner() {
         return;
       }
       // ⌘B or Ctrl+B → toggle sidebar (no shift)
-      if (e.key.toLowerCase() === 'b' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !inInput) {
+      if (isWide && e.key.toLowerCase() === 'b' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !inInput) {
         e.preventDefault();
         setCollapsed((prev) => !prev);
         return;
       }
-      // ⌘E or Ctrl+E → toggle Executive Suite
+      // ⌘E or Ctrl+E → toggle Executive Suite (Admins only)
       if (e.key.toLowerCase() === 'e' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !inInput) {
+        if (!isAdminRole(user?.role)) return;
         e.preventDefault();
         const isExec = location.pathname.startsWith('/executive');
         navigate(isExec ? '/' : '/executive-dashboard');
@@ -352,14 +355,24 @@ function AppLayoutInner() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [setCollapsed, mobileMenuOpen, mobileSearchOpen, shortcutsOpen, location.pathname, navigate]);
+  }, [setCollapsed, mobileMenuOpen, mobileSearchOpen, shortcutsOpen, location.pathname, navigate, isWide]);
 
   const userRole = user?.role || '';
   const userFullName = user ? fullName(user.firstName, user.lastName) : '';
   const userInitials = user ? initials(user.firstName, user.lastName) : '?';
   const orgName = user?.organization?.name || 'Education Center';
 
-  const currentNav = ALL_ITEMS_MAP.get(location.pathname);
+  // Exact match first, then the longest matching prefix so nested routes
+  // (`/students/42`) still announce and label the parent module.
+  const currentNav = useMemo(() => {
+    const exact = ALL_ITEMS_MAP.get(location.pathname);
+    if (exact) return exact;
+    return Array.from(ALL_ITEMS_MAP.values())
+      .filter(
+        (item) => item.to !== '/' && location.pathname.startsWith(`${item.to}/`),
+      )
+      .sort((a, b) => b.to.length - a.to.length)[0];
+  }, [location.pathname]);
   const currentTitle = currentNav ? t(currentNav.labelKey) || currentNav.label : '';
   const isAiCopilot = location.pathname.startsWith('/ai-copilot');
 
@@ -368,9 +381,9 @@ function AppLayoutInner() {
       <div
         role="status"
         aria-live="polite"
-        className="fixed inset-0 flex items-center justify-center bg-[var(--bg-base)] backdrop-blur-2xl"
+        className="fixed inset-0 flex items-center justify-center bg-page/80 backdrop-blur-2xl"
       >
-        <div className="flex flex-col items-center gap-4 rounded-3xl border border-white/60 dark:border-white/[0.08] bg-white/70 dark:bg-white/[0.035] p-8 shadow-2xl backdrop-blur-xl">
+        <div className="flex flex-col items-center gap-4 rounded-3xl glass-card p-8 shadow-glass-floating">
           <span
             aria-hidden="true"
             className="h-10 w-10 animate-spin rounded-full border-[3px] border-brand-500/25 border-t-brand-500"
@@ -385,14 +398,20 @@ function AppLayoutInner() {
 
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
-  const SIDEBAR_W = collapsed ? 84 : 270;
+  const SIDEBAR_W = collapsed ? SHELL.sidebarCollapsed : SHELL.sidebarWidth;
   const mainPaddingLeft = showRail ? SIDEBAR_W : 0;
 
   return (
     <div
-      className="fixed inset-0 flex overflow-hidden bg-[var(--bg-base)] text-primary"
+      className="fixed inset-0 flex overflow-hidden bg-page text-primary"
+      data-shell-tier={isPhone ? 'phone' : isWide ? 'desktop' : 'tablet'}
       style={{
         '--sidebar-center-offset': `${showRail ? mainPaddingLeft / 2 : 0}px`,
+        '--shell-top-offset': isPhone ? '4.75rem' : '0px',
+        '--shell-bottom-offset': isPhone ? '6rem' : '0px',
+        '--shell-progress-top': isPhone
+          ? 'calc(4.25rem + env(safe-area-inset-top, 0px))'
+          : '0px',
       } as React.CSSProperties}
     >
       <ScrollToTop containerSelector="[data-scroll-container]" viewTransitions={false} />
@@ -405,7 +424,7 @@ function AppLayoutInner() {
       {/* Accessible skip link */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-brand-500 focus:px-5 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-glow-vivid focus:outline-2 focus:outline-offset-2 focus:outline-[var(--border-focus)]"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-brand-500 focus:px-5 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-white focus:shadow-glow-vivid focus:outline-2 focus:outline-offset-2 focus:outline-[var(--border-focus)]"
       >
         {t('a11y.skipToContent') || 'Skip to content'}
       </a>
@@ -454,9 +473,9 @@ function AppLayoutInner() {
 
       {/* Main Content Column */}
       <motion.div
-        className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col will-change-[padding-left]"
+        className="relative z-10 flex h-full min-h-0 min-w-0 flex-1 flex-col"
         animate={{ paddingLeft: showRail ? mainPaddingLeft : 0 }}
-        transition={reducedMotion ? { duration: 0 } : { duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+        transition={reducedMotion ? { duration: 0 } : SHELL_SPRING}
       >
         {showRail && (
           <TopBar
@@ -479,7 +498,7 @@ function AppLayoutInner() {
           />
         )}
 
-        {isPhone && !isSearchFocused && !isAiCopilot && (
+        {isPhone && !isAiCopilot && (
           <MobileBottomNav
             role={userRole}
             onOpenMore={() => setMobileMenuOpen(true)}
@@ -498,14 +517,13 @@ function AppLayoutInner() {
             'relative min-h-0 min-w-0 flex-1 outline-none overscroll-y-contain touch-pan-y',
             isAiCopilot
               ? 'flex flex-col min-h-0 min-w-0 flex-1 overflow-hidden p-0'
-              : 'overflow-y-auto overflow-x-hidden pl-[max(0.625rem,env(safe-area-inset-left,0px))] pr-[max(0.625rem,env(safe-area-inset-right,0px))] pt-[calc(4.25rem+env(safe-area-inset-top,0px))] pb-[calc(5.75rem+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] md:pt-3 md:pb-8 xl:pl-[max(2rem,env(safe-area-inset-left,0px))] xl:pr-[max(2rem,env(safe-area-inset-right,0px))] xl:pb-10 xl:pt-3',
+              : 'overflow-y-auto overflow-x-clip pl-[max(0.625rem,env(safe-area-inset-left,0px))] pr-[max(0.625rem,env(safe-area-inset-right,0px))] pt-[calc(var(--shell-top-offset)+env(safe-area-inset-top,0px))] pb-[calc(var(--shell-bottom-offset)+env(safe-area-inset-bottom,0px))] scrollbar-thin sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] md:pt-3 md:pb-8 xl:pl-[max(2rem,env(safe-area-inset-left,0px))] xl:pr-[max(2rem,env(safe-area-inset-right,0px))] xl:pb-10 xl:pt-3',
           )}
           style={{
             WebkitOverflowScrolling: 'touch',
             overscrollBehaviorY: 'contain',
             touchAction: 'pan-y',
-            transform: 'translateZ(0)',
-            willChange: 'scroll-position',
+            scrollPaddingTop: 'calc(var(--shell-top-offset, 0px) + 1.25rem)',
           }}
         >
           <ScrollProgress containerRef={mainRef} />

@@ -39,8 +39,23 @@ export interface Payment {
   dueDate?: string | null;
   method?: string | null;
   reference?: string | null;
+  receivedById?: string | null;
+  shiftId?: string | null;
   createdAt: string;
   student?: Student;
+  receivedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    username?: string;
+    email?: string;
+  } | null;
+  shift?: {
+    id: string;
+    status: 'OPEN' | 'CLOSED';
+    openedAt: string;
+    closedAt?: string | null;
+  } | null;
 }
 
 export interface Expense {
@@ -138,8 +153,62 @@ export interface ZReportRecord {
 }
 
 export interface CloseCashierShiftPayload {
+  shiftId?: string;
   startDate?: string;
   endDate?: string;
   actualCashCounted: number;
+  handoverAmount?: number;
   closingNotes?: string;
+}
+
+
+export interface CashShift {
+  id: string;
+  organizationId: string;
+  branchId?: string | null;
+  cashierId: string;
+  cashier?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    username?: string;
+  };
+  branch?: {
+    id: string;
+    name: string;
+  };
+  openedAt: string;
+  closedAt?: string | null;
+  status: 'OPEN' | 'CLOSED';
+  openingBalance: number;
+  cashPayments: number;
+  cardPayments: number;
+  otherPayments: number;
+  cashExpenses: number;
+  expectedCash: number;
+  actualCash?: number | null;
+  difference?: number | null;
+  handoverAmount?: number | null;
+  openingNote?: string | null;
+  closingNote?: string | null;
+  liveStats?: {
+    paymentsCount: number;
+    cashPayments: number;
+    cardPayments: number;
+    otherPayments: number;
+    totalCollected: number;
+    openingBalance: number;
+    expectedCash: number;
+  };
+}
+
+export interface OpenCashShiftPayload {
+  openingBalance?: number;
+  branchId?: string;
+  openingNote?: string;
+}
+
+export interface CurrentShiftResponse {
+  active: boolean;
+  shift: CashShift | null;
 }

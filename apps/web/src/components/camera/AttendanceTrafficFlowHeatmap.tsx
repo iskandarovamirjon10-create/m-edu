@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { GlassSurface, GlassButton, GlassBadge, useToast } from '@/components/ui';
 import { cn, Icon } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -40,6 +40,13 @@ export function AttendanceTrafficFlowHeatmap({
   const [gates, setGates] = useState<GateTrafficData[]>([]);
   const [selectedGateId, setSelectedGateId] = useState<string>('gate-1');
   const [isAutoBalancing, setIsAutoBalancing] = useState(false);
+  const balancingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (balancingTimerRef.current) clearTimeout(balancingTimerRef.current);
+    };
+  }, []);
 
   // Sync with real backend attendance analytics and registered cameras
   useEffect(() => {
@@ -140,7 +147,8 @@ export function AttendanceTrafficFlowHeatmap({
     setIsAutoBalancing(true);
     sounds.playLaserScan();
 
-    setTimeout(() => {
+    if (balancingTimerRef.current) clearTimeout(balancingTimerRef.current);
+    balancingTimerRef.current = setTimeout(() => {
       setGates((prev) =>
         prev.map((g) => {
           if (g.gateId === 'gate-1') {

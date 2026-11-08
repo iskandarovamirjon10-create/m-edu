@@ -363,20 +363,13 @@ export function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 export function AuroraBackdrop() {
-  const reduced = usePrefersReducedMotion();
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-indigo-50/20 dark:from-[#060810] dark:via-[#090D18] dark:to-[#070A14]" />
       <div className="absolute -left-40 -top-40 h-[580px] w-[580px] rounded-full bg-blue-500/10 blur-[140px] dark:bg-sky-500/10" />
       <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-indigo-500/10 blur-[140px] dark:bg-violet-500/10" />
       <div className="absolute -bottom-32 left-1/3 h-[460px] w-[460px] rounded-full bg-emerald-500/[0.08] blur-[140px] dark:bg-emerald-500/[0.08]" />
-      {!reduced && (
-        <motion.div
-          animate={{ scale: [1, 1.04, 1], opacity: [0.4, 0.7, 0.4] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.04] via-indigo-500/[0.03] to-emerald-500/[0.03] blur-[160px]"
-        />
-      )}
+      <div className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.04] via-indigo-500/[0.03] to-emerald-500/[0.03] blur-[140px] opacity-70 transform-gpu" />
     </div>
   );
 }
@@ -1632,7 +1625,7 @@ export function SubjectsPage() {
   /* ── Loading Skeleton ──────────────────────────────────────────────── */
   if (isLoading && !subjects.length) {
     return (
-      <div className="relative min-h-screen pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="relative min-h-full pb-[max(2rem,env(safe-area-inset-bottom))]">
         <AuroraBackdrop />
         <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">
           <div className="mb-6 h-16 rounded-2xl bg-white/40 dark:bg-white/[0.04] animate-pulse" />
@@ -1645,7 +1638,7 @@ export function SubjectsPage() {
   /* ── Error State ──────────────────────────────────────────────────── */
   if (isError) {
     return (
-      <div className="relative min-h-screen pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="relative min-h-full pb-[max(2rem,env(safe-area-inset-bottom))]">
         <AuroraBackdrop />
         <div className="mx-auto max-w-3xl px-4 pt-16 sm:px-6">
           <ErrorState
@@ -1659,7 +1652,7 @@ export function SubjectsPage() {
 
   /* ── Main Render ─────────────────────────────────────────────────── */
   return (
-    <div className="relative min-h-screen pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div className="relative min-h-full pb-[max(2rem,env(safe-area-inset-bottom))]">
       <AuroraBackdrop />
 
       <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6">

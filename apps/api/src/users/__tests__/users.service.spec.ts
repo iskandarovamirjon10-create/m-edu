@@ -156,24 +156,24 @@ describe('UsersService privilege-escalation guards (P1)', () => {
   it('rejects ORG_ADMIN creating a SUPER_ADMIN account', async () => {
     await expect(
       svc.create('org1', { email: 'x@y.com', password: 'password123', firstName: 'X', lastName: 'Y', role: 'SUPER_ADMIN' }, 'ORG_ADMIN'),
-    ).rejects.toThrow('Only a SUPER_ADMIN can assign the SUPER_ADMIN role');
+    ).rejects.toThrow('Only the Platform Owner can provision user accounts');
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('rejects ORG_ADMIN creating an ORG_ADMIN account', async () => {
     await expect(
       svc.create('org1', { email: 'x@y.com', password: 'password123', firstName: 'X', lastName: 'Y', role: 'ORG_ADMIN' }, 'ORG_ADMIN'),
-    ).rejects.toThrow('Only a SUPER_ADMIN can grant the ORG_ADMIN role');
+    ).rejects.toThrow('Only the Platform Owner can provision user accounts');
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
-  it('allows SUPER_ADMIN to create a SUPER_ADMIN account', async () => {
+  it('allows PLATFORM_OWNER to create a SUPER_ADMIN account', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.user.create.mockResolvedValue({ id: 'u2', role: 'SUPER_ADMIN' });
     const result = await svc.create(
       'org1',
       { email: 'x@y.com', password: 'password123', firstName: 'X', lastName: 'Y', role: 'SUPER_ADMIN' },
-      'SUPER_ADMIN',
+      'PLATFORM_OWNER',
     );
     expect(prisma.user.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ role: 'SUPER_ADMIN' }) }),

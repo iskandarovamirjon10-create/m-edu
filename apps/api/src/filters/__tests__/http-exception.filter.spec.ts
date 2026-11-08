@@ -69,6 +69,33 @@ describe('GlobalExceptionFilter', () => {
     expect(status).toHaveBeenCalledWith(403);
   });
 
+  it('structures validation errors with details.errors and VALIDATION_ERROR code', () => {
+    const { host, status, json } = createMockHost();
+    filter.catch(
+      new BadRequestException({
+        statusCode: 400,
+        message: ['email must be an email', 'password is too short'],
+        error: 'Bad Request',
+      }),
+      host,
+    );
+    expect(status).toHaveBeenCalledWith(400);
+    const resBody = json.mock.calls[0][0];
+    expect(resBody.code).toBe('VALIDATION_ERROR');
+    expect(resBody.message).toBe('email must be an email, password is too short');
+    expect(resBody.details).toEqual({
+      errors: ['email must be an email', 'password is too short'],
+    });
+  });
+
+  it('attaches incoming X-Request-Id to the response body', () => {
+    const { host, json, request } = createMockHost();
+    (request as any).headers = { 'x-request-id': 'req_test12345678' };
+    filter.catch(new BadRequestException('failed'), host);
+    const resBody = json.mock.calls[0][0];
+    expect(resBody.requestId).toBe('req_test12345678');
+  });
+
   it('passes HttpException through', () => {
     const { host, status, json } = createMockHost();
     filter.catch(new BadRequestException('bad input'), host);
@@ -121,6 +148,42 @@ describe('GlobalExceptionFilter', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+
+  it('sanitizes sensitive postgres connection strings and bearer tokens from messages', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    try {
+      const { host, json } = createMockHost();
+      const rawError = new Error('Connection failed to postgresql://postgres:superSecretPass123@db.internal:5432/production');
+      filter.catch(rawError, host);
+      const resBody = json.mock.calls[0][0];
+      expect(resBody.message).not.toContain('superSecretPass123');
+      expect(resBody.message).toContain('***');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('maps PrismaClientValidationError to 400 DATABASE_VALIDATION_ERROR', () => {
+    const { host, status, json } = createMockHost();
+    const valError = new Error('Argument where of type UserWhereUniqueInput needs at least one of ids');
+    valError.name = 'PrismaClientValidationError';
+    filter.catch(valError, host);
+    expect(status).toHaveBeenCalledWith(400);
+    const body = json.mock.calls[0][0];
+    expect(body.code).toBe('DATABASE_VALIDATION_ERROR');
+    expect(body.message).toBe('Invalid input query parameters or data format');
+  });
+
+  it('maps PrismaClientInitializationError to 503 DATABASE_CONNECTION_ERROR', () => {
+    const { host, status, json } = createMockHost();
+    const initError = new Error('Can not reach database server at db.internal:5432');
+    initError.name = 'PrismaClientInitializationError';
+    filter.catch(initError, host);
+    expect(status).toHaveBeenCalledWith(503);
+    const body = json.mock.calls[0][0];
+    expect(body.code).toBe('DATABASE_CONNECTION_ERROR');
   });
 
   it('exposes raw error messages outside production (debug aid)', () => {

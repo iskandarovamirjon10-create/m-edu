@@ -171,56 +171,21 @@ describe('AuthService', () => {
     });
   });
 
-  describe('register', () => {
-    it('creates organization + user and returns token', async () => {
-      prisma.user.findFirst.mockResolvedValue(null);
-      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          organization: { create: vi.fn().mockResolvedValue({ id: 'org-new' }) },
-          user: {
-            create: vi.fn().mockResolvedValue({
-              id: 'u-new',
-              email: 'new@b.com',
-              firstName: 'Bob',
-              lastName: 'Smith',
-              role: 'ORG_ADMIN',
-              organizationId: 'org-new',
-              organization: { id: 'org-new' },
-            }),
-          },
-        };
-        return fn(tx);
-      });
-
+  describe('register (OWNER_ONLY enforced)', () => {
+    it('rejects public registration unconditionally', async () => {
       const svc = new AuthService(prisma, mockJwt);
-      const result = await svc.register({
-        email: 'new@b.com',
-        password: 'password123',
-        firstName: 'Bob',
-        lastName: 'Smith',
-        organizationName: 'Test Center',
-      });
-      expect(result.user.role).toBe('ORG_ADMIN');
-      expect(result.accessToken).toBeTruthy();
-      // Registration must also create a revocable session record
-      expect(prisma.session.create).toHaveBeenCalled();
+      await expect(
+        svc.register({
+          email: 'new@b.com',
+          password: 'password123',
+          firstName: 'Bob',
+          lastName: 'Smith',
+          organizationName: 'Test Center',
+        }),
+      ).rejects.toThrow('Public registration is disabled. Accounts can only be provisioned by the Platform Owner.');
     });
 
-    it('rejects duplicate email', async () => {
-      // The database is the source of truth for email uniqueness (`User.email`
-      // is globally unique); the service maps P2002 to a ConflictException.
-      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          $executeRaw: vi.fn().mockResolvedValue(undefined),
-          organization: { create: vi.fn().mockResolvedValue({ id: 'org-1' }) },
-          user: {
-            create: vi.fn().mockRejectedValue(
-              Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
-            ),
-          },
-        };
-        return fn(tx);
-      });
+    it('rejects public registration even for duplicate email attempt', async () => {
       const svc = new AuthService(prisma, mockJwt);
       await expect(
         svc.register({
@@ -230,15 +195,12 @@ describe('AuthService', () => {
           lastName: 'B',
           organizationName: 'X',
         }),
-      ).rejects.toThrow(/already registered/);
+      ).rejects.toThrow('Public registration is disabled. Accounts can only be provisioned by the Platform Owner.');
     });
 
-    it('rejects registration without invite code when AccessControlConfig row is missing (fail-closed default, M-EDU-SEC-002)', async () => {
+    it('rejects registration attempt even when invite codes or config exist', async () => {
       prisma.accessControlConfig = {
-        findUnique: vi.fn().mockResolvedValue(null),
-      };
-      prisma.accessWhitelist = {
-        findUnique: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: true, requireApproval: true }),
       };
       const svc = new AuthService(prisma, mockJwt);
 
@@ -250,107 +212,24 @@ describe('AuthService', () => {
           lastName: 'Admin',
           organizationName: 'Rogue Org',
         }),
-      ).rejects.toThrow(/Registration is currently invite-only/);
+      ).rejects.toThrow('Public registration is disabled. Accounts can only be provisioned by the Platform Owner.');
     });
 
-    it('rejects registration without invite code when inviteOnly is configured true (M-EDU-SEC-002)', async () => {
-      prisma.accessControlConfig = {
-        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: true, requireApproval: true }),
-      };
+    it('rejects registration attempt even when email is in whitelist', async () => {
       prisma.accessWhitelist = {
-        findUnique: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn().mockResolvedValue({ email: 'whitelisted@school.edu' }),
       };
       const svc = new AuthService(prisma, mockJwt);
 
       await expect(
         svc.register({
-          email: 'guest@test.com',
+          email: 'whitelisted@school.edu',
           password: 'password123',
-          firstName: 'Guest',
-          lastName: 'User',
-          organizationName: 'Guest Org',
+          firstName: 'White',
+          lastName: 'Listed',
+          organizationName: 'White Org',
         }),
-      ).rejects.toThrow(/Registration is currently invite-only/);
-    });
-
-    it('creates pending approval account when inviteOnly is false but requireApproval is true', async () => {
-      prisma.accessControlConfig = {
-        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: false, requireApproval: true }),
-      };
-      prisma.accessWhitelist = {
-        findUnique: vi.fn().mockResolvedValue(null),
-      };
-      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          organization: { create: vi.fn().mockResolvedValue({ id: 'org-pending', name: 'Pending Org' }) },
-          user: {
-            create: vi.fn().mockResolvedValue({
-              id: 'u-pending',
-              email: 'pending@test.com',
-              firstName: 'Pending',
-              lastName: 'User',
-              role: 'ORG_ADMIN',
-              organizationId: 'org-pending',
-              status: 'PENDING',
-              isActive: false,
-            }),
-          },
-        };
-        return fn(tx);
-      });
-      const svc = new AuthService(prisma, mockJwt);
-
-      const result = await svc.register({
-        email: 'pending@test.com',
-        password: 'password123',
-        firstName: 'Pending',
-        lastName: 'User',
-        organizationName: 'Pending Org',
-      });
-
-      expect(result.pendingApproval).toBe(true);
-      expect(result.message).toMatch(/Pending administrator approval/);
-      expect(result.accessToken).toBeUndefined();
-    });
-
-    it('allows registration without invite code when email is whitelisted', async () => {
-      prisma.accessControlConfig = {
-        findUnique: vi.fn().mockResolvedValue({ id: 'global', inviteOnly: true, requireApproval: true }),
-      };
-      prisma.accessWhitelist = {
-        findUnique: vi.fn().mockResolvedValue({ email: 'whitelisted@school.edu' }),
-      };
-      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-        const tx = {
-          $executeRaw: vi.fn().mockResolvedValue(undefined),
-          organization: { create: vi.fn().mockResolvedValue({ id: 'org-white', name: 'White Org' }) },
-          user: {
-            create: vi.fn().mockResolvedValue({
-              id: 'u-white',
-              email: 'whitelisted@school.edu',
-              firstName: 'White',
-              lastName: 'Listed',
-              role: 'ORG_ADMIN',
-              organizationId: 'org-white',
-              status: 'ACTIVE',
-              isActive: true,
-            }),
-          },
-        };
-        return fn(tx);
-      });
-      const svc = new AuthService(prisma, mockJwt);
-
-      const result = await svc.register({
-        email: 'whitelisted@school.edu',
-        password: 'password123',
-        firstName: 'White',
-        lastName: 'Listed',
-        organizationName: 'White Org',
-      });
-
-      expect(result.user.email).toBe('whitelisted@school.edu');
-      expect(result.accessToken).toBeTruthy();
+      ).rejects.toThrow('Public registration is disabled. Accounts can only be provisioned by the Platform Owner.');
     });
   });
 

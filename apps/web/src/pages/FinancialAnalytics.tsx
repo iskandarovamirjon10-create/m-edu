@@ -641,7 +641,7 @@ function CashFlowTab({ data, t }: { data: CashFlowData | undefined; t: (key: str
 
 function handleOpenAnomalySidecar(a: FinancialAnomaly) {
   const sidecarData: QuickLookData = {
-    id: `${a.type}-${a.metric || Math.random()}`,
+    id: `${a.type}-${a.metric || a.severity}`,
     type: 'payment',
     title: a.type ? a.type.replace(/_/g, ' ') : 'Moliyaviy anomaliya',
     subtitle: `${a.severity} daraja · ${a.metric || 'Moliyaviy ko\'rsatkich'}`,

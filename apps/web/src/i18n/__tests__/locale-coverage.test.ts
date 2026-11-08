@@ -157,3 +157,33 @@ describe('locale coverage — Certificates & Payments', () => {
     expect(untranslated.length).toBeLessThan(REQUIRED_KEYS.length * 0.15);
   });
 });
+
+/**
+ * DS-05: the block above only covers the hand-listed Certificates + Payments
+ * keys (~105 of the dictionary). This block enforces full parity over every
+ * key that any locale defines, so a key added to `en` but forgotten in `uz`
+ * (or vice versa) fails CI instead of silently falling back at runtime.
+ */
+describe('locale parity — full dictionary', () => {
+  const locales = Object.keys(DICTS) as Array<keyof typeof DICTS>;
+  const allKeys = Array.from(
+    new Set(locales.flatMap((locale) => Object.keys(DICTS[locale]))),
+  ).sort();
+
+  it('has a non-trivial dictionary (guards against an empty/broken import)', () => {
+    expect(allKeys.length).toBeGreaterThan(1000);
+  });
+
+  it.each(locales)('%s defines every key present in any locale', (locale) => {
+    const missing = allKeys.filter((key) => !DICTS[locale][key]);
+    expect(missing).toEqual([]);
+  });
+
+  it.each(locales)('%s defines no key the other locales do not', (locale) => {
+    const others = locales.filter((other) => other !== locale);
+    const extra = Object.keys(DICTS[locale]).filter(
+      (key) => !others.some((other) => DICTS[other][key]),
+    );
+    expect(extra).toEqual([]);
+  });
+});

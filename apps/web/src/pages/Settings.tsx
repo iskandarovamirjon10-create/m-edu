@@ -40,7 +40,6 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useTheme, type Theme } from '@/hooks/useTheme';
 import { usePersistSettings } from '@/hooks/usePersistSettings';
 import { useSafeI18n, isLocale } from '@/i18n/I18nProvider';
-import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS
@@ -361,7 +360,6 @@ function getInitials(name: string): string {
  * ════════════════════════════════════════════════════════════════════════ */
 
 function AuroraBackdrop() {
-  const reduced = usePrefersReducedMotion();
   return (
     <div
       aria-hidden="true"
@@ -371,13 +369,7 @@ function AuroraBackdrop() {
       <div className="absolute -left-40 -top-40 h-[580px] w-[580px] rounded-full bg-blue-400/10 blur-[140px] dark:bg-sky-500/10" />
       <div className="absolute -right-32 top-1/3 h-[520px] w-[520px] rounded-full bg-violet-400/10 blur-[140px] dark:bg-violet-500/10" />
       <div className="absolute -bottom-32 left-1/3 h-[460px] w-[460px] rounded-full bg-emerald-400/08 blur-[140px] dark:bg-emerald-500/08" />
-      {!reduced && (
-        <motion.div
-          animate={{ scale: [1, 1.06, 1], opacity: [0.55, 0.85, 0.55] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-violet-500/[0.02] to-emerald-500/[0.03] blur-[160px]"
-        />
-      )}
+      <div className="absolute left-1/2 top-1/2 h-[700px] w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.03] via-violet-500/[0.02] to-emerald-500/[0.03] blur-[140px] opacity-70 transform-gpu" />
       <div
         className="absolute inset-0 opacity-[0.015] dark:opacity-[0.022]"
         style={{

@@ -38,6 +38,13 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
   const { playSuccess, playPop, playError } = usePremiumSound();
   const toast = useToast();
 
+  React.useEffect(() => {
+    if (!isOpen) {
+      setActiveSuggestions(null);
+      setSelectedScheduleId(null);
+    }
+  }, [isOpen]);
+
   const dayParam = selectedDay === 'ALL' ? undefined : selectedDay;
 
   const { data, isLoading, refetch } = useQuery({
@@ -233,9 +240,9 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
           </div>
         ) : (
           <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-            {conflicts.map((conflict: any) => (
+            {conflicts.map((conflict: any, idx: number) => (
               <motion.div
-                key={conflict.conflictId}
+                key={conflict.conflictId || conflict.id || idx}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-xl border border-border/50 bg-card/50 hover:bg-card/75 transition-colors p-4 flex flex-col md:flex-row md:items-center justify-between gap-4"

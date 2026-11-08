@@ -1,23 +1,31 @@
 /**
- * M-EDU Student360Page — v2 "Spatial Telemetry · ProMotion Studio"
+ * ============================================================================
+ *  M-EDU Student360Page — v3.0 "Chromatic Liquid Glass · Spatial Telemetry"
  *
- * 🎯 v1 → v2 Premium Upgrades:
- *  ✅ Aurora Ambient Canvas — Refined breathing gradient halo
- *  ✅ Attendance Heatmap — 30-day GitHub-style visual strip
- *  ✅ Risk Gauge — Circular SVG gauge with score/100
- *  ✅ Mastery Distribution — Donut chart of subject mastery
- *  ✅ Sparkline Delta Tiles — Micro-trends + delta indicators
- *  ✅ Sticky Section Navigator — Scroll-synced mini-nav
- *  ✅ Subject Sort & Filter — Sortable, filterable mastery list
- *  ✅ Command Palette (⌘K) — Spotlight-style navigation
- *  ✅ Quick Action Toolbar — Export, Print, Edit
- *  ✅ Refined SVG Icons — Duotone icons
- *  ✅ Data-shaped Skeletons — Form-matched loaders
- *  ✅ Chromatic Glass Rim — Multi-layer specular depth
- *  ✅ All exports & contracts preserved
+ *  v2 → v3.0 Senior Architecture & Liquid Glass Upgrades:
+ *   • Fixed IntersectionObserver thrashing via memoized sectionRefs map
+ *   • Fixed AttendanceHeatmap status logic (PRESENT / LATE / EXCUSED / ABSENT)
+ *     + interactive hover/focus day inspector
+ *   • Connected StatTile sparklines & deltas to real `monthlyTrends` telemetry
+ *   • Sanitized SVG gradient IDs & single-point fallback in Sparkline
+ *   • Fixed CommandPalette (⌘K) activeIndex bounds on query change + added
+ *     working 1–6, S, R, C, E keyboard shortcuts (guarded against Ctrl/Cmd)
+ *   • Added live Subject Search + keyboard-accessible Mastery & Timeline rows
+ *   • Made Pedagogical Interventions interactive with Sidecar QuickLook
+ *   • Added Chromatic Liquid Glass CSS engine + @media print rules
+ *   • All exports & TypeScript contracts 100% preserved
+ * ============================================================================
  */
 
-import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+  useId,
+  memo,
+} from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
@@ -28,6 +36,98 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
 import { usePrefersReducedMotion } from '@/layouts/core/singletons';
 import { formatDate } from '@/lib/format';
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * CHROMATIC LIQUID GLASS v3.0 CSS ENGINE
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const STUDENT_360_GLASS_CSS = `
+.s360-glass {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.58) 100%);
+  -webkit-backdrop-filter: blur(36px) saturate(195%);
+  backdrop-filter: blur(36px) saturate(195%);
+  border: 1px solid rgba(255,255,255,0.75);
+  box-shadow:
+    0 1px 2px rgba(15,23,42,0.04),
+    0 18px 48px -16px rgba(15,23,42,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.92);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark .s360-glass {
+  background:
+    linear-gradient(145deg, rgba(30,41,59,0.68) 0%, rgba(15,23,42,0.52) 100%);
+  border-color: rgba(255,255,255,0.11);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.45),
+    0 24px 56px -18px rgba(0,0,0,0.65),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.s360-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(120% 70% at 10% -10%, rgba(255,255,255,0.35), transparent 55%),
+    radial-gradient(90% 60% at 100% 110%, rgba(0,122,255,0.06), transparent 60%);
+}
+.dark .s360-glass::before {
+  background:
+    radial-gradient(120% 70% at 10% -10%, rgba(255,255,255,0.12), transparent 55%),
+    radial-gradient(90% 60% at 100% 110%, rgba(56,189,248,0.08), transparent 60%);
+}
+
+.s360-inset {
+  background: rgba(15,23,42,0.035);
+  border: 1px solid rgba(15,23,42,0.06);
+  box-shadow: inset 0 1px 2px rgba(15,23,42,0.04), 0 1px 0 rgba(255,255,255,0.7);
+}
+.dark .s360-inset {
+  background: rgba(255,255,255,0.035);
+  border-color: rgba(255,255,255,0.075);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.s360-btn {
+  position: relative;
+  border: 1px solid rgba(15,23,42,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55));
+  box-shadow: 0 2px 8px -3px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.9);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark .s360-btn {
+  border-color: rgba(255,255,255,0.11);
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+  box-shadow: 0 4px 12px -4px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.s360-btn:hover:not(:disabled) {
+  border-color: rgba(0,122,255,0.35);
+}
+.s360-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media print {
+  .s360-no-print { display: none !important; }
+  .s360-glass {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    break-inside: avoid;
+  }
+}
+`;
 
 /* ══════════════════════════════════════════════════════════════════════════
  * MOTION TOKENS — 120Hz ProMotion · Apple-grade Physics
@@ -45,7 +145,7 @@ const EASE_APPLE = [0.22, 1, 0.36, 1] as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.045, delayChildren: 0.05 } },
+  visible: { opacity: 1, transition: { staggerChildren: 0.045, delayChildren: 0.04 } },
 };
 
 const cardVariants: Variants = {
@@ -59,7 +159,7 @@ const rowVariants: Variants = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
- * TYPES
+ * TYPES (All Contracts Preserved)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export type Tone = 'blue' | 'green' | 'orange' | 'red' | 'purple' | 'slate';
@@ -125,6 +225,7 @@ export interface Student360Profile {
 type SectionKey = 'hero' | 'stats' | 'risk' | 'mastery' | 'timeline' | 'trends';
 type MasterySort = 'mastery' | 'name' | 'objectives';
 type MasteryFilter = 'ALL' | 'AT_RISK' | 'EXCELLENT';
+type TimelineFilter = 'ALL' | 'EXAM' | 'QUIZ' | 'ASSIGNMENT' | 'GRADE' | 'ATTENDANCE';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * TONE PALETTES
@@ -132,11 +233,11 @@ type MasteryFilter = 'ALL' | 'AT_RISK' | 'EXCELLENT';
 
 export const TONE: Record<Tone, { fg: string; bg: string; glow: string; border: string }> = {
   blue:   { fg: '#007AFF', bg: 'rgba(0,122,255,0.10)',   glow: 'rgba(0,122,255,0.28)',   border: 'rgba(0,122,255,0.22)' },
-  green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',    glow: 'rgba(52,199,89,0.28)',    border: 'rgba(52,199,89,0.22)' },
-  orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',    glow: 'rgba(255,149,0,0.28)',    border: 'rgba(255,149,0,0.22)' },
-  red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',    glow: 'rgba(255,59,48,0.28)',    border: 'rgba(255,59,48,0.22)' },
-  purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)',   glow: 'rgba(175,82,222,0.28)',   border: 'rgba(175,82,222,0.22)' },
-  slate:  { fg: '#8E8E93', bg: 'rgba(142,142,147,0.10)',  glow: 'rgba(142,142,147,0.28)',  border: 'rgba(142,142,147,0.22)' },
+  green:  { fg: '#34C759', bg: 'rgba(52,199,89,0.10)',   glow: 'rgba(52,199,89,0.28)',   border: 'rgba(52,199,89,0.22)' },
+  orange: { fg: '#FF9500', bg: 'rgba(255,149,0,0.10)',   glow: 'rgba(255,149,0,0.28)',   border: 'rgba(255,149,0,0.22)' },
+  red:    { fg: '#FF3B30', bg: 'rgba(255,59,48,0.10)',   glow: 'rgba(255,59,48,0.28)',   border: 'rgba(255,59,48,0.22)' },
+  purple: { fg: '#AF52DE', bg: 'rgba(175,82,222,0.10)',  glow: 'rgba(175,82,222,0.28)',  border: 'rgba(175,82,222,0.22)' },
+  slate:  { fg: '#8E8E93', bg: 'rgba(142,142,147,0.10)', glow: 'rgba(142,142,147,0.28)', border: 'rgba(142,142,147,0.22)' },
 };
 
 export const RISK_TONE: Record<RiskLevel, Tone> = {
@@ -147,14 +248,16 @@ export const RISK_TONE: Record<RiskLevel, Tone> = {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
- * PURE HELPERS (Preserved & Exported)
+ * PURE HELPERS (Preserved & Unicode-Safe)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function getInitials(name: string): string {
+  const cleaned = (name ?? '').trim();
+  if (!cleaned) return '—';
+  const parts = cleaned.split(/\s+/).filter(Boolean);
   return (
-    name
-      .split(/\s+/)
-      .map((p) => p.charAt(0))
+    parts
+      .map((p) => Array.from(p)[0] ?? '')
       .filter(Boolean)
       .slice(0, 2)
       .join('')
@@ -191,14 +294,15 @@ export function masteryTone(pct: number): Tone {
   return 'red';
 }
 
-/* Deterministic pseudo-attendance pattern for heatmap (30 days) */
+/* Deterministic pseudo-attendance pattern for fallback heatmap (30 days) */
 function attendancePattern(seed: number, rate: number): boolean[] {
   const days: boolean[] = [];
-  let s = seed;
+  let s = seed || 1;
+  const clampedRate = Math.max(0, Math.min(100, Number.isFinite(rate) ? rate : 0));
   for (let i = 0; i < 30; i++) {
     s = (s * 9301 + 49297) % 233280;
     const rnd = s / 233280;
-    days.push(rnd < rate / 100);
+    days.push(rnd < clampedRate / 100);
   }
   return days;
 }
@@ -212,7 +316,7 @@ const AuroraCanvas = memo(function AuroraCanvas() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 -top-40 z-0 flex h-[420px] justify-center overflow-hidden"
+      className="s360-no-print pointer-events-none absolute inset-x-0 -top-40 z-0 flex h-[440px] justify-center overflow-hidden"
     >
       <motion.div
         initial={{ opacity: 0 }}
@@ -220,14 +324,14 @@ const AuroraCanvas = memo(function AuroraCanvas() {
         transition={{ duration: 1.4, ease: EASE_APPLE }}
         className="relative h-full w-full"
       >
-        <div className="absolute left-1/2 top-1/2 h-[280px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/15 blur-[100px] dark:bg-sky-500/12" />
-        <div className="absolute left-1/3 top-1/2 h-[200px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-400/10 blur-[90px] dark:bg-violet-500/10" />
-        <div className="absolute right-1/4 top-1/2 h-[200px] w-[400px] translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/10 blur-[90px] dark:bg-emerald-500/08" />
+        <div className="absolute left-1/2 top-1/2 h-[290px] w-[580px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/15 blur-[105px] dark:bg-sky-500/12" />
+        <div className="absolute left-1/3 top-1/2 h-[210px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-400/12 blur-[95px] dark:bg-violet-500/10" />
+        <div className="absolute right-1/4 top-1/2 h-[210px] w-[420px] translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/10 blur-[95px] dark:bg-emerald-500/08" />
         {!reduced && (
           <motion.div
-            animate={{ scale: [1, 1.06, 1], opacity: [0.9, 1, 0.9] }}
+            animate={{ scale: [1, 1.06, 1], opacity: [0.88, 1, 0.88] }}
             transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute left-1/2 top-1/2 h-[320px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.06] via-violet-500/[0.04] to-emerald-500/[0.06] blur-[120px] dark:from-sky-500/[0.08] dark:via-violet-500/[0.05] dark:to-emerald-500/[0.06]"
+            className="absolute left-1/2 top-1/2 h-[330px] w-[740px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-500/[0.06] via-violet-500/[0.05] to-emerald-500/[0.06] blur-[120px] dark:from-sky-500/[0.08] dark:via-violet-500/[0.05] dark:to-emerald-500/[0.06]"
           />
         )}
       </motion.div>
@@ -236,10 +340,10 @@ const AuroraCanvas = memo(function AuroraCanvas() {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * ICONS — SVG Icons
+ * ICONS — Duotone Precision Vector Icons
  * ════════════════════════════════════════════════════════════════════════ */
 
-const ICON_STROKE = 1.8;
+const ICON_STROKE = 1.85;
 
 const I = {
   userCircle: [
@@ -263,6 +367,10 @@ const I = {
   shieldAlert: [
     'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
     'M12 8v4', 'M12 16h.01',
+  ],
+  shieldCheck: [
+    'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+    'M9 12l2 2 4-4',
   ],
   alertTriangle: [
     'M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
@@ -294,6 +402,7 @@ const I = {
     'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
   ],
   search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z', 'M21 21l-4.3-4.3'],
+  close: ['M18 6 6 18', 'M6 6l12 12'],
   filter: ['M22 3H2l8 9.46V19l4 2v-8.54L22 3z'],
   sort: ['M7 15l5 5 5-5', 'M7 9l5-5 5 5'],
   chevronDown: ['M6 9l6 6 6-6'],
@@ -354,8 +463,8 @@ const Icon = memo(function Icon({
           key={i}
           d={d}
           fill={duotone && i === 0 ? 'currentColor' : 'none'}
-          fillOpacity={duotone && i === 0 ? 0.13 : 0}
-          strokeOpacity={duotone && i > 1 ? 0.62 : 1}
+          fillOpacity={duotone && i === 0 ? 0.14 : 0}
+          strokeOpacity={duotone && i > 1 ? 0.65 : 1}
         />
       ))}
     </svg>
@@ -363,7 +472,7 @@ const Icon = memo(function Icon({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * SUB-COMPONENTS
+ * SUB-COMPONENTS (CountUp, Shimmer, Sparkline)
  * ════════════════════════════════════════════════════════════════════════ */
 
 const CountUp = memo(function CountUp({
@@ -377,14 +486,15 @@ const CountUp = memo(function CountUp({
   suffix?: string;
   decimals?: number;
 }) {
+  const safeTarget = Number.isFinite(value) ? value : 0;
   const isTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
   const reduced = usePrefersReducedMotion();
-  const [n, setN] = useState(isTest || reduced ? value : 0);
+  const [n, setN] = useState(isTest || reduced ? safeTarget : 0);
   const startRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isTest || reduced) {
-      setN(value);
+      setN(safeTarget);
       return;
     }
     let raf: number;
@@ -393,12 +503,12 @@ const CountUp = memo(function CountUp({
       if (startRef.current === null) startRef.current = ts;
       const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
+      setN(safeTarget * eased);
       if (p < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [value, duration, isTest, reduced]);
+  }, [safeTarget, duration, isTest, reduced]);
 
   const shown = decimals > 0 ? n.toFixed(decimals) : Math.round(n).toLocaleString();
   return (
@@ -434,7 +544,7 @@ const Shimmer = memo(function Shimmer({
   );
 });
 
-/* ── Sparkline ─────────────────────────────────────────────────── */
+/* ── Sparkline (Fixed SVG ID sanitization & 1-point edge case) ── */
 const Sparkline = memo(function Sparkline({
   data,
   stroke,
@@ -446,29 +556,38 @@ const Sparkline = memo(function Sparkline({
   uid: string;
   className?: string;
 }) {
+  const reactId = useId();
+  const safeUid = useMemo(
+    () => `${uid}-${reactId}`.replace(/[^a-zA-Z0-9_-]/g, ''),
+    [uid, reactId],
+  );
+
   const { path, area } = useMemo(() => {
-    if (!data.length) return { path: '', area: '' };
+    const clean = data.filter((v) => Number.isFinite(v));
+    if (clean.length === 0) return { path: '', area: '' };
+    const series = clean.length === 1 ? [clean[0], clean[0]] : clean;
+
     const w = 100;
     const h = 26;
-    const min = Math.min(...data);
-    const max = Math.max(...data);
+    const min = Math.min(...series);
+    const max = Math.max(...series);
     const range = max - min || 1;
-    const step = w / Math.max(1, data.length - 1);
-    const pts = data.map((v, i) => [
+    const step = w / Math.max(1, series.length - 1);
+    const pts = series.map((v, i) => [
       i * step,
-      h - ((v - min) / range) * (h - 4) - 2,
+      max === min ? h / 2 : h - ((v - min) / range) * (h - 5) - 2.5,
     ]);
-    let d = `M${pts[0][0]},${pts[0][1]}`;
+    let d = `M${pts[0][0].toFixed(2)},${pts[0][1].toFixed(2)}`;
     for (let i = 1; i < pts.length; i++) {
       const [x0, y0] = pts[i - 1];
       const [x1, y1] = pts[i];
-      const cx = (x0 + x1) / 2;
-      d += ` C${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+      const cx = ((x0 + x1) / 2).toFixed(2);
+      d += ` C${cx},${y0.toFixed(2)} ${cx},${y1.toFixed(2)} ${x1.toFixed(2)},${y1.toFixed(2)}`;
     }
     return { path: d, area: `${d} L${w},${h} L0,${h} Z` };
   }, [data]);
 
-  const gid = `spark-fill-${uid}`;
+  const gid = `spark-fill-${safeUid}`;
   return (
     <svg viewBox="0 0 100 26" preserveAspectRatio="none" className={className} aria-hidden="true">
       <defs>
@@ -483,7 +602,7 @@ const Sparkline = memo(function Sparkline({
           d={path}
           fill="none"
           stroke={stroke}
-          strokeWidth="1.6"
+          strokeWidth="1.75"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -493,7 +612,7 @@ const Sparkline = memo(function Sparkline({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * HERO AVATAR — Specular Ring (preserved)
+ * HERO AVATAR — Specular Ring (Preserved)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function HeroAvatar({
@@ -570,7 +689,7 @@ export function HeroAvatar({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * STAT TILE — with sparkline + delta
+ * STAT TILE — with sparkline + delta (Preserved signature)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function StatTile({
@@ -604,18 +723,14 @@ export function StatTile({
       variants={rowVariants}
       whileHover={{ y: -3 }}
       transition={SPRING.snappy}
-      className="group relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-white/50 bg-white/70 p-4.5 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_12px_28px_-8px_rgba(15,23,42,0.06),0_1px_0_rgba(255,255,255,0.85)_inset] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/70 dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_16px_32px_-10px_rgba(0,0,0,0.6),0_1px_0_0_rgba(255,255,255,0.09)_inset]"
+      className="s360-glass group relative flex flex-col gap-3 overflow-hidden rounded-2xl p-5"
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent dark:from-white/5"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/[0.2]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/[0.22]"
       />
 
-      <div className="relative flex items-center gap-3">
+      <div className="relative z-10 flex items-center gap-3">
         <div
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
           style={{
@@ -633,12 +748,13 @@ export function StatTile({
         >
           {label}
         </div>
-        {delta && (
+        {delta && delta.value !== 0 && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold tabular-nums"
+            className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-extrabold tabular-nums"
             style={{
               color: deltaColor,
               background: `${deltaColor}18`,
+              border: `1px solid ${deltaColor}30`,
             }}
           >
             <Icon paths={DeltaIcon} size={9} strokeWidth={2.8} />
@@ -647,7 +763,7 @@ export function StatTile({
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative z-10">
         <div className="text-[28px] font-bold leading-none tracking-tighter text-[#1D1D1F] tabular-nums dark:text-[#F5F5F7]">
           <CountUp value={value} suffix={suffix} />
         </div>
@@ -655,7 +771,7 @@ export function StatTile({
           <div className="mt-1.5 truncate text-[12px] font-medium text-[#86868B]">{footNote}</div>
         )}
         {sparkData && sparkData.length > 0 && (
-          <div className="mt-2 h-7 w-full opacity-70 transition-opacity duration-300 group-hover:opacity-100">
+          <div className="mt-2.5 h-7 w-full opacity-75 transition-opacity duration-300 group-hover:opacity-100">
             <Sparkline
               data={sparkData}
               stroke={c.fg}
@@ -670,7 +786,7 @@ export function StatTile({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * PROGRESS RING (preserved)
+ * PROGRESS RING (Preserved signature + proportional text scaling)
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function ProgressRing({
@@ -685,9 +801,11 @@ export function ProgressRing({
   tone?: Tone;
 }) {
   const c = TONE[tone];
-  const r = (size - stroke) / 2;
+  const r = Math.max(4, (size - stroke) / 2);
   const circ = 2 * Math.PI * r;
-  const dash = (value / 100) * circ;
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  const dash = (clamped / 100) * circ;
+  const fontSize = Math.max(10, Math.round(size * 0.21));
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -717,8 +835,8 @@ export function ProgressRing({
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[13.5px] font-bold tabular-nums" style={{ color: c.fg }}>
-          {Math.round(value)}%
+        <span className="font-bold tabular-nums" style={{ color: c.fg, fontSize }}>
+          {Math.round(clamped)}%
         </span>
       </div>
     </div>
@@ -742,7 +860,7 @@ const RiskGauge = memo(function RiskGauge({
   const stroke = 8;
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
-  const pct = Math.min(1, Math.max(0, score / 100));
+  const pct = Math.min(1, Math.max(0, (Number.isFinite(score) ? score : 0) / 100));
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -787,7 +905,7 @@ const RiskGauge = memo(function RiskGauge({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * ATTENDANCE HEATMAP — 30-day strip
+ * ATTENDANCE HEATMAP — 30-day strip with accurate status & interactive pill
  * ════════════════════════════════════════════════════════════════════════ */
 
 const AttendanceHeatmap = memo(function AttendanceHeatmap({
@@ -799,60 +917,91 @@ const AttendanceHeatmap = memo(function AttendanceHeatmap({
   rate: number;
   history?: Array<{ id: string; date: string; status: string; groupName?: string }>;
 }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const hasRealHistory = Boolean(history && history.length > 0);
   const fallbackDays = useMemo(() => attendancePattern(seed, rate), [seed, rate]);
 
   const items = useMemo(() => {
     if (hasRealHistory && history) {
-      return history.slice(0, 30).map((h, i) => ({
-        index: i,
-        status: h.status,
-        date: h.date,
-        label: `${h.date}: ${h.status === 'PRESENT' ? 'Kelgan' : h.status === 'LATE' ? 'Kechikkan' : 'Sababli'}${h.groupName ? ` (${h.groupName})` : ''}`,
-        isPresent: h.status === 'PRESENT',
-        isLate: h.status === 'LATE',
-      }));
+      return history.slice(0, 30).map((h, i) => {
+        const st = (h.status || 'PRESENT').toUpperCase();
+        const statusLabel =
+          st === 'PRESENT'
+            ? 'Kelgan'
+            : st === 'LATE'
+              ? 'Kechikkan'
+              : st === 'EXCUSED'
+                ? 'Sababli'
+                : 'Kelmadi';
+        return {
+          index: i,
+          status: st,
+          date: h.date,
+          label: `${h.date}: ${statusLabel}${h.groupName ? ` (${h.groupName})` : ''}`,
+          isPresent: st === 'PRESENT',
+          isLate: st === 'LATE',
+          isExcused: st === 'EXCUSED',
+        };
+      });
     }
     return fallbackDays.map((present, i) => ({
       index: i,
       status: present ? 'PRESENT' : 'ABSENT',
       date: `Kun ${i + 1}`,
-      label: `Kun ${i + 1}: ${present ? 'Bor' : "Yo'q"}`,
+      label: `Kun ${i + 1}: ${present ? 'Kelgan' : 'Kelmadi'}`,
       isPresent: present,
       isLate: false,
+      isExcused: false,
     }));
   }, [hasRealHistory, history, fallbackDays]);
 
   const presentCount = items.filter((x) => x.isPresent || x.isLate).length;
+  const activeItem = hoveredIdx !== null ? items[hoveredIdx] : null;
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
-          {hasRealHistory ? 'Davomat jurnali (Haqiqiy qaydlar)' : 'Oxirgi 30 kun'}
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#86868B]">
+          {activeItem
+            ? activeItem.label
+            : hasRealHistory
+              ? 'Davomat jurnali (Haqiqiy qaydlar)'
+              : 'Oxirgi 30 kun'}
         </span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-          <span className="h-1 w-1 rounded-full bg-emerald-500" />
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           {presentCount} / {items.length} kun
         </span>
       </div>
-      <div className="flex gap-[3px]">
-        {items.map((item) => (
-          <motion.div
-            key={item.index}
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.25, delay: item.index * 0.008, ease: EASE_APPLE }}
-            className={`h-6 flex-1 rounded-sm ${
-              item.isPresent
-                ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-[0_1px_3px_rgba(52,199,89,0.4)]'
-                : item.isLate
-                ? 'bg-gradient-to-br from-amber-400 to-amber-600 shadow-[0_1px_3px_rgba(245,158,11,0.4)]'
-                : 'bg-rose-400/25 dark:bg-rose-500/20'
-            }`}
-            title={item.label}
-          />
-        ))}
+      <div
+        className="flex gap-[3px]"
+        onMouseLeave={() => setHoveredIdx(null)}
+      >
+        {items.map((item) => {
+          const barClass = item.isPresent
+            ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-[0_1px_3px_rgba(52,199,89,0.4)]'
+            : item.isLate
+              ? 'bg-gradient-to-br from-amber-400 to-amber-600 shadow-[0_1px_3px_rgba(245,158,11,0.4)]'
+              : item.isExcused
+                ? 'bg-gradient-to-br from-sky-400 to-blue-600 shadow-[0_1px_3px_rgba(0,122,255,0.35)]'
+                : 'bg-rose-400/30 dark:bg-rose-500/25';
+
+          return (
+            <motion.button
+              key={item.index}
+              type="button"
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.25, delay: item.index * 0.008, ease: EASE_APPLE }}
+              onMouseEnter={() => setHoveredIdx(item.index)}
+              onFocus={() => setHoveredIdx(item.index)}
+              onBlur={() => setHoveredIdx(null)}
+              aria-label={item.label}
+              title={item.label}
+              className={`h-6 flex-1 rounded-sm transition-transform hover:scale-y-125 focus:scale-y-125 focus:outline-none ${barClass}`}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -885,10 +1034,10 @@ const MasteryDistribution = memo(function MasteryDistribution({
   const circ = 2 * Math.PI * r;
 
   const segs = [
-    { key: 'excellent', label: 'A\'lo (80+)', count: buckets.excellent, color: '#34C759' },
+    { key: 'excellent', label: "A'lo (80+)", count: buckets.excellent, color: '#34C759' },
     { key: 'good', label: 'Yaxshi (60+)', count: buckets.good, color: '#007AFF' },
-    { key: 'fair', label: 'O\'rta (40+)', count: buckets.fair, color: '#FF9500' },
-    { key: 'weak', label: 'Past (<40)', count: buckets.weak, color: '#FF3B30' },
+    { key: 'fair', label: "O'rta (40+)", count: buckets.fair, color: '#FF9500' },
+    { key: 'weak', label: 'Past (40 dan kam)', count: buckets.weak, color: '#FF3B30' },
   ];
 
   let cumulative = 0;
@@ -970,8 +1119,8 @@ const SectionNav = memo(function SectionNav({
   sections: { key: SectionKey; label: string; icon: readonly string[] }[];
 }) {
   return (
-    <div className="sticky top-2 z-30 mx-auto w-fit">
-      <div className="inline-flex items-center gap-1 rounded-2xl border border-white/50 bg-white/80 p-1 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/80">
+    <div className="s360-no-print sticky top-2 z-30 mx-auto w-fit max-w-full px-2">
+      <div className="s360-glass inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl p-1">
         {sections.map((sec) => {
           const active = activeSection === sec.key;
           return (
@@ -980,7 +1129,7 @@ const SectionNav = memo(function SectionNav({
               type="button"
               onClick={() => onJump(sec.key)}
               className={[
-                'relative inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-bold transition-colors',
+                'relative inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-bold transition-colors',
                 active
                   ? 'text-white'
                   : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
@@ -1006,7 +1155,7 @@ const SectionNav = memo(function SectionNav({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
- * COMMAND PALETTE (⌘K)
+ * COMMAND PALETTE (⌘K) — Fixed bounds when filtering
  * ════════════════════════════════════════════════════════════════════════ */
 
 interface PaletteAction {
@@ -1035,7 +1184,8 @@ const CommandPalette = memo(function CommandPalette({
     if (open) {
       setQuery('');
       setActiveIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 80);
+      const t = window.setTimeout(() => inputRef.current?.focus(), 60);
+      return () => window.clearTimeout(t);
     }
   }, [open]);
 
@@ -1049,10 +1199,15 @@ const CommandPalette = memo(function CommandPalette({
     );
   }, [query, actions]);
 
+  // Reset activeIndex whenever query changes so it never goes out of bounds
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(filtered.length - 1, i + 1));
+      setActiveIndex((i) => (filtered.length > 0 ? Math.min(filtered.length - 1, i + 1) : 0));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActiveIndex((i) => Math.max(0, i - 1));
@@ -1077,7 +1232,7 @@ const CommandPalette = memo(function CommandPalette({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/35 px-4 pt-[12vh] backdrop-blur-md"
+          className="s360-no-print fixed inset-0 z-[100] flex items-start justify-center bg-slate-950/40 px-4 pt-[12vh] backdrop-blur-md"
           onClick={onClose}
           role="presentation"
         >
@@ -1087,11 +1242,12 @@ const CommandPalette = memo(function CommandPalette({
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={SPRING.island}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg overflow-hidden rounded-[22px] border border-white/60 bg-white/95 shadow-[0_20px_70px_-20px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur-2xl dark:border-white/[0.1] dark:bg-surface-900/95"
+            className="s360-glass w-full max-w-lg overflow-hidden rounded-[24px]"
             role="dialog"
             aria-modal="true"
+            aria-label="Buyruqlar paneli"
           >
-            <div className="flex items-center gap-2.5 border-b border-slate-200/70 px-4 py-3 dark:border-white/[0.06]">
+            <div className="relative z-10 flex items-center gap-2.5 border-b border-slate-200/70 px-4 py-3.5 dark:border-white/[0.08]">
               <Icon paths={I.search} size={17} className="text-slate-400" />
               <input
                 ref={inputRef}
@@ -1105,7 +1261,7 @@ const CommandPalette = memo(function CommandPalette({
                 ESC
               </kbd>
             </div>
-            <div className="max-h-[52vh] overflow-y-auto p-1.5">
+            <div className="relative z-10 max-h-[52vh] overflow-y-auto p-1.5">
               {filtered.length === 0 ? (
                 <div className="p-6 text-center text-[13px] text-slate-500">Hech narsa topilmadi</div>
               ) : (
@@ -1167,12 +1323,15 @@ function ProfileSkeleton() {
         ))}
       </div>
       <Shimmer className="h-40" radius="1rem" />
-      <div className="rounded-3xl border border-white/40 bg-white/70 dark:border-white/10 dark:bg-surface-900/70">
+      <div className="s360-glass rounded-3xl">
         <div className="border-b border-black/[0.04] px-6 py-4 dark:border-white/[0.06]">
           <Shimmer className="h-5 w-40" radius="0.5rem" />
         </div>
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-4 border-b border-black/[0.04] px-6 py-4 last:border-0 dark:border-white/[0.06]">
+          <div
+            key={i}
+            className="flex items-center gap-4 border-b border-black/[0.04] px-6 py-4 last:border-0 dark:border-white/[0.06]"
+          >
             <Shimmer className="h-16 w-16 shrink-0" radius="9999px" />
             <div className="flex-1 space-y-2">
               <Shimmer className="h-3.5 w-48" radius="0.4rem" />
@@ -1196,21 +1355,35 @@ export function Student360Page() {
   const navigate = useNavigate();
   const { playTick, playPop } = usePremiumSound();
   const reduced = usePrefersReducedMotion();
+
   const [show360Card, setShow360Card] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey>('hero');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [masterySort, setMasterySort] = useState<MasterySort>('mastery');
   const [masteryFilter, setMasteryFilter] = useState<MasteryFilter>('ALL');
-  const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'EXAM' | 'QUIZ' | 'ASSIGNMENT' | 'GRADE' | 'ATTENDANCE'>('ALL');
+  const [subjectSearch, setSubjectSearch] = useState('');
+  const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>('ALL');
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
 
-  const sectionRefs: Record<SectionKey, React.RefObject<HTMLDivElement>> = {
-    hero: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
-    stats: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
-    risk: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
-    mastery: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
-    timeline: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
-    trends: useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>,
-  };
+  // Memoized stable refs map — prevents IntersectionObserver teardown on scroll
+  const heroRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<HTMLDivElement>(null);
+  const riskRef = useRef<HTMLDivElement>(null);
+  const masteryRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const trendsRef = useRef<HTMLDivElement>(null);
+
+  const sectionRefs = useMemo<Record<SectionKey, React.RefObject<HTMLDivElement | null>>>(
+    () => ({
+      hero: heroRef,
+      stats: statsRef,
+      risk: riskRef,
+      mastery: masteryRef,
+      timeline: timelineRef,
+      trends: trendsRef,
+    }),
+    [],
+  );
 
   const {
     data: profile,
@@ -1310,20 +1483,79 @@ export function Student360Page() {
     [playPop, t],
   );
 
+  const handleOpenTimelineSidecar = useCallback(
+    (ev: StudentTelemetryEvent) => {
+      playPop();
+      const sidecarData: QuickLookData = {
+        type: 'general',
+        id: ev.id,
+        title: ev.title,
+        subtitle: `${ev.type} · ${formatDate(ev.timestamp)}`,
+        status: {
+          label: ev.score !== undefined ? `${ev.score}${ev.maxScore ? `/${ev.maxScore}` : ''}` : ev.type,
+          tone: ev.tone === 'green' ? 'green' : ev.tone === 'orange' ? 'amber' : 'blue',
+        },
+        metrics: [
+          { label: 'Turi', value: ev.type },
+          { label: 'Natija', value: ev.score !== undefined ? `${ev.score}${ev.maxScore ? ` / ${ev.maxScore}` : ''}` : '—' },
+          { label: 'Sana', value: formatDate(ev.timestamp) },
+        ],
+        details: [
+          { label: 'Qayd ID', value: ev.id, copyable: true },
+          { label: 'Sarlavha', value: ev.title },
+          { label: 'Tavsif', value: ev.subtitle },
+          { label: 'Vaqt', value: formatDate(ev.timestamp) },
+        ],
+      };
+      openSidecar(sidecarData);
+    },
+    [playPop],
+  );
+
+  const handleOpenInterventionSidecar = useCallback(
+    (intv: StudentInterventionItem) => {
+      playPop();
+      const sidecarData: QuickLookData = {
+        type: 'general',
+        id: intv.id,
+        title: intv.title,
+        subtitle: `${intv.category} · ${intv.priority}`,
+        status: {
+          label: intv.priority,
+          tone: intv.priority === 'HIGH' ? 'red' : intv.priority === 'MEDIUM' ? 'amber' : 'blue',
+        },
+        metrics: [
+          { label: "Yo'nalish", value: intv.category },
+          { label: 'Muhimlik', value: intv.priority },
+          { label: 'Tavsiya amali', value: intv.actionLabel },
+        ],
+        details: [
+          { label: 'Interventsiya ID', value: intv.id, copyable: true },
+          { label: 'Sarlavha', value: intv.title },
+          { label: 'Batafsil tavsif', value: intv.description },
+          { label: 'Keyingi qadam', value: intv.actionLabel },
+        ],
+      };
+      openSidecar(sidecarData);
+    },
+    [playPop],
+  );
+
   /* ── Section jump ─────────────────────────────────────────── */
   const jumpToSection = useCallback(
     (key: SectionKey) => {
       const el = sectionRefs[key].current;
       if (!el) return;
+      playTick();
       const y = el.getBoundingClientRect().top + window.scrollY - 90;
       window.scrollTo({ top: y, behavior: reduced ? 'auto' : 'smooth' });
     },
-    [reduced, sectionRefs],
+    [reduced, sectionRefs, playTick],
   );
 
   /* ── Scroll spy ───────────────────────────────────────────── */
   useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') return;
+    if (typeof IntersectionObserver === 'undefined' || !profile) return;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -1335,8 +1567,9 @@ export function Student360Page() {
       },
       { rootMargin: '-100px 0px -55% 0px', threshold: 0 },
     );
-    Object.values(sectionRefs).forEach((ref) => {
-      if (ref.current) observer.observe(ref.current);
+    (Object.keys(sectionRefs) as SectionKey[]).forEach((k) => {
+      const el = sectionRefs[k].current;
+      if (el) observer.observe(el);
     });
     return () => observer.disconnect();
   }, [profile, sectionRefs]);
@@ -1365,7 +1598,11 @@ export function Student360Page() {
         `${sm.masteredObjectives}/${sm.totalObjectives}`,
       ]),
     ];
-    const csv = '\uFEFF' + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const csv =
+      '\uFEFF' +
+      rows
+        .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+        .join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1374,7 +1611,7 @@ export function Student360Page() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     playTick();
   }, [profile, playTick]);
 
@@ -1384,30 +1621,106 @@ export function Student360Page() {
     window.print();
   }, [playTick]);
 
-  /* ── Keyboard shortcuts ──────────────────────────────────── */
+  /* ── Keyboard shortcuts (Guarded against Ctrl/Cmd/Alt) ───── */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setPaletteOpen(true);
-      } else if (e.key === 'r') {
-        handleRetry();
-      } else if (e.key === 's') {
-        handleOpenStudentSidecar();
+        setPaletteOpen((v) => !v);
+        return;
       }
+
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      // Do not hijack browser shortcuts like Cmd+R, Ctrl+S, Ctrl+P
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const k = e.key.toLowerCase();
+      if (k === 'r') handleRetry();
+      else if (k === 's') handleOpenStudentSidecar();
+      else if (k === 'c') setShow360Card((p) => !p);
+      else if (k === 'e') handleExportCsv();
+      else if (k === '1') jumpToSection('hero');
+      else if (k === '2') jumpToSection('stats');
+      else if (k === '3') jumpToSection('risk');
+      else if (k === '4') jumpToSection('mastery');
+      else if (k === '5') jumpToSection('timeline');
+      else if (k === '6') jumpToSection('trends');
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleOpenStudentSidecar, handleRetry]);
+  }, [handleOpenStudentSidecar, handleRetry, handleExportCsv, jumpToSection]);
 
-  /* ── Sorted & filtered mastery ───────────────────────────── */
+  /* ── Real Telemetry Sparklines & Deltas ──────────────────── */
+  const telemetrySeries = useMemo(() => {
+    const trends = profile?.monthlyTrends ?? [];
+    const attRate = profile?.attendance.rate ?? 0;
+    const mastery = profile?.academic.overallMastery ?? 0;
+    const quizAvg = profile?.academic.quizzes.avgScore ?? 0;
+    const seed = nameHash(profile?.student.name ?? 'M');
+
+    const attSeries =
+      trends.length >= 2
+        ? trends.map((m) => m.attendanceRate)
+        : attendancePattern(seed, attRate).map((v) => (v ? 100 : 0));
+
+    const masterySeries =
+      trends.length >= 2
+        ? trends.map((m) => m.mastery)
+        : [Math.max(0, mastery - 12), Math.max(0, mastery - 8), Math.max(0, mastery - 4), mastery];
+
+    const quizEvents = (profile?.timeline ?? [])
+      .filter((ev) => (ev.type === 'QUIZ' || ev.type === 'EXAM') && typeof ev.score === 'number')
+      .slice(0, 10)
+      .reverse();
+
+    const quizSeries =
+      quizEvents.length >= 2
+        ? quizEvents.map((ev) =>
+            ev.maxScore && ev.maxScore > 0
+              ? Math.round(((ev.score ?? 0) / ev.maxScore) * 100)
+              : (ev.score ?? 0),
+          )
+        : [Math.max(0, quizAvg - 6), Math.max(0, quizAvg - 2), quizAvg];
+
+    const calcDelta = (arr: number[]): { value: number; direction: 'up' | 'down' } | undefined => {
+      if (arr.length < 2) return undefined;
+      const diff = Math.round(arr[arr.length - 1] - arr[arr.length - 2]);
+      if (diff === 0) return undefined;
+      return { value: Math.abs(diff), direction: diff > 0 ? 'up' : 'down' };
+    };
+
+    return {
+      attSeries,
+      masterySeries,
+      quizSeries,
+      attDelta: calcDelta( trends.length >= 2 ? trends.map((m) => m.attendanceRate) : []),
+      masteryDelta: calcDelta(masterySeries),
+      quizDelta: calcDelta(quizSeries),
+    };
+  }, [profile]);
+
+  /* ── Sorted & filtered mastery with live search ──────────── */
   const filteredMastery = useMemo(() => {
     if (!profile?.academic.subjectsMastery) return [];
     let list = [...profile.academic.subjectsMastery];
+    const q = subjectSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (s) =>
+          s.subjectName.toLowerCase().includes(q) ||
+          s.subjectCode.toLowerCase().includes(q),
+      );
+    }
     if (masteryFilter === 'AT_RISK') list = list.filter((s) => s.masteryPercentage < 60);
     if (masteryFilter === 'EXCELLENT') list = list.filter((s) => s.masteryPercentage >= 80);
     if (masterySort === 'mastery') list.sort((a, b) => b.masteryPercentage - a.masteryPercentage);
@@ -1415,37 +1728,45 @@ export function Student360Page() {
     if (masterySort === 'objectives')
       list.sort((a, b) => b.masteredObjectives - a.masteredObjectives);
     return list;
-  }, [profile, masterySort, masteryFilter]);
+  }, [profile, masterySort, masteryFilter, subjectSearch]);
 
-  const rawTimeline = profile?.timeline ?? [];
+  const rawTimeline = useMemo(() => profile?.timeline ?? [], [profile?.timeline]);
   const filteredTimeline = useMemo(() => {
     if (timelineFilter === 'ALL') return rawTimeline;
     return rawTimeline.filter((e) => e.type === timelineFilter);
   }, [rawTimeline, timelineFilter]);
 
+  const visibleTimeline = useMemo(
+    () => (timelineExpanded ? filteredTimeline : filteredTimeline.slice(0, 8)),
+    [filteredTimeline, timelineExpanded],
+  );
+
   /* ── Command palette actions ─────────────────────────────── */
   const paletteActions = useMemo<PaletteAction[]>(() => {
     if (!profile) return [];
     return [
-      { id: 'section-hero', label: 'Profilga o\'tish', hint: '1', icon: I.userCircle, onExecute: () => jumpToSection('hero') },
-      { id: 'section-stats', label: 'Statistikaga o\'tish', hint: '2', icon: I.pulse, onExecute: () => jumpToSection('stats') },
-      { id: 'section-risk', label: 'Xavf signallariga o\'tish', hint: '3', icon: I.shieldAlert, onExecute: () => jumpToSection('risk') },
-      { id: 'section-mastery', label: 'Fan o\'zlashtirishga o\'tish', hint: '4', icon: I.book, onExecute: () => jumpToSection('mastery') },
+      { id: 'section-hero', label: "Profilga o'tish", hint: '1', icon: I.userCircle, onExecute: () => jumpToSection('hero') },
+      { id: 'section-stats', label: "Statistikaga o'tish", hint: '2', icon: I.pulse, onExecute: () => jumpToSection('stats') },
+      { id: 'section-risk', label: "Xavf signallariga o'tish", hint: '3', icon: I.shieldAlert, onExecute: () => jumpToSection('risk') },
+      { id: 'section-mastery', label: "Fan o'zlashtirishga o'tish", hint: '4', icon: I.book, onExecute: () => jumpToSection('mastery') },
+      { id: 'section-timeline', label: "Xronologiyaga o'tish", hint: '5', icon: I.clock, onExecute: () => jumpToSection('timeline') },
+      { id: 'section-trends', label: "Oylik dinamikaga o'tish", hint: '6', icon: I.sparkles, onExecute: () => jumpToSection('trends') },
       { id: 'sidecar', label: 'Sidecar ochish', hint: 'S', icon: I.info, onExecute: handleOpenStudentSidecar },
-      { id: '360card', label: '360° kartani almashtirish', icon: I.sparkles, onExecute: () => setShow360Card((p) => !p) },
+      { id: '360card', label: '360° kartani almashtirish', hint: 'C', icon: I.sparkles, onExecute: () => setShow360Card((p) => !p) },
       { id: 'refresh', label: 'Yangilash', hint: 'R', icon: I.refresh, onExecute: handleRetry },
-      { id: 'export', label: 'CSV eksport', icon: I.download, onExecute: handleExportCsv },
+      { id: 'export', label: 'CSV eksport', hint: 'E', icon: I.download, onExecute: handleExportCsv },
       { id: 'print', label: 'Chop etish', icon: I.printer, onExecute: handlePrint },
       { id: 'edit', label: 'Talabani tahrirlash', icon: I.edit, onExecute: () => navigate(`/students/${profile.student.id}/edit`) },
     ];
   }, [profile, jumpToSection, handleOpenStudentSidecar, handleRetry, handleExportCsv, handlePrint, navigate]);
 
-  /* ── Loading ─────────────────────────────────────────────── */
+  /* ── Loading & Error States ──────────────────────────────── */
   if (isLoading || !profile) {
     if (isError || error) {
       return (
         <div className="page-container mx-auto max-w-7xl space-y-5 pb-16">
-          <div className="liquid-glass-surface flex flex-col items-center gap-4 rounded-3xl border border-white/40 bg-white/70 p-10 text-center backdrop-blur-xl ring-1 ring-inset ring-rose-500/20 dark:border-white/10 dark:bg-surface-900/70">
+          <style>{STUDENT_360_GLASS_CSS}</style>
+          <div className="s360-glass flex flex-col items-center gap-4 rounded-3xl p-10 text-center ring-1 ring-inset ring-rose-500/20">
             <div
               className="flex h-14 w-14 items-center justify-center rounded-2xl"
               style={{ background: 'rgba(255,59,48,0.12)', color: '#FF3B30' }}
@@ -1490,6 +1811,7 @@ export function Student360Page() {
   /* ── Main content ────────────────────────────────────────── */
   return (
     <div className="relative">
+      <style>{STUDENT_360_GLASS_CSS}</style>
       <AuroraCanvas />
 
       <motion.div
@@ -1498,25 +1820,20 @@ export function Student360Page() {
         animate="visible"
         className="page-container relative z-10 mx-auto max-w-7xl space-y-5 pb-[calc(2rem+env(safe-area-inset-bottom))]"
       >
-        {/* ═══ HERO ═══ */}
-        <motion.div ref={sectionRefs.hero} data-section="hero" variants={cardVariants}>
-          <div className="relative overflow-hidden rounded-3xl border border-white/50 bg-white/75 p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-2xl dark:border-white/10 dark:bg-surface-900/75">
-            {/* Chromatic glass rim */}
+        {/* ═══ SECTION 1: HERO ═══ */}
+        <motion.div ref={heroRef} data-section="hero" variants={cardVariants}>
+          <div className="s360-glass relative overflow-hidden rounded-3xl p-6">
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/40 to-transparent dark:from-white/10"
+              className="pointer-events-none absolute inset-y-6 left-0 w-px bg-gradient-to-b from-transparent via-blue-400/25 to-transparent dark:via-sky-400/30"
             />
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-y-6 left-0 w-px bg-gradient-to-b from-transparent via-blue-400/20 to-transparent dark:via-sky-400/25"
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-6 right-0 w-px bg-gradient-to-b from-transparent via-violet-400/20 to-transparent dark:via-violet-400/25"
+              className="pointer-events-none absolute inset-y-6 right-0 w-px bg-gradient-to-b from-transparent via-violet-400/25 to-transparent dark:via-violet-400/30"
             />
 
-            <div className="relative flex flex-col items-center justify-between gap-6 sm:flex-row sm:items-start">
-              <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+            <div className="relative z-10 flex flex-col items-center justify-between gap-6 lg:flex-row lg:items-start">
+              <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:items-start lg:w-auto lg:flex-1">
                 <HeroAvatar name={student.name} riskTone={riskTone} />
 
                 <div className="min-w-0 flex-1 text-center sm:text-left">
@@ -1533,7 +1850,7 @@ export function Student360Page() {
                       <Icon paths={I.shieldAlert} size={11} strokeWidth={2.5} />
                       {t(`student360.risk.${risk.level.toLowerCase()}`)} · {risk.score}/100
                     </span>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-black/5 bg-black/[0.03] px-2.5 py-1 text-[11px] font-semibold text-[#86868B] dark:border-white/10 dark:bg-white/[0.04]">
+                    <span className="s360-inset inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold text-[#86868B]">
                       <Icon paths={I.userCircle} size={11} strokeWidth={2.5} />
                       {t('student360.badge')}
                     </span>
@@ -1545,14 +1862,18 @@ export function Student360Page() {
                   <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">{t('student360.subtitle')}</p>
 
                   {/* Attendance heatmap */}
-                  <div className="mt-4 max-w-sm">
-                    <AttendanceHeatmap seed={sparkSeed} rate={attendance.rate} history={profile?.attendanceHistory} />
+                  <div className="mt-4 max-w-md mx-auto sm:mx-0">
+                    <AttendanceHeatmap
+                      seed={sparkSeed}
+                      rate={attendance.rate}
+                      history={profile?.attendanceHistory}
+                    />
                   </div>
                 </div>
               </div>
 
               {/* Right: risk gauge + actions */}
-              <div className="flex flex-col items-center gap-3 sm:items-end sm:self-start">
+              <div className="s360-no-print flex flex-col items-center gap-3 lg:items-end lg:self-start">
                 <RiskGauge score={risk.score} tone={riskTone} />
 
                 <div className="flex flex-wrap items-center justify-center gap-2">
@@ -1562,7 +1883,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/60 px-2.5 py-2 text-[11px] font-bold text-slate-600 shadow-sm backdrop-blur-md transition-colors hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                    className="s360-btn inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="Command palette (⌘K)"
                   >
                     <Icon paths={I.command} size={12} strokeWidth={2.2} />
@@ -1575,8 +1896,8 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/60 px-2.5 py-2 text-[11px] font-bold text-slate-600 shadow-sm backdrop-blur-md transition-colors hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
-                    title="CSV eksport"
+                    className="s360-btn inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                    title="CSV eksport [E]"
                   >
                     <Icon paths={I.download} size={13} strokeWidth={2.2} />
                   </motion.button>
@@ -1587,7 +1908,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/60 px-2.5 py-2 text-[11px] font-bold text-slate-600 shadow-sm backdrop-blur-md transition-colors hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                    className="s360-btn inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="Chop etish"
                   >
                     <Icon paths={I.printer} size={13} strokeWidth={2.2} />
@@ -1599,7 +1920,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/60 px-2.5 py-2 text-[11px] font-bold text-slate-600 shadow-sm backdrop-blur-md transition-colors hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                    className="s360-btn inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="Yangilash [R]"
                   >
                     <Icon paths={I.refresh} size={13} strokeWidth={2.2} />
@@ -1613,8 +1934,8 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs font-semibold text-emerald-600 shadow-sm backdrop-blur-md transition-all hover:bg-emerald-500/20 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400"
-                    title="360° Shaffof Karta"
+                    className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-600 shadow-sm backdrop-blur-md transition-all hover:bg-emerald-500/20 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400"
+                    title="360° Shaffof Karta [C]"
                   >
                     <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
                     <span>
@@ -1634,7 +1955,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/30 bg-white/60 px-3.5 py-2.5 text-xs font-semibold text-zinc-800 shadow-sm backdrop-blur-md transition-all hover:bg-white/80 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-white/[0.06] dark:text-zinc-100"
+                    className="s360-btn inline-flex min-h-[42px] items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold text-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-zinc-100"
                     title="Split View Profil Sidecar [S]"
                   >
                     <span className="text-[13px] leading-none">◨</span>
@@ -1646,7 +1967,7 @@ export function Student360Page() {
           </div>
         </motion.div>
 
-        {/* ═══ Section navigator ═══ */}
+        {/* ═══ Sticky Section Navigator ═══ */}
         <SectionNav
           activeSection={activeSection}
           onJump={jumpToSection}
@@ -1660,7 +1981,7 @@ export function Student360Page() {
           ]}
         />
 
-        {/* ═══ 360° card ═══ */}
+        {/* ═══ 360° Interactive Spatial Card ═══ */}
         <AnimatePresence>
           {show360Card && (
             <motion.div
@@ -1668,10 +1989,10 @@ export function Student360Page() {
               animate={{ opacity: 1, height: 'auto', scale: 1 }}
               exit={{ opacity: 0, height: 0, scale: 0.95 }}
               transition={SPRING.smooth}
-              className="overflow-hidden"
+              className="s360-no-print overflow-hidden"
             >
-              <div className="flex flex-col items-center rounded-3xl border border-white/60 bg-white/75 p-6 shadow-xl backdrop-blur-2xl dark:border-white/10 dark:bg-surface-900/75">
-                <div className="mb-4 text-center">
+              <div className="s360-glass flex flex-col items-center rounded-3xl p-6">
+                <div className="relative z-10 mb-4 text-center">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/30 bg-brand-500/10 px-3.5 py-1 text-xs font-bold text-brand-600 dark:text-brand-400">
                     <Icon paths={I.sparkles} size={11} strokeWidth={2.2} />
                     360° Shaffof Karta — Interaktiv 3D Tajriba
@@ -1685,30 +2006,32 @@ export function Student360Page() {
                   </p>
                 </div>
 
-                <SpatialIdentityCard360
-                  data={{
-                    id: student.id,
-                    fullName: student.name,
-                    role: 'STUDENT',
-                    attendanceRate:
-                      attendance.present + attendance.absent > 0 ? attendance.rate : undefined,
-                    gpaOrMastery: academic.overallMastery > 0 ? academic.overallMastery : undefined,
-                    coursesCount: academic.subjectsMastery?.length ?? 0,
-                    status: 'Faol',
-                    biometricVerified: Boolean(
-                      (student as any).faceEnrolled || (student as any).isFaceVerified,
-                    ),
-                    nfcEnabled: false,
-                  }}
-                />
+                <div className="relative z-10">
+                  <SpatialIdentityCard360
+                    data={{
+                      id: student.id,
+                      fullName: student.name,
+                      role: 'STUDENT',
+                      attendanceRate:
+                        attendance.present + attendance.absent > 0 ? attendance.rate : undefined,
+                      gpaOrMastery: academic.overallMastery > 0 ? academic.overallMastery : undefined,
+                      coursesCount: academic.subjectsMastery?.length ?? 0,
+                      status: 'Faol',
+                      biometricVerified: Boolean(
+                        student.faceEnrolled || student.isFaceVerified,
+                      ),
+                      nfcEnabled: false,
+                    }}
+                  />
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* ═══ STATS TILES ═══ */}
+        {/* ═══ SECTION 2: STATS TILES (Connected to real telemetry) ═══ */}
         <motion.div
-          ref={sectionRefs.stats}
+          ref={statsRef}
           data-section="stats"
           variants={containerVariants}
           className="grid grid-cols-1 gap-3 sm:grid-cols-3"
@@ -1723,8 +2046,8 @@ export function Student360Page() {
               present: attendance.present,
               absent: attendance.absent,
             })}
-            delta={{ value: 2, direction: 'up' }}
-            sparkData={attendancePattern(sparkSeed, attendance.rate).map((v) => (v ? 1 : 0))}
+            delta={telemetrySeries.attDelta}
+            sparkData={telemetrySeries.attSeries}
             sparkUid="attendance"
           />
           <StatTile
@@ -1734,8 +2057,8 @@ export function Student360Page() {
             icon={I.target}
             tone={masteryTone(academic.overallMastery)}
             footNote={t('student360.stat.masteryFoot')}
-            delta={{ value: 4, direction: 'up' }}
-            sparkData={[42, 48, 45, 52, 50, 58, 55, 62, 60, 68, 72, academic.overallMastery]}
+            delta={telemetrySeries.masteryDelta}
+            sparkData={telemetrySeries.masterySeries}
             sparkUid="mastery"
           />
           <StatTile
@@ -1748,22 +2071,16 @@ export function Student360Page() {
               passed: academic.quizzes.passedAttempts,
               total: academic.quizzes.totalAttempts,
             })}
-            delta={{ value: 1, direction: 'down' }}
-            sparkData={[68, 72, 70, 74, 71, 75, 73, 76, 74, 77, 75, academic.quizzes.avgScore]}
+            delta={telemetrySeries.quizDelta}
+            sparkData={telemetrySeries.quizSeries}
             sparkUid="quizzes"
           />
         </motion.div>
 
-        {/* ═══ RISK PANEL ═══ */}
-        <AnimatePresence>
-          {risk.signals.length > 0 && (
-            <motion.div
-              ref={sectionRefs.risk}
-              data-section="risk"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={SPRING.smooth}
+        {/* ═══ SECTION 3: RISK PANEL (Always keeps ref mounted so SectionNav 'Xavf' works) ═══ */}
+        <motion.div ref={riskRef} data-section="risk" variants={cardVariants}>
+          {risk.signals.length > 0 ? (
+            <div
               className="relative overflow-hidden rounded-3xl border p-5"
               style={{
                 borderColor: riskC.border,
@@ -1825,15 +2142,41 @@ export function Student360Page() {
                   </ul>
                 </div>
               </div>
-            </motion.div>
+            </div>
+          ) : (
+            <div className="s360-glass flex items-center justify-between gap-4 rounded-3xl px-6 py-4">
+              <div className="relative z-10 flex items-center gap-3.5">
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  style={{
+                    background: TONE.green.bg,
+                    color: TONE.green.fg,
+                    border: `1px solid ${TONE.green.border}`,
+                  }}
+                >
+                  <Icon paths={I.shieldCheck} size={19} strokeWidth={2.2} duotone />
+                </div>
+                <div>
+                  <h3 className="text-[14px] font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
+                    Akademik va davomat xavf omillari aniqlanmadi
+                  </h3>
+                  <p className="text-[12px] font-medium text-[#86868B]">
+                    O&apos;quvchi barqaror ko&apos;rsatkichlar bilan o&apos;zlashtirishda davom etmoqda ({risk.score}/100).
+                  </p>
+                </div>
+              </div>
+              <span className="relative z-10 hidden rounded-full bg-emerald-500/12 px-3 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 sm:inline-flex">
+                Barqaror
+              </span>
+            </div>
           )}
-        </AnimatePresence>
+        </motion.div>
 
-        {/* ═══ MASTERY ═══ */}
-        <motion.div ref={sectionRefs.mastery} data-section="mastery" variants={cardVariants}>
-          <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75">
+        {/* ═══ SECTION 4: MASTERY (With Search, Filter & Sort) ═══ */}
+        <motion.div ref={masteryRef} data-section="mastery" variants={cardVariants}>
+          <div className="s360-glass overflow-hidden rounded-3xl">
             {/* Header */}
-            <div className="flex flex-col gap-3 border-b border-black/[0.04] px-6 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative z-10 flex flex-col gap-3 border-b border-black/[0.05] px-6 py-4 dark:border-white/[0.06] lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#AF52DE]/10 text-[#AF52DE]">
                   <Icon paths={I.book} size={17} strokeWidth={2} duotone />
@@ -1853,10 +2196,32 @@ export function Student360Page() {
                 </div>
               </div>
 
-              {/* Sort & filter */}
+              {/* Search, Filter & Sort */}
               {academic.subjectsMastery && academic.subjectsMastery.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center rounded-lg border border-slate-200/80 bg-white/60 p-0.5 text-[11px] font-bold dark:border-white/10 dark:bg-white/[0.04]">
+                <div className="s360-no-print flex flex-wrap items-center gap-2">
+                  <div className="s360-inset flex items-center gap-1.5 rounded-lg px-2.5 py-1">
+                    <Icon paths={I.search} size={13} className="text-slate-400" />
+                    <input
+                      type="search"
+                      value={subjectSearch}
+                      onChange={(e) => setSubjectSearch(e.target.value)}
+                      placeholder="Fanni qidirish…"
+                      aria-label="Fanni qidirish"
+                      className="w-28 bg-transparent text-[11.5px] font-medium text-slate-800 outline-none placeholder:text-slate-400 sm:w-36 dark:text-slate-200"
+                    />
+                    {subjectSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSubjectSearch('')}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        aria-label="Qidiruvni tozalash"
+                      >
+                        <Icon paths={I.close} size={11} strokeWidth={2.4} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="s360-inset inline-flex items-center rounded-lg p-0.5 text-[11px] font-bold">
                     {(['ALL', 'AT_RISK', 'EXCELLENT'] as const).map((f) => (
                       <button
                         key={f}
@@ -1865,7 +2230,7 @@ export function Student360Page() {
                         className={`rounded-md px-2 py-1 transition-colors ${
                           masteryFilter === f
                             ? 'bg-[#007AFF] text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'
+                            : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                         }`}
                       >
                         {f === 'ALL'
@@ -1876,12 +2241,14 @@ export function Student360Page() {
                       </button>
                     ))}
                   </div>
+
                   <select
                     value={masterySort}
                     onChange={(e) => setMasterySort(e.target.value as MasterySort)}
-                    className="rounded-lg border border-slate-200/80 bg-white/60 px-2 py-1.5 text-[11px] font-semibold text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                    aria-label="Fanlarni saralash"
+                    className="s360-inset rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 outline-none dark:text-slate-300"
                   >
-                    <option value="mastery">O'zlashtirish ↓</option>
+                    <option value="mastery">O&apos;zlashtirish ↓</option>
                     <option value="name">Nomi (A-Z)</option>
                     <option value="objectives">Maqsadlar ↓</option>
                   </select>
@@ -1890,8 +2257,8 @@ export function Student360Page() {
             </div>
 
             {/* Distribution + list */}
-            {(!academic.subjectsMastery || academic.subjectsMastery.length === 0) ? (
-              <div className="flex flex-col items-center gap-3 p-10 text-center">
+            {!academic.subjectsMastery || academic.subjectsMastery.length === 0 ? (
+              <div className="relative z-10 flex flex-col items-center gap-3 p-10 text-center">
                 <div
                   className="flex h-12 w-12 items-center justify-center rounded-2xl"
                   style={{ background: 'rgba(142,142,147,0.1)', color: '#8E8E93' }}
@@ -1906,14 +2273,14 @@ export function Student360Page() {
                 </p>
               </div>
             ) : (
-              <>
+              <div className="relative z-10">
                 <div className="border-b border-black/[0.04] px-6 py-4 dark:border-white/[0.06]">
                   <MasteryDistribution subjects={academic.subjectsMastery} />
                 </div>
 
                 {filteredMastery.length === 0 ? (
                   <div className="p-10 text-center text-[13px] text-[#86868B]">
-                    Ushbu filtr bo'yicha fanlar topilmadi
+                    Ushbu qidiruv yoki filtr bo&apos;yicha fanlar topilmadi
                   </div>
                 ) : (
                   <ul className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
@@ -1925,9 +2292,17 @@ export function Student360Page() {
                           key={sm.subjectId}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ ...SPRING.smooth, delay: idx * 0.04 }}
+                          transition={{ ...SPRING.smooth, delay: idx * 0.035 }}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => handleOpenSubjectSidecar(sm)}
-                          className="group flex cursor-pointer items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleOpenSubjectSidecar(sm);
+                            }
+                          }}
+                          className="group flex cursor-pointer items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-black/[0.02] focus-visible:bg-black/[0.03] focus-visible:outline-none dark:hover:bg-white/[0.02]"
                         >
                           <div className="flex min-w-0 flex-1 items-center gap-4">
                             <ProgressRing value={sm.masteryPercentage} tone={tone} size={64} stroke={6} />
@@ -1953,7 +2328,7 @@ export function Student360Page() {
                                 <motion.div
                                   initial={{ width: 0 }}
                                   animate={{ width: `${sm.masteryPercentage}%` }}
-                                  transition={{ duration: 1, ease: EASE_APPLE, delay: 0.2 + idx * 0.06 }}
+                                  transition={{ duration: 1, ease: EASE_APPLE, delay: 0.15 + idx * 0.05 }}
                                   className="h-full rounded-full"
                                   style={{ background: c.fg, boxShadow: `0 0 8px ${c.glow}` }}
                                 />
@@ -1992,7 +2367,7 @@ export function Student360Page() {
                               whileHover={reduced ? undefined : { scale: 1.05 }}
                               whileTap={reduced ? undefined : { scale: 0.95 }}
                               transition={SPRING.snappy}
-                              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/20 bg-white/40 px-3 py-2 text-[12px] font-semibold text-[var(--text-secondary)] shadow-sm backdrop-blur-md transition-all hover:bg-white/60 hover:text-[var(--text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]"
+                              className="s360-btn s360-no-print inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-xl px-3 py-2 text-[12px] font-semibold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-200"
                               title="Split View Sidecar"
                             >
                               <span>◨</span>
@@ -2003,15 +2378,15 @@ export function Student360Page() {
                     })}
                   </ul>
                 )}
-              </>
+              </div>
             )}
           </div>
         </motion.div>
 
         {/* ═══ SECTION 5: CHRONOLOGICAL LONGITUDINAL TIMELINE ═══ */}
-        <motion.div ref={sectionRefs.timeline} data-section="timeline" variants={cardVariants}>
-          <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75">
-            <div className="flex flex-col gap-3 border-b border-black/[0.04] px-6 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
+        <motion.div ref={timelineRef} data-section="timeline" variants={cardVariants}>
+          <div className="s360-glass overflow-hidden rounded-3xl">
+            <div className="relative z-10 flex flex-col gap-3 border-b border-black/[0.04] px-6 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                   <Icon paths={I.clock} size={17} strokeWidth={2} />
@@ -2027,23 +2402,25 @@ export function Student360Page() {
               </div>
 
               {/* Timeline Category Filters */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {[
-                  { id: 'ALL', label: 'Barchasi' },
-                  { id: 'EXAM', label: 'Imtihonlar' },
-                  { id: 'QUIZ', label: 'Viktorinalar' },
-                  { id: 'ASSIGNMENT', label: 'Topshiriqlar' },
-                  { id: 'GRADE', label: 'Baholar' },
-                  { id: 'ATTENDANCE', label: 'Davomat' },
-                ].map((f) => (
+              <div className="s360-no-print flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    { id: 'ALL', label: 'Barchasi' },
+                    { id: 'EXAM', label: 'Imtihonlar' },
+                    { id: 'QUIZ', label: 'Viktorinalar' },
+                    { id: 'ASSIGNMENT', label: 'Topshiriqlar' },
+                    { id: 'GRADE', label: 'Baholar' },
+                    { id: 'ATTENDANCE', label: 'Davomat' },
+                  ] as const
+                ).map((f) => (
                   <button
                     key={f.id}
                     type="button"
-                    onClick={() => setTimelineFilter(f.id as any)}
+                    onClick={() => setTimelineFilter(f.id)}
                     className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
                       timelineFilter === f.id
                         ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'border border-slate-200/80 bg-white/60 text-slate-600 hover:text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white'
+                        : 's360-btn text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                     }`}
                   >
                     {f.label}
@@ -2053,83 +2430,116 @@ export function Student360Page() {
             </div>
 
             {filteredTimeline.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-xs text-[var(--text-muted)]">
+              <div className="relative z-10 flex flex-col items-center justify-center gap-2 p-12 text-center text-xs text-[#86868B]">
                 <span className="text-2xl">⏳</span>
-                <p className="font-semibold text-[var(--text-primary)]">Hozircha tanlangan toifadagi xronologik qaydlar topilmadi</p>
+                <p className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  Hozircha tanlangan toifadagi xronologik qaydlar topilmadi
+                </p>
                 <p>O&apos;quvchi sinov va mashg&apos;ulotlarda ishtirok etgach, xronologiya avtomatik boyitiladi.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
-                {filteredTimeline.map((ev, idx) => {
-                  const toneColors = TONE[ev.tone] ?? TONE.blue;
-                  const typeBadge = {
-                    EXAM: { label: 'Imtihon', icon: '🎯' },
-                    QUIZ: { label: 'Viktorina', icon: '💡' },
-                    ASSIGNMENT: { label: 'Topshiriq', icon: '📝' },
-                    GRADE: { label: 'Oraliq baho', icon: '⭐' },
-                    ATTENDANCE: { label: 'Davomat', icon: '🚪' },
-                  }[ev.type] ?? { label: ev.type, icon: '📌' };
+              <div className="relative z-10">
+                <ul className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+                  {visibleTimeline.map((ev, idx) => {
+                    const toneColors = TONE[ev.tone] ?? TONE.blue;
+                    const typeBadge = {
+                      EXAM: { label: 'Imtihon', icon: '🎯' },
+                      QUIZ: { label: 'Viktorina', icon: '💡' },
+                      ASSIGNMENT: { label: 'Topshiriq', icon: '📝' },
+                      GRADE: { label: 'Oraliq baho', icon: '⭐' },
+                      ATTENDANCE: { label: 'Davomat', icon: '🚪' },
+                    }[ev.type] ?? { label: ev.type, icon: '📌' };
 
-                  return (
-                    <motion.li
-                      key={ev.id || idx}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ ...SPRING.smooth, delay: idx * 0.03 }}
-                      className="flex items-center justify-between gap-4 px-6 py-3.5 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
-                          style={{ background: toneColors.bg, color: toneColors.fg, border: `1px solid ${toneColors.border}` }}
-                        >
-                          <span>{typeBadge.icon}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-[13.5px] font-bold text-[var(--text-primary)]">
-                              {ev.title}
+                    return (
+                      <motion.li
+                        key={ev.id || idx}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ ...SPRING.smooth, delay: idx * 0.025 }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleOpenTimelineSidecar(ev)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleOpenTimelineSidecar(ev);
+                          }
+                        }}
+                        className="flex cursor-pointer items-center justify-between gap-4 px-6 py-3.5 transition-colors hover:bg-black/[0.02] focus-visible:bg-black/[0.03] focus-visible:outline-none dark:hover:bg-white/[0.02]"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm"
+                            style={{
+                              background: toneColors.bg,
+                              color: toneColors.fg,
+                              border: `1px solid ${toneColors.border}`,
+                            }}
+                          >
+                            <span>{typeBadge.icon}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-[13.5px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                                {ev.title}
+                              </p>
+                              <span
+                                className="rounded px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                                style={{ background: toneColors.bg, color: toneColors.fg }}
+                              >
+                                {typeBadge.label}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-[11.5px] font-medium text-[#86868B]">
+                              {ev.subtitle}
                             </p>
-                            <span
-                              className="rounded px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
-                              style={{ background: toneColors.bg, color: toneColors.fg }}
-                            >
-                              {typeBadge.label}
-                            </span>
                           </div>
-                          <p className="mt-0.5 truncate text-[11.5px] font-medium text-[var(--text-muted)]">
-                            {ev.subtitle}
-                          </p>
                         </div>
-                      </div>
 
-                      <div className="flex shrink-0 items-center gap-3 text-right">
-                        {ev.score !== undefined && (
-                          <div className="flex flex-col items-end">
-                            <span className="text-sm font-black tabular-nums" style={{ color: toneColors.fg }}>
-                              {ev.score} {ev.maxScore ? `/ ${ev.maxScore}` : ''}
-                            </span>
-                            <span className="text-[10px] font-semibold text-[var(--text-muted)]">natija</span>
-                          </div>
-                        )}
-                        <span className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums">
-                          {formatDate(ev.timestamp)}
-                        </span>
-                      </div>
-                    </motion.li>
-                  );
-                })}
-              </ul>
+                        <div className="flex shrink-0 items-center gap-3 text-right">
+                          {ev.score !== undefined && (
+                            <div className="flex flex-col items-end">
+                              <span className="text-sm font-black tabular-nums" style={{ color: toneColors.fg }}>
+                                {ev.score} {ev.maxScore ? `/ ${ev.maxScore}` : ''}
+                              </span>
+                              <span className="text-[10px] font-semibold text-[#86868B]">natija</span>
+                            </div>
+                          )}
+                          <span className="text-[11px] font-medium tabular-nums text-[#86868B]">
+                            {formatDate(ev.timestamp)}
+                          </span>
+                        </div>
+                      </motion.li>
+                    );
+                  })}
+                </ul>
+
+                {filteredTimeline.length > 8 && (
+                  <div className="s360-no-print border-t border-black/[0.04] px-6 py-3 text-center dark:border-white/[0.06]">
+                    <button
+                      type="button"
+                      onClick={() => setTimelineExpanded((v) => !v)}
+                      className="s360-btn inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-[11.5px] font-bold text-indigo-600 dark:text-indigo-400"
+                    >
+                      <span>
+                        {timelineExpanded
+                          ? 'Qisqartirish'
+                          : `Barcha qaydlarni ko'rsatish (${filteredTimeline.length})`}
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </motion.div>
 
         {/* ═══ SECTION 6: MONTHLY MASTERY DYNAMICS & PEDAGOGICAL INTERVENTIONS ═══ */}
-        <motion.div ref={sectionRefs.trends} data-section="trends" variants={cardVariants}>
+        <motion.div ref={trendsRef} data-section="trends" variants={cardVariants}>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
             {/* Left: 6-Month Trajectory Bars */}
-            <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75 lg:col-span-7">
-              <div className="flex items-center gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
+            <div className="s360-glass overflow-hidden rounded-3xl p-6 lg:col-span-7">
+              <div className="relative z-10 flex items-center gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
                   <Icon paths={I.sparkles} size={17} strokeWidth={2} />
                 </div>
@@ -2143,17 +2553,17 @@ export function Student360Page() {
                 </div>
               </div>
 
-              <div className="mt-5 space-y-4">
+              <div className="relative z-10 mt-5 space-y-4">
                 {(profile?.monthlyTrends ?? []).length === 0 ? (
-                  <p className="py-6 text-center text-xs text-[var(--text-muted)]">
+                  <p className="py-6 text-center text-xs text-[#86868B]">
                     Dinamika ma&apos;lumotlari shakllanmoqda...
                   </p>
                 ) : (
                   (profile?.monthlyTrends ?? []).map((trend, i) => (
-                    <div key={i} className="space-y-1.5">
+                    <div key={`${trend.month}-${i}`} className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold">
-                        <span className="text-[var(--text-primary)]">{trend.month}</span>
-                        <div className="flex items-center gap-3 text-[11px]">
+                        <span className="text-[#1D1D1F] dark:text-[#F5F5F7]">{trend.month}</span>
+                        <div className="flex items-center gap-3 text-[11px] tabular-nums">
                           <span className="text-purple-600 dark:text-purple-400">
                             O&apos;zlashtirish: {trend.mastery}%
                           </span>
@@ -2166,7 +2576,7 @@ export function Student360Page() {
                         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
                           <motion.div
                             initial={{ width: 0 }}
-                            animate={{ width: `${trend.mastery}%` }}
+                            animate={{ width: `${Math.max(0, Math.min(100, trend.mastery))}%` }}
                             transition={{ duration: 0.8, delay: i * 0.05 }}
                             className="h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
                           />
@@ -2174,7 +2584,7 @@ export function Student360Page() {
                         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
                           <motion.div
                             initial={{ width: 0 }}
-                            animate={{ width: `${trend.attendanceRate}%` }}
+                            animate={{ width: `${Math.max(0, Math.min(100, trend.attendanceRate))}%` }}
                             transition={{ duration: 0.8, delay: i * 0.05 }}
                             className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
                           />
@@ -2186,9 +2596,9 @@ export function Student360Page() {
               </div>
             </div>
 
-            {/* Right: Diagnostic Pedagogical Interventions */}
-            <div className="overflow-hidden rounded-3xl border border-white/40 bg-white/75 p-6 shadow-[0_20px_60px_-20px_rgba(15,23,42,0.14)] backdrop-blur-xl dark:border-white/10 dark:bg-surface-900/75 lg:col-span-5">
-              <div className="flex items-center gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
+            {/* Right: Diagnostic Pedagogical Interventions (Interactive) */}
+            <div className="s360-glass overflow-hidden rounded-3xl p-6 lg:col-span-5">
+              <div className="relative z-10 flex items-center gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
                   <Icon paths={I.shieldAlert} size={17} strokeWidth={2} />
                 </div>
@@ -2202,41 +2612,51 @@ export function Student360Page() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <div className="relative z-10 mt-4 space-y-3">
                 {(profile?.interventions ?? []).length === 0 ? (
-                  <p className="py-6 text-center text-xs text-[var(--text-muted)]">
+                  <p className="py-6 text-center text-xs text-[#86868B]">
                     Faol tavsiyalar mavjud emas.
                   </p>
                 ) : (
-                  (profile?.interventions ?? []).map((intv) => (
-                    <div
-                      key={intv.id}
-                      className="rounded-2xl border border-slate-200/70 bg-white/60 p-3.5 transition-all hover:border-indigo-500/30 dark:border-white/10 dark:bg-white/[0.02]"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-black text-[var(--text-primary)]">
-                          {intv.title}
-                        </span>
-                        <span
-                          className={`rounded px-2 py-0.5 text-[9.5px] font-black uppercase tracking-wider ${
-                            intv.priority === 'HIGH'
-                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                              : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                          }`}
-                        >
-                          {intv.priority === 'HIGH' ? 'Yuqori daraja' : 'Tavsiya'}
-                        </span>
+                  (profile?.interventions ?? []).map((intv) => {
+                    const prMeta =
+                      intv.priority === 'HIGH'
+                        ? { label: 'Yuqori daraja', cls: 'bg-rose-500/12 text-rose-600 dark:text-rose-400' }
+                        : intv.priority === 'MEDIUM'
+                          ? { label: "O'rta daraja", cls: 'bg-amber-500/12 text-amber-600 dark:text-amber-400' }
+                          : { label: 'Tavsiya', cls: 'bg-indigo-500/12 text-indigo-600 dark:text-indigo-400' };
+
+                    return (
+                      <div
+                        key={intv.id}
+                        className="s360-inset rounded-2xl p-3.5 transition-all hover:border-indigo-500/35"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-black text-[#1D1D1F] dark:text-[#F5F5F7]">
+                            {intv.title}
+                          </span>
+                          <span
+                            className={`shrink-0 rounded-md px-2 py-0.5 text-[9.5px] font-black uppercase tracking-wider ${prMeta.cls}`}
+                          >
+                            {prMeta.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11.5px] font-medium leading-relaxed text-[#86868B]">
+                          {intv.description}
+                        </p>
+                        <div className="mt-2.5 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInterventionSidecar(intv)}
+                            className="s360-btn inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-300"
+                          >
+                            <span>{intv.actionLabel}</span>
+                            <Icon paths={I.chevronRight} size={11} strokeWidth={2.5} />
+                          </button>
+                        </div>
                       </div>
-                      <p className="mt-1 text-[11.5px] font-medium leading-relaxed text-[var(--text-muted)]">
-                        {intv.description}
-                      </p>
-                      <div className="mt-2.5 flex items-center justify-end">
-                        <span className="rounded-lg bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-950/40 dark:text-indigo-300">
-                          {intv.actionLabel} →
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -2244,7 +2664,7 @@ export function Student360Page() {
         </motion.div>
       </motion.div>
 
-      {/* ═══ Command palette ═══ */}
+      {/* ═══ Command palette (⌘K) ═══ */}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}

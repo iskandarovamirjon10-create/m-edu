@@ -103,12 +103,19 @@ describe('DashboardPage', () => {
     expect(mockStatsApi).not.toHaveBeenCalled();
   });
 
-  it('redirects TEACHER role to attendance and STUDENT to schedule', async () => {
+  it('redirects TEACHER role to teacher-cockpit and STUDENT to schedule', async () => {
     mockUser = { id: 'u3', role: 'TEACHER' };
     renderDashboard();
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/attendance', { replace: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/teacher-cockpit', { replace: true });
+    });
+
+    mockUser = { id: 'u3b', role: 'ASSISTANT' };
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/teacher-cockpit', { replace: true });
     });
 
     mockUser = { id: 'u4', role: 'STUDENT' };

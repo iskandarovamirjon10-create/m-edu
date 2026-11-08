@@ -7,13 +7,13 @@ import type { Paginated } from '@/lib/types';
  */
 export function useAllPaginatedItems<T>(
   queryKey: unknown[],
-  fetchFn: (params: { page: number; limit: number; [key: string]: any }) => Promise<Paginated<T>>,
-  baseParams: Record<string, any> = {},
+  fetchFn: (params: { page: number; limit: number; [key: string]: unknown }) => Promise<Paginated<T>>,
+  baseParams: Record<string, unknown> = {},
 ) {
   return useQuery({
     queryKey: [...queryKey, 'all-paginated', baseParams],
     queryFn: async () => {
-      const limit = baseParams.limit || 100;
+      const limit = typeof baseParams.limit === 'number' ? baseParams.limit : 100;
       // Hard safety cap: an API that never reports totalPages (or returns a
       // huge total) would otherwise loop forever and hang the UI. 100 pages
       // × 100 rows = 10,000 items, which is enough for every dropdown in the
@@ -24,9 +24,10 @@ export function useAllPaginatedItems<T>(
 
       while (page <= MAX_PAGES) {
         const response = await fetchFn({ ...baseParams, page, limit });
-        allItems = allItems.concat(response.items);
+        const items = response?.items || [];
+        allItems = allItems.concat(items);
 
-        if (page >= response.totalPages || response.items.length < limit) {
+        if (page >= (response?.totalPages ?? 1) || items.length < limit) {
           break;
         }
         page++;

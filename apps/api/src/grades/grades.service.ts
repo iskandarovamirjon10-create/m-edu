@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { parsePagination } from '../lib/pagination';
 import { Prisma } from '@prisma/client';
@@ -12,12 +12,26 @@ const DEFAULT_MAX_VALUE = 100;
 export class GradesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: GradeQuery) {
+  async findAll(organizationId: string, query: GradeQuery, currentUser?: { id?: string; role?: string; sub?: string }) {
     const { page, limit, skip } = parsePagination(query);
     const where: Prisma.GradeWhereInput = { organizationId };
 
     if (query.studentId) where.studentId = query.studentId;
     if (query.groupId) where.groupId = query.groupId;
+
+    // Object-level authorization for teachers, students, and parents
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id || currentUser.sub, organizationId },
+        select: { id: true },
+      });
+      const teacherId = teacher?.id || '00000000-0000-0000-0000-000000000000';
+      where.group = { teacherId };
+    } else if (currentUser?.role === 'STUDENT') {
+      where.student = { userId: currentUser.id || currentUser.sub };
+    } else if (currentUser?.role === 'PARENT') {
+      where.student = { parentStudents: { some: { parentId: currentUser.id || currentUser.sub } } };
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.grade.findMany({
@@ -36,20 +50,48 @@ export class GradesService {
     return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
   }
 
-  async findOne(organizationId: string, id: string) {
+  async findOne(organizationId: string, id: string, currentUser?: { id?: string; role?: string; sub?: string }) {
     const grade = await this.prisma.grade.findFirst({
       where: { id, organizationId },
       include: {
-        student: { include: { user: { select: { firstName: true, lastName: true } } } },
-        group: { select: { id: true, name: true } },
+        student: {
+          include: {
+            user: { select: { firstName: true, lastName: true } },
+            parentStudents: { select: { parentId: true } },
+          },
+        },
+        group: { select: { id: true, name: true, teacherId: true } },
       },
     });
     if (!grade) throw new NotFoundException('Grade not found');
+
+    // Object-level authorization
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id || currentUser.sub, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || grade.group?.teacherId !== teacher.id) {
+        throw new ForbiddenException('Siz faqat o‘zingiz biriktirilgan guruh o‘quvchilari baholarini ko‘ra olasiz');
+      }
+    } else if (currentUser?.role === 'STUDENT') {
+      if (grade.student?.userId !== (currentUser.id || currentUser.sub)) {
+        throw new ForbiddenException('Siz faqat o‘z baholaringizni ko‘ra olasiz');
+      }
+    } else if (currentUser?.role === 'PARENT') {
+      const isMyChild = grade.student?.parentStudents?.some(
+        (ps: any) => ps.parentId === (currentUser.id || currentUser.sub),
+      );
+      if (!isMyChild) {
+        throw new ForbiddenException('Siz faqat o‘z farzandingiz baholarini ko‘ra olasiz');
+      }
+    }
+
     return grade;
   }
 
-  async update(organizationId: string, id: string, data: UpdateGradeDto) {
-    const existing = await this.findOne(organizationId, id);
+  async update(organizationId: string, id: string, data: UpdateGradeDto, currentUser?: { id?: string; role?: string; sub?: string }) {
+    const existing = await this.findOne(organizationId, id, currentUser);
 
     const updateData: Prisma.GradeUpdateInput = {};
     if (data.value !== undefined) updateData.value = data.value;
@@ -75,7 +117,7 @@ export class GradesService {
     return this.prisma.grade.update({ where: { id, organizationId }, data: updateData });
   }
 
-  async create(organizationId: string, data: CreateGradeDto) {
+  async create(organizationId: string, data: CreateGradeDto, currentUser?: { id?: string; role?: string; sub?: string }) {
     const maxValue = data.maxValue ?? DEFAULT_MAX_VALUE;
     if (maxValue <= 0) throw new BadRequestException('maxValue must be greater than zero');
     if (data.value > maxValue) {
@@ -91,6 +133,17 @@ export class GradesService {
       where: { id: data.groupId, organizationId },
     });
     if (!group) throw new NotFoundException('Group not found');
+
+    // Object-level authorization: Teachers can only grade students in their assigned groups
+    if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.id || currentUser.sub, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || group.teacherId !== teacher.id) {
+        throw new ForbiddenException('Siz faqat o‘zingiz biriktirilgan guruh o‘quvchilariga baho qo‘ya olasiz');
+      }
+    }
 
     // A grade is only meaningful for a student actually enrolled in the
     // group — same invariant as attendance. Prevents grading a student who

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Analytics / admin page keys referenced via t() but missing from base+legacy.
  * Merged last so these keys always resolve (English fallback for gaps in uz/ru
  * is handled by translate() — but parity tests require all three locales).
@@ -41,6 +41,7 @@ export const analyticsEn = {
   'common.offline': "You're offline — changes may not save",
   'a11y.mainNav': 'Main navigation',
   'a11y.closeMenu': 'Close menu',
+  'a11y.dragToClose': 'Drag handle to close drawer',
   'a11y.select': 'Select…',
   'a11y.switchToLight': 'Switch to light theme',
   'a11y.switchToDark': 'Switch to dark theme',

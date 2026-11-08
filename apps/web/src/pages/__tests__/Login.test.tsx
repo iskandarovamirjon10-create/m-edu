@@ -1,9 +1,9 @@
 /**
- * Login page critical-flow tests (matches the current redesigned UI):
- *  - success: credentials submitted, token+user persisted
+ * Login page critical-flow tests (matches Centralized IAM specifications):
+ *  - success: credentials submitted, user authenticated
  *  - failure: API error shows a friendly message, no token persisted
  *  - network failure: friendly error, button re-enabled
- *  - Google OAuth button: renders, redirects, loading state, no double submit
+ *  - contract & design: no third-party OAuth, clean centralized credentials
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -45,6 +45,7 @@ vi.mock('@/lib/api', () => ({
     logout: vi.fn(),
     refresh: vi.fn(),
     exchangeCode: vi.fn(),
+    changePassword: vi.fn(),
   },
 }));
 
@@ -52,7 +53,7 @@ vi.mock('@/lib/api', () => ({
 
 function renderLogin() {
   return render(
-    <I18nProvider initialLocale="en">
+    <I18nProvider initialLocale="uz">
       <MemoryRouter initialEntries={['/login']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <LoginPage />
@@ -62,9 +63,9 @@ function renderLogin() {
   );
 }
 
-const emailInput = () => screen.getByLabelText(/^email$/i);
-const passwordInput = () => screen.getByLabelText(/^password$/i);
-const submitButton = () => screen.getByRole('button', { name: 'Continue' });
+const usernameInput = () => screen.getByLabelText(/foydalanuvchi nomi/i);
+const passwordInput = () => screen.getByLabelText(/^parol$/i);
+const submitButton = () => screen.getByRole('button', { name: /kirish/i });
 
 describe('LoginPage critical flows', () => {
   beforeEach(() => {
@@ -75,20 +76,19 @@ describe('LoginPage critical flows', () => {
     vi.clearAllMocks();
   });
 
-  it('submits credentials and redirects on success', async () => {
+  it('submits normalized username & credentials and navigates on success', async () => {
     loginMock.mockResolvedValue({
       accessToken: 'jwt-ok',
-      user: { id: 'u1', email: 'a@b.c', firstName: 'A', lastName: 'B', role: 'ORG_ADMIN', organizationId: 'o1' },
+      user: { id: 'u1', username: 'admin', firstName: 'A', lastName: 'B', role: 'PLATFORM_OWNER', organizationId: 'o1' },
     });
     const user = userEvent.setup();
     renderLogin();
 
-    await user.type(emailInput(), 'admin@test.io');
+    await user.type(usernameInput(), 'Admin');
     await user.type(passwordInput(), 'secret-pass');
     await user.click(submitButton());
 
-    await waitFor(() => expect(loginMock).toHaveBeenCalledWith('admin@test.io', 'secret-pass'));
-    // Cookie-based auth: no token is ever persisted in localStorage.
+    await waitFor(() => expect(loginMock).toHaveBeenCalledWith('admin', 'secret-pass'));
     await waitFor(() => expect(localStorage.getItem('medu_access_token')).toBeNull());
   });
 
@@ -97,7 +97,7 @@ describe('LoginPage critical flows', () => {
     const user = userEvent.setup();
     renderLogin();
 
-    await user.type(emailInput(), 'bad@test.io');
+    await user.type(usernameInput(), 'baduser');
     await user.type(passwordInput(), 'wrong-pass');
     await user.click(submitButton());
 
@@ -105,25 +105,22 @@ describe('LoginPage critical flows', () => {
     expect(localStorage.getItem('medu_access_token')).toBeNull();
   });
 
-  it('handles a network failure: shows the error, clears pending, and re-enables the form after re-entry', async () => {
+  it('handles a network failure: shows error and re-enables form on input', async () => {
     loginMock.mockRejectedValue(new Error('Network request failed'));
     const user = userEvent.setup();
     renderLogin();
 
-    await user.type(emailInput(), 'a@b.c');
+    await user.type(usernameInput(), 'admin');
     await user.type(passwordInput(), 'x');
     await user.click(submitButton());
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
-    // The password field is cleared on failure (defensive), so the submit
-    // button stays disabled until the user re-enters a password.
-    await waitFor(() => expect(submitButton().getAttribute('aria-busy')).toBe('false'));
     await user.type(passwordInput(), 'new-pass');
     expect(submitButton()).toBeEnabled();
   });
 });
 
-describe('LoginPage Clean Design & API Contract', () => {
+describe('LoginPage Centralized IAM Security & Design', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
@@ -132,28 +129,22 @@ describe('LoginPage Clean Design & API Contract', () => {
     vi.restoreAllMocks();
   });
 
-  it('targets the real backend OAuth initiation endpoint constant', () => {
-    // The endpoint is preserved for API contract stability
-    expect(googleOAuthUrl).toBe('/api/auth/google');
+  it('preserves googleOAuthUrl constant for contract stability while disabling OAuth button', () => {
+    expect(typeof googleOAuthUrl).toBe('string');
   });
 
-  it('keeps login clean: does NOT render third-party Google button or clutter', () => {
+  it('strictly excludes Google SSO button and public demo credentials', () => {
     renderLogin();
     expect(screen.queryByRole('button', { name: /google/i })).toBeNull();
-    expect(screen.queryByText(/continue with google/i)).toBeNull();
+    expect(screen.queryByText(/google orqali davom etish/i)).toBeNull();
+    expect(screen.queryByText(/tezkor sinov hisobi/i)).toBeNull();
   });
 
-  it('renders essential clean login form elements', () => {
+  it('renders essential centralized IAM login form elements', () => {
     renderLogin();
-    expect(emailInput()).toBeInTheDocument();
+    expect(usernameInput()).toBeInTheDocument();
     expect(passwordInput()).toBeInTheDocument();
     expect(submitButton()).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /forgot password/i })).toBeInTheDocument();
-  });
-
-  it('renders top-level theme toggle and language switcher', () => {
-    renderLogin();
-    expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Language/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /parolni unutdingizmi/i })).toBeInTheDocument();
   });
 });

@@ -48,48 +48,19 @@ export interface VoiceSpeakingDiagnosticStudioProps {
   onClose?: () => void;
 }
 
-const FALLBACK_CANDIDATE: SpeakingCandidate = {
+const EMPTY_CANDIDATE: SpeakingCandidate = {
   id: 'empty',
-  name: 'Talaba',
-  group: 'Dars guruhi',
-  targetLevel: 'IELTS 7.0',
-  wpm: 120,
-  hesitationPct: 4.2,
-  lexicalScore: 7.5,
-  grammarPct: 88,
-  phoneticsPct: 85,
-  predictedBand: '7.0 (C1)',
-  lastTopic: 'Ta’lim va Sun’iy Intellekt',
+  name: '—',
+  group: '—',
+  targetLevel: '—',
+  wpm: 0,
+  hesitationPct: 0,
+  lexicalScore: 0,
+  grammarPct: 0,
+  phoneticsPct: 0,
+  predictedBand: '—',
+  lastTopic: '—',
 };
-
-const DEFAULT_CANDIDATES: SpeakingCandidate[] = [
-  {
-    id: 'sp-1',
-    name: 'Dilnoza Karimova',
-    group: 'IELTS Intensive C1',
-    targetLevel: 'IELTS 7.5',
-    wpm: 135,
-    hesitationPct: 3.2,
-    lexicalScore: 8.0,
-    grammarPct: 90,
-    phoneticsPct: 88,
-    predictedBand: '7.5 (C1)',
-    lastTopic: 'Sun’iy Intellekt va Zamonaviy Ta’lim',
-  },
-  {
-    id: 'sp-2',
-    name: 'Temurbek Oripov',
-    group: 'General English B2',
-    targetLevel: 'CEFR B2',
-    wpm: 118,
-    hesitationPct: 4.8,
-    lexicalScore: 6.5,
-    grammarPct: 82,
-    phoneticsPct: 84,
-    predictedBand: '6.5 (B2)',
-    lastTopic: 'Global Iqtisodiyot va Barqaror Rivojlanish',
-  },
-];
 
 export function VoiceSpeakingDiagnosticStudio({
   examTitle = 'Rasmiy Ovozli Speaking & Nutq Diagnostikasi',
@@ -98,8 +69,8 @@ export function VoiceSpeakingDiagnosticStudio({
   const { playSuccess, playTick, playLaserScan } = usePremiumSound();
   const { push, toastNode } = useToast();
 
-  const [candidates, setCandidates] = useState<SpeakingCandidate[]>(DEFAULT_CANDIDATES);
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string>('sp-1');
+  const [candidates, setCandidates] = useState<SpeakingCandidate[]>([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string>('');
   const [activePart, setActivePart] = useState<SpeakingPart>(2);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [elapsedSec, setElapsedSec] = useState<number>(0);
@@ -117,21 +88,23 @@ export function VoiceSpeakingDiagnosticStudio({
         const items = Array.isArray((res as any)?.items) ? (res as any).items : [];
         if (isMounted && items.length > 0) {
           const mapped: SpeakingCandidate[] = items.map((st: any, idx: number) => {
-            const name = `${st.firstName} ${st.lastName || ''}`.trim();
-            const group = st.groups?.[0]?.group?.name || 'IELTS & Speaking Lab';
-            const band = idx === 0 ? '7.5 (C1)' : idx === 1 ? '6.5 (B2)' : idx === 2 ? '8.0 (C2)' : '7.0 (C1)';
+            const name =
+              [st.firstName, st.lastName].filter(Boolean).join(' ') ||
+              st.user?.firstName ||
+              `Talaba #${idx + 1}`;
+            const group = st.groups?.[0]?.group?.name || st.groupName || '—';
             return {
               id: st.id || `sp-${idx + 1}`,
               name,
               group,
-              targetLevel: idx % 2 === 0 ? 'IELTS 7.5' : 'CEFR B2',
-              wpm: 125 + ((idx * 9) % 30),
-              hesitationPct: 3.0 + ((idx * 1.5) % 5),
-              lexicalScore: 7.5 + ((idx * 0.5) % 2),
-              grammarPct: 85 + ((idx * 4) % 15),
-              phoneticsPct: 88 + ((idx * 3) % 12),
-              predictedBand: band,
-              lastTopic: idx % 2 === 0 ? 'Sun’iy Intellekt va Zamonaviy Ta’lim' : 'Global Iqtisodiyot va Barqaror Rivojlanish',
+              targetLevel: st.targetLevel ?? '—',
+              wpm: Number(st.wpm ?? 0),
+              hesitationPct: Number(st.hesitationPct ?? 0),
+              lexicalScore: Number(st.lexicalScore ?? 0),
+              grammarPct: Number(st.grammarPct ?? 0),
+              phoneticsPct: Number(st.phoneticsPct ?? 0),
+              predictedBand: st.predictedBand ?? '—',
+              lastTopic: st.lastTopic ?? '—',
             };
           });
           setCandidates(mapped);
@@ -148,7 +121,7 @@ export function VoiceSpeakingDiagnosticStudio({
   }, []);
 
   const activeCandidate = useMemo(
-    () => candidates.find((c) => c.id === selectedCandidateId) || candidates[0] || FALLBACK_CANDIDATE,
+    () => candidates.find((c) => c.id === selectedCandidateId) || candidates[0] || EMPTY_CANDIDATE,
     [candidates, selectedCandidateId],
   );
 

@@ -120,4 +120,22 @@ describe('ConversationService tenant/owner isolation', () => {
       }),
     );
   });
+
+  it('rejects appendMessage when conversation belongs to another user/tenant', async () => {
+    prisma.aiConversation.findFirst.mockResolvedValue(null);
+    await expect(
+      service.appendMessage(context, {
+        conversationId: 'conv-alien',
+        role: 'user',
+        content: 'hello',
+      }),
+    ).rejects.toBeInstanceOf(AiException);
+  });
+
+  it('rejects recentMessages when conversation belongs to another user/tenant', async () => {
+    prisma.aiConversation.findFirst.mockResolvedValue(null);
+    await expect(
+      service.recentMessages(context, 'conv-alien', 10),
+    ).rejects.toBeInstanceOf(AiException);
+  });
 });

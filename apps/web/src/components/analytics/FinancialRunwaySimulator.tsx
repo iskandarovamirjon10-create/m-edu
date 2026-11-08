@@ -290,7 +290,7 @@ export function FinancialRunwaySimulator({
             <div className="grid grid-cols-12 gap-2 h-44 items-end pt-4 pb-2 border-b border-white/10">
               {scenario.monthlyProjection.map((val, idx) => {
                 const heightPct = Math.min(100, Math.max(10, Math.round((val / 600000000) * 100)));
-                const isProfitable = val >= 180000000;
+                const isProfitable = val >= initialCashReserveUzs;
 
                 return (
                   <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end">
@@ -314,7 +314,7 @@ export function FinancialRunwaySimulator({
           <div className="mt-4 flex items-center justify-between text-xs text-white/60">
             <span>12 oydan keyingi kutilayotgan zaxira:</span>
             <span className="text-base font-bold text-emerald-400 font-mono">
-              {(scenario.monthlyProjection[11] / 1000000).toFixed(1)} mln UZS
+              {((scenario.monthlyProjection[11] ?? 0) / 1000000).toFixed(1)} mln UZS
             </span>
           </div>
         </div>

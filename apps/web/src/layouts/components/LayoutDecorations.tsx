@@ -1,6 +1,6 @@
 /**
- * M-EDU Layout Decorations & Accessibility Systems — v5 "Hyper-Refractive Liquid Glass"
- * VisionOS-inspired ambient illumination, refractive offline capsules,
+ * M-EDU Layout Decorations & Accessibility Systems — V4.0 "Liquid Glass"
+ * Token-synchronized ambient illumination, refractive offline capsules,
  * WCAG live announcer, ultra-smooth scroll beam, and fluid route transitions.
  */
 import {
@@ -18,13 +18,13 @@ import {
   useSpring,
   useTransform,
 } from 'framer-motion';
-import { useI18n } from '@/i18n/I18nProvider';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { Icon, cn, usePrefersReducedMotion } from '@/lib/design';
 import { SPRING, bannerVariants } from '../core/tokens';
 import { useOnline } from '../core/singletons';
 
 /* ══════════════════════════════════════════════════════════════════
- * 1 · AMBIENT — Ultra-Refractive Spatial Wash (VisionOS style)
+ * 1 · AMBIENT — Refractive Spatial Wash (Synced to V4 Caustics)
  * ══════════════════════════════════════════════════════════════════ */
 
 export const AmbientParticles = memo(function AmbientParticles() {
@@ -35,14 +35,12 @@ export const AmbientParticles = memo(function AmbientParticles() {
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none"
     >
-      {reduced ? (
-        <div className="absolute inset-0 bg-black/[0.015] dark:bg-white/[0.02]" />
-      ) : (
+      {reduced ? null : (
         <>
           {/* Top Caustic Light Wash */}
-          <div className="absolute inset-x-0 top-0 h-[45vh] bg-gradient-to-b from-[#007AFF]/[0.06] via-[#5E5CE6]/[0.02] to-transparent dark:from-[#0A84FF]/[0.09] dark:via-[#5E5CE6]/[0.03]" />
+          <div className="absolute inset-x-0 top-0 h-[45vh] bg-gradient-to-b from-[var(--glass-caustic-1)] via-[var(--glass-caustic-2)] to-transparent" />
           {/* Bottom Ambient Glow */}
-          <div className="absolute inset-x-0 bottom-0 h-[30vh] bg-gradient-to-t from-black/[0.03] to-transparent dark:from-white/[0.04]" />
+          <div className="absolute inset-x-0 bottom-0 h-[30vh] bg-gradient-to-t from-[var(--glass-caustic-2)] to-transparent" />
         </>
       )}
     </div>
@@ -57,7 +55,7 @@ type BannerMode = 'hidden' | 'offline' | 'reconnected';
 
 export const OfflineBanner = memo(function OfflineBanner() {
   const online = useOnline();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
 
   const wasOfflineRef = useRef(false);
@@ -104,10 +102,10 @@ export const OfflineBanner = memo(function OfflineBanner() {
             exit={reduced ? undefined : { scale: 0.96, y: -8 }}
             transition={SPRING.snappy}
             className={cn(
-              'pointer-events-auto inline-flex items-center gap-2.5 rounded-full border px-4.5 py-2 text-[12px] font-bold shadow-[0_12px_36px_-8px_rgba(0,0,0,0.22),inset_0_1px_1.5px_rgba(255,255,255,0.9)] backdrop-blur-3xl backdrop-saturate-[210%]',
+              'pointer-events-auto inline-flex items-center gap-2.5 rounded-full border px-4.5 py-2 text-[12px] font-bold shadow-glass-floating backdrop-blur-3xl backdrop-saturate-[210%]',
               isOffline
-                ? 'border-apple-orange/40 bg-white/80 text-apple-orange dark:bg-[#1C1C1E]/85 dark:border-apple-orange/50'
-                : 'border-apple-green/40 bg-white/80 text-apple-green dark:bg-[#1C1C1E]/85 dark:border-apple-green/50',
+                ? 'border-apple-orange/40 bg-surface/85 text-apple-orange'
+                : 'border-apple-green/40 bg-surface/85 text-apple-green',
             )}
           >
             <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
@@ -154,7 +152,7 @@ export const RouteAnnouncer = memo(function RouteAnnouncer({
   routeTitle: string;
 }) {
   const location = useLocation();
-  const { t } = useI18n();
+  const { t } = useSafeI18n();
   const [message, setMessage] = useState('');
   const isFirstMount = useRef(true);
 
@@ -214,11 +212,11 @@ export const ScrollProgress = memo(function ScrollProgress({
   return (
     <motion.div
       aria-hidden="true"
-      style={{ opacity }}
-      className="pointer-events-none sticky top-0 z-30 h-[2.5px] w-full overflow-hidden"
+      style={{ opacity, top: 'var(--shell-progress-top, 0px)' }}
+      className="pointer-events-none sticky z-30 h-[2.5px] w-full overflow-hidden"
     >
       <motion.div
-        className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[#007AFF] via-[#5E5CE6] to-[#007AFF] shadow-[0_0_12px_#007AFF] dark:from-[#0A84FF] dark:via-[#BF5AF2] dark:to-[#0A84FF] dark:shadow-[0_0_14px_#0A84FF]"
+        className="h-full w-full origin-left rounded-full bg-gradient-to-r from-[var(--c-blue)] via-[var(--c-purple)] to-[var(--c-blue)] shadow-[0_0_12px_var(--c-blue)]"
         style={{ scaleX }}
       />
     </motion.div>
@@ -235,18 +233,18 @@ export const AnimatedOutlet = memo(function AnimatedOutlet() {
   const reduced = usePrefersReducedMotion();
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence mode="popLayout" initial={false}>
       {outlet && (
         <motion.div
           key={location.pathname}
-          initial={reduced ? undefined : { opacity: 0, y: 10, scale: 0.996 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={reduced ? undefined : { opacity: 0, y: -8, scale: 0.996 }}
+          initial={reduced ? undefined : { opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduced ? undefined : { opacity: 0 }}
           transition={{
-            duration: reduced ? 0 : 0.22,
-            ease: [0.22, 1, 0.36, 1],
+            duration: reduced ? 0 : 0.16,
+            ease: [0.16, 1, 0.3, 1],
           }}
-          className="min-h-full w-full max-w-full min-w-0 flex-1 flex flex-col transform-gpu will-change-[opacity,transform]"
+          className="min-h-full w-full max-w-full min-w-0 flex-1 flex flex-col transform-gpu"
         >
           {outlet}
         </motion.div>
@@ -291,7 +289,7 @@ export const RouteProgressBar = memo(function RouteProgressBar() {
             initial={{ x: '-100%' }}
             animate={{ x: '100%' }}
             transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
-            className="h-full w-full bg-gradient-to-r from-transparent via-[#007AFF] to-[#5856D6] dark:via-[#0A84FF] dark:to-[#BF5AF2] shadow-[0_0_12px_rgba(0,122,255,0.7)]"
+            className="h-full w-full bg-gradient-to-r from-transparent via-[var(--c-blue)] to-[var(--c-purple)] shadow-[0_0_12px_var(--c-blue)]"
           />
         </motion.div>
       )}

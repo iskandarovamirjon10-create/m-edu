@@ -37,29 +37,6 @@ const STAGES: readonly { id: PipelineStage; label: string; prob: number; color: 
   { id: 'enrolled', label: 'Qabul Qilindi', prob: 1.0, color: 'text-emerald-400 border-emerald-400/40 bg-emerald-500/10' },
 ];
 
-const DEFAULT_ADMISSION_LEADS: readonly AdmissionLead[] = [
-  {
-    id: 'lead-1',
-    fullName: 'Shaxzod Oripov',
-    phone: '+998 90 123 45 67',
-    interestedCourse: 'Full-Stack JavaScript & Next.js',
-    expectedTuitionUzs: 1500000,
-    stage: 'new',
-    source: 'Telegram',
-    followUpHoursLeft: 4,
-  },
-  {
-    id: 'lead-2',
-    fullName: 'Zarnigor Karimova',
-    phone: '+998 93 987 65 43',
-    interestedCourse: 'UI/UX Product Design',
-    expectedTuitionUzs: 1200000,
-    stage: 'trial',
-    source: 'Instagram',
-    followUpHoursLeft: 12,
-  },
-];
-
 export function LeadPipelineKanbanStudio({
   onLeadEnrolled,
   className,
@@ -67,7 +44,7 @@ export function LeadPipelineKanbanStudio({
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [leads, setLeads] = useState<readonly AdmissionLead[]>(DEFAULT_ADMISSION_LEADS);
+  const [leads, setLeads] = useState<readonly AdmissionLead[]>([]);
   const [selectedLead, setSelectedLead] = useState<AdmissionLead | null>(null);
 
   // Connect to live backend leads API

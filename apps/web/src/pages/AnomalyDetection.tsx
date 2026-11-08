@@ -487,7 +487,7 @@ export function AnomalyDetectionPage() {
   /* ── Loading state ── */
   if (anomaliesQuery.isLoading && !anomaliesQuery.data) {
     return (
-      <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+      <div className="min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
         <GlassPageHeader title={t('anomaly.title')} subtitle="System patterns scanning…" />
         <div className="mt-8 flex items-center justify-center rounded-[20px] border border-black/[0.05] bg-white/60 py-24 backdrop-blur-xl dark:border-white/[0.06] dark:bg-neutral-950/60">
           <GlassPageLoader label={t('anomaly.loading')} />
@@ -499,7 +499,7 @@ export function AnomalyDetectionPage() {
   /* ── Error state ── */
   if (anomaliesQuery.isError) {
     return (
-      <div className="min-h-screen bg-transparent p-4 sm:p-6 lg:p-8">
+      <div className="min-h-full bg-transparent p-4 sm:p-6 lg:p-8">
         <GlassPageHeader title={t('anomaly.title')} subtitle="Connection error" />
         <div className="mt-8 rounded-[20px] border border-black/[0.05] bg-white/60 p-12 backdrop-blur-xl dark:border-white/[0.06] dark:bg-neutral-950/60">
           <GlassErrorState
@@ -533,7 +533,7 @@ export function AnomalyDetectionPage() {
   ];
 
   return (
-    <div className="relative min-h-screen bg-transparent selection:bg-indigo-500/25">
+    <div className="relative min-h-full bg-transparent selection:bg-indigo-500/25">
       <AuroraMesh variant="security" opacity={0.65} />
 
       <motion.div
@@ -611,7 +611,7 @@ export function AnomalyDetectionPage() {
                     />
                   ) : (
                     <GlassEmptyState
-                      title="Bu toifada anomaliya yo'q"
+                      title="Bu toifada anomaliya yo‘q"
                       message="Boshqa severity darajasini tanlang."
                     />
                   )}

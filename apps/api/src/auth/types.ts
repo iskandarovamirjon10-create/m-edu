@@ -10,9 +10,13 @@
 export interface JwtPayload {
   /** User id (Prisma `user.id`). */
   sub: string;
+  id?: string;
+  username?: string | null;
   email: string;
   role: string;
   organizationId: string;
+  mustChangePassword?: boolean;
+  permissions?: readonly string[];
   /** Session row id — lets logout() revoke the exact session that issued the token. */
   sid?: string;
 }
@@ -25,7 +29,7 @@ export interface JwtPayload {
  * to `string`, so callers are forced to handle the no-session case
  * (tokens issued without a session row, e.g. pre-session legacy tokens).
  */
-export type RequestUser = Omit<JwtPayload, 'sid'> & { sid: string | null; id: string; };
+export type RequestUser = Omit<JwtPayload, 'sid'> & { sid: string | null; id: string };
 
 /** Tenant context attached to face/camera requests by the TenantInterceptor. */
 export interface TenantContext {
@@ -49,18 +53,22 @@ export interface GoogleProfile {
 /** Minimal user shape required to mint a token (Prisma user rows satisfy this). */
 export interface TokenUser {
   id: string;
+  username?: string | null;
   email: string;
   role: string;
   organizationId: string;
   firstName?: string | null;
   lastName?: string | null;
   avatar?: string | null;
+  mustChangePassword?: boolean;
+  memberships?: any[];
   organization?: { id: string; name: string } | null;
 }
 
 /** Response type for getMe route */
 export interface GetMeResponse {
   id: string;
+  username?: string | null;
   email: string;
   firstName: string | null;
   lastName: string | null;
@@ -68,9 +76,11 @@ export interface GetMeResponse {
   avatar: string | null;
   role: string;
   organizationId: string;
+  mustChangePassword?: boolean;
   organization: { id: string; name: string } | null;
-  settings: any; // We can use the Prisma settings type if imported, but any is safe here for now
+  settings: any;
   lastLoginAt: Date | null;
+  memberships?: any[];
 }
 
 /** Active session / device representation returned by GET /auth/sessions */
@@ -91,4 +101,3 @@ export interface ActiveSessionDto {
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
-

@@ -19,6 +19,7 @@ interface ValidationCacheEntry {
     role: string;
     organizationId: string;
     sid: string;
+    mustChangePassword?: boolean;
   };
   expiresAt: number;
 }
@@ -107,9 +108,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
       const session = await this.prisma.parentSession.findUnique({
         where: { id: payload.sid },
-        select: { id: true, revokedAt: true, expiresAt: true, parentId: true, organizationId: true },
+        select: { id: true, revokedAt: true, revokedReason: true, expiresAt: true, parentId: true, organizationId: true },
       });
       if (!session || session.revokedAt || session.expiresAt < new Date()) {
+        if (session?.revokedReason === 'concurrent_session_revoked') {
+          throw new UnauthorizedException({
+            statusCode: 401,
+            message: 'Hisobingizga boshqa qurilmadan kirildi. Xavfsizlik maqsadida ushbu seans yakunlandi.',
+            code: 'CONCURRENT_SESSION_REVOKED',
+          });
+        }
+        if (session?.revokedReason === 'tenant_suspended' || session?.revokedReason === 'organization_suspended') {
+          throw new UnauthorizedException({
+            statusCode: 401,
+            message: "Tashkilot faoliyati vaqtincha to'xtatilgan. Iltimos, Platforma Egasi bilan bog'laning.",
+            code: 'TENANT_SUSPENDED',
+          });
+        }
         throw new UnauthorizedException('Session expired or revoked');
       }
       if (session.parentId !== parent.id || session.organizationId !== parent.organizationId) {
@@ -134,7 +149,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, organizationId: true, isActive: true, status: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        organizationId: true,
+        isActive: true,
+        status: true,
+        mustChangePassword: true,
+      },
     });
 
     if (!user || !user.isActive || (user.status && user.status !== 'ACTIVE')) {
@@ -151,9 +174,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const session = await this.prisma.session.findUnique({
       where: { id: payload.sid },
-      select: { id: true, revokedAt: true, expiresAt: true, userId: true, organizationId: true },
+      select: { id: true, revokedAt: true, revokedReason: true, expiresAt: true, userId: true, organizationId: true },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
+      if (session?.revokedReason === 'concurrent_session_revoked') {
+        throw new UnauthorizedException({
+          statusCode: 401,
+          message: 'Hisobingizga boshqa qurilmadan kirildi. Xavfsizlik maqsadida ushbu seans yakunlandi.',
+          code: 'CONCURRENT_SESSION_REVOKED',
+        });
+      }
+      if (session?.revokedReason === 'tenant_suspended' || session?.revokedReason === 'organization_suspended') {
+        throw new UnauthorizedException({
+          statusCode: 401,
+          message: "Tashkilot faoliyati vaqtincha to'xtatilgan. Iltimos, Platforma Egasi bilan bog'laning.",
+          code: 'TENANT_SUSPENDED',
+        });
+      }
       throw new UnauthorizedException('Session expired or revoked');
     }
     if (session.userId !== user.id || session.organizationId !== user.organizationId) {
@@ -167,6 +204,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role,
       organizationId: user.organizationId,
       sid: payload.sid,
+      mustChangePassword: !!user.mustChangePassword,
     };
 
     if (this.cacheTtlMs > 0 && payload.sid) {

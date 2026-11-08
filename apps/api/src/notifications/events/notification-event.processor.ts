@@ -16,6 +16,7 @@ import {
   telegramDeliveryDedupKey,
 } from '../notification-delivery.service';
 import { TelegramNotificationPolicyService } from '../telegram-notification-policy.service';
+import { EmailService } from '../email.service';
 import {
   ChannelDeliveryResult,
   NOTIFICATION_EVENTS_QUEUE,
@@ -58,6 +59,7 @@ export class NotificationEventProcessor extends WorkerHost {
     private readonly deliveries: NotificationDeliveryService,
     private readonly telegramPolicy: TelegramNotificationPolicyService,
     @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly email?: EmailService,
   ) {
     super();
   }
@@ -128,83 +130,156 @@ export class NotificationEventProcessor extends WorkerHost {
       await redis.set(idempKey, 'DELIVERING_EXTERNAL', 'EX', 86400);
     }
 
-    // 2. Parent SMS via the real provider (Eskiz/PlayMobile).
+    // 2. Smart Omnichannel Cascade Delivery for Parents:
+    // Priority 1: Telegram (Free, instant, saves center SMS costs)
+    // Priority 2: SMS via Eskiz/PlayMobile (Failover if Telegram unavailable/blocked)
+    // Priority 3: Email via SMTP (Failover if SMS provider fails / out of credits)
     //
-    // Attendance (absent/late) and payment events go straight to SMS as the
-    // primary parent channel: Uzbek parents overwhelmingly interact via SMS,
-    // Telegram is a bonus and email is effectively unused. The processor
-    // passes the org id so the SmsService can audit-delivery into SMSLog.
-    if (PARENT_SMS_EVENTS.has(event.type)) {
-      const smsTargets = await this.resolveParentPhones(event);
-      for (const phone of smsTargets) {
-        try {
-          const ok = await this.sms.sendSms(phone, `${title}: ${body}`, event.organizationId);
-          deliveries.push({ channel: 'SMS', ok, error: ok ? undefined : 'provider rejected' });
-        } catch (e: any) {
-          const errText = e?.message || String(e || 'unknown error');
-          deliveries.push({ channel: 'SMS', ok: false, error: errText });
-          this.logger.error(
-            `Parent SMS failed for event ${event.type}/${event.entityId} to ${phone}: ${errText}`,
-          );
-        }
+    // Deduplicates per parent to prevent dual-billing / duplicate messages.
+    const resolvedParents = await this.resolveParents(event);
+    const parentPhonesDirect = PARENT_SMS_EVENTS.has(event.type)
+      ? await this.resolveParentPhones(event)
+      : [];
+
+    type UnifiedParentTarget = {
+      id: string;
+      phone?: string | null;
+      email?: string | null;
+      isVirtual?: boolean;
+    };
+
+    const coveredPhones = new Set<string>();
+    const unifiedTargets: UnifiedParentTarget[] = [];
+
+    for (const p of resolvedParents) {
+      unifiedTargets.push({
+        id: p.id,
+        phone: p.phone,
+        email: p.email,
+        isVirtual: false,
+      });
+      if (p.phone) coveredPhones.add(p.phone);
+    }
+
+    // Add legacy/direct student parent phones that are not yet covered by a registered ParentAccount
+    for (const directPhone of parentPhonesDirect) {
+      if (!coveredPhones.has(directPhone)) {
+        coveredPhones.add(directPhone);
+        unifiedTargets.push({
+          id: `virtual-phone-${directPhone}`,
+          phone: directPhone,
+          email: null,
+          isVirtual: true,
+        });
       }
     }
 
-    // 3. Parent notifications.
-    //
-    // `TelegramAccount` (status = ACTIVE, same organization) is the ONLY
-    // authoritative Telegram delivery identity. The legacy
-    // `ParentAccount.telegramChatId` column is deliberately NOT read here: a
-    // stale pointer (set before a disconnect/block) must never route a
-    // message, and a non-ACTIVE account must never receive one. The column is
-    // still dual-written by the linking flow for the compatibility window.
-    const parents = await this.resolveParents(event);
+    // Additional legacy fallback if no parents were resolved and not in PARENT_SMS_EVENTS, but event has parentPhone
+    if (unifiedTargets.length === 0 && event.data.parentPhone) {
+      unifiedTargets.push({
+        id: `virtual-phone-${event.data.parentPhone}`,
+        phone: event.data.parentPhone,
+        email: null,
+        isVirtual: true,
+      });
+    }
+
+    const realParentTargets = unifiedTargets.filter((t) => !t.isVirtual);
     const targets = await this.telegramDelivery.resolveActiveTargetsForPrincipals(
       event.organizationId,
-      parents.map((parent) => ({
+      realParentTargets.map((parent) => ({
         type: 'PARENT_ACCOUNT' as const,
         parentAccountId: parent.id,
       })),
     );
 
-    for (const parent of parents) {
-      const target = targets.get(parent.id) ?? null;
-      let telegramHandled = false; // sent OR deferred for a later retry
+    for (const targetItem of unifiedTargets) {
+      const activeTelegram = !targetItem.isVirtual ? targets.get(targetItem.id) ?? null : null;
+      let handled = false;
 
-      if (target) {
-        telegramHandled = await this.deliverParentTelegram({
+      // ── Step 1: Telegram (Primary, instant, free for center) ──
+      if (activeTelegram) {
+        const telegramHandled = await this.deliverParentTelegram({
           event,
           eventId: String(job.id ?? ''),
           title,
           body,
-          target,
+          target: activeTelegram,
           deliveries,
         });
-      }
-
-      // Preserve the existing fallback chain: SMS when Telegram was not
-      // delivered. A DEFERRED delivery is not "not delivered" — it will be
-      // retried — so it deliberately does not trigger the SMS fallback (nor
-      // does an explicit user opt-out, which is what the setting means).
-      if (!telegramHandled && parent.phone) {
-        try {
-          const smsOk = await this.sms.sendSms(parent.phone, `${title}: ${body}`);
-          deliveries.push({ channel: 'SMS', ok: smsOk, error: smsOk ? undefined : 'SMS provider rejected' });
-        } catch (e) {
-          deliveries.push({ channel: 'SMS', ok: false, error: e.message });
+        if (telegramHandled) {
+          handled = true;
         }
       }
-    }
 
-    // Handle legacy fallback if no parents were resolved but event has parentPhone
-    if (parents.length === 0 && event.data.parentPhone) {
-      try {
-        const smsOk = await this.sms.sendSms(event.data.parentPhone, `${title}: ${body}`);
-        deliveries.push({ channel: 'SMS', ok: smsOk, error: smsOk ? undefined : 'provider rejected' });
-      } catch (e) {
-        deliveries.push({ channel: 'SMS', ok: false, error: e.message });
-        if (e.message !== 'IMPLEMENTED - RUNTIME CREDENTIALS UNVERIFIED') {
-          throw e;
+      // ── Step 2: SMS (Failover if Telegram not handled/available) ──
+      let smsFailed = false;
+      let smsErrorMessage: string | undefined;
+
+      if (!handled && targetItem.phone) {
+        try {
+          const isDirectEvent = PARENT_SMS_EVENTS.has(event.type);
+          const smsResult = typeof this.sms.sendSmsDetailed === 'function'
+            ? await (isDirectEvent
+                ? this.sms.sendSmsDetailed(targetItem.phone, `${title}: ${body}`, event.organizationId)
+                : this.sms.sendSmsDetailed(targetItem.phone, `${title}: ${body}`))
+            : {
+                ok: await (isDirectEvent
+                  ? this.sms.sendSms(targetItem.phone, `${title}: ${body}`, event.organizationId)
+                  : this.sms.sendSms(targetItem.phone, `${title}: ${body}`)),
+              };
+
+          if (smsResult.ok) {
+            deliveries.push({ channel: 'SMS', ok: true });
+            handled = true;
+          } else {
+            smsFailed = true;
+            smsErrorMessage =
+              (smsResult as any).errorMessage ||
+              (smsResult as any).failureCategory ||
+              'provider rejected';
+            deliveries.push({ channel: 'SMS', ok: false, error: smsErrorMessage });
+          }
+        } catch (e: any) {
+          smsFailed = true;
+          smsErrorMessage = e?.message || String(e || 'unknown SMS error');
+          deliveries.push({ channel: 'SMS', ok: false, error: smsErrorMessage });
+          if (e?.message === 'IMPLEMENTED - RUNTIME CREDENTIALS UNVERIFIED') {
+            throw e;
+          }
+          this.logger.error(
+            `Parent SMS failed for event ${event.type}/${event.entityId} to ${targetItem.phone}: ${smsErrorMessage}`,
+          );
+        }
+      }
+
+      // ── Step 3: Email (Smart Failover if Telegram & SMS both failed/unavailable) ──
+      if (!handled && targetItem.email) {
+        try {
+          const emailResult = await this.deliverParentEmail({
+            event,
+            to: targetItem.email,
+            title,
+            body,
+            failoverReason: smsFailed ? `SMS uzatilmadi: ${smsErrorMessage}` : 'Telegram/SMS ulanmagan',
+          });
+          deliveries.push({
+            channel: 'EMAIL',
+            ok: emailResult.success,
+            error: emailResult.success ? undefined : emailResult.error,
+          });
+          if (emailResult.success) {
+            handled = true;
+            this.logger.log(
+              `Smart Failover to Email succeeded for parent ${targetItem.id} (${targetItem.email})`,
+            );
+          }
+        } catch (emailErr: any) {
+          deliveries.push({
+            channel: 'EMAIL',
+            ok: false,
+            error: emailErr?.message || String(emailErr),
+          });
         }
       }
     }
@@ -346,6 +421,53 @@ export class NotificationEventProcessor extends WorkerHost {
       );
       deliveries.push({ channel: 'TELEGRAM', ok: false, error: 'internal error' });
       return false;
+    }
+  }
+
+  /**
+   * Deliver ONE event to ONE parent's Email address as part of the
+   * Smart Omnichannel Failover Cascade (when Telegram & SMS were unsuccessful).
+   */
+  private async deliverParentEmail(params: {
+    event: NotificationEventPayload;
+    to: string;
+    title: string;
+    body: string;
+    failoverReason?: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { event, to, title, body, failoverReason } = params;
+    if (!this.email) {
+      return { success: false, error: 'EmailService not available' };
+    }
+
+    try {
+      const html = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+          <div style="border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 16px;">
+            <h2 style="color: #1e293b; margin: 0; font-size: 20px;">${escapeHtml(title)}</h2>
+            ${failoverReason ? `<span style="font-size: 11px; background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-top: 6px;">Zaxira aloqa kanali (${escapeHtml(failoverReason)})</span>` : ''}
+          </div>
+          <p style="color: #334155; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">${escapeHtml(body)}</p>
+          <div style="border-top: 1px solid #f1f5f9; padding-top: 16px; margin-top: 24px; font-size: 12px; color: #94a3b8; text-align: center;">
+            <p style="margin: 0;">Ushbu bildirishnoma <b>M-EDU Ta'lim Platformasi</b> orqali yuborildi.</p>
+          </div>
+        </div>
+      `.trim();
+
+      const result = await this.email.sendRawEmail({
+        to,
+        subject: `[M-EDU] ${title}`,
+        html,
+        text: `${title}\n\n${body}`,
+        organizationId: event.organizationId,
+      });
+
+      return result;
+    } catch (err: unknown) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 

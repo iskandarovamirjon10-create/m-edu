@@ -181,13 +181,13 @@ export class GeminiProvider implements AiProvider {
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
         this.logger.error(`Gemini ${response.status}: ${detail.slice(0, 300)}`);
-        // 429 rates and 5xx are transient → retryable via fallback models.
-        // Other 4xx (bad API key 400/403, unknown model 404, malformed
-        // request) indicate a configuration problem that no fallback can fix.
+        // 429 rates, 5xx server errors and 404 (model not found) are transient/model-specific
+        // -> retryable via fallback models.
+        // 400, 401, 403 indicate bad credentials, expired keys or malformed auth that no fallback can fix.
         throw new AiProviderError(
           response.status === 429
             ? AiErrorCode.AI_RATE_LIMITED
-            : response.status >= 500
+            : response.status >= 500 || response.status === 404
               ? AiErrorCode.AI_PROVIDER_UNAVAILABLE
               : AiErrorCode.AI_PROVIDER_CONFIG_ERROR,
           `Gemini responded ${response.status}`,
@@ -216,7 +216,7 @@ export class GeminiProvider implements AiProvider {
     if (functionPart?.functionCall) {
       return {
         toolCall: {
-          id: randomUUID(),
+          id: functionPart.functionCall.id || randomUUID(),
           name: functionPart.functionCall.name,
           arguments: functionPart.functionCall.args ?? {},
         },

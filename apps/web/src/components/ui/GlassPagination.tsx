@@ -193,7 +193,7 @@ export function GlassPagination({
                 active={pageNum === safePage}
                 onClick={() => onPageChange(pageNum)}
                 ariaLabel={`${pageWord} ${pageNum}`}
-                ariaCurrent={pageNum === page ? 'page' : undefined}
+                ariaCurrent={pageNum === safePage ? 'page' : undefined}
               >
                 {pageNum}
               </PageChip>

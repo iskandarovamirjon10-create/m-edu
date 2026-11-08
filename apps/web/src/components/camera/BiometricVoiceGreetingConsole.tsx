@@ -16,7 +16,7 @@ export interface GreetedStudent {
   nextRoom: string;
   nextSubject: string;
   startTime: string;
-  financialStatus: 'paid' | 'grace_period' | 'pending';
+  financialStatus: 'paid' | 'grace_period' | 'pending' | 'unknown';
   balanceFormatted: string;
   greetedAt: string;
   spokenText: string;
@@ -27,20 +27,6 @@ export interface BiometricVoiceGreetingConsoleProps {
   defaultLanguage?: VoiceLanguage;
 }
 
-const DEFAULT_GREETED_STUDENT: GreetedStudent = {
-  id: 'st-default-1',
-  name: 'Dilshod Rahmatov',
-  studentCode: 'STD-2026',
-  className: 'Frontend Pro & AI',
-  nextRoom: '304-Auditoriya',
-  nextSubject: 'Full-Stack JavaScript',
-  startTime: '09:00',
-  financialStatus: 'paid',
-  balanceFormatted: "+250,000 UZS (To'langan)",
-  greetedAt: '08:45:00',
-  spokenText: 'Xush kelibsiz, Dilshod Rahmatov! Darsingiz 304-Auditoriyada boshlanadi.',
-};
-
 export function BiometricVoiceGreetingConsole({
   className,
   defaultLanguage = 'uz',
@@ -48,13 +34,22 @@ export function BiometricVoiceGreetingConsole({
   const toast = useToast();
   const sounds = usePremiumSound();
 
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
   const [language, setLanguage] = useState<VoiceLanguage>(defaultLanguage);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [speechRate, setSpeechRate] = useState(1.05);
   const [speechPitch, setSpeechPitch] = useState(1.0);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [activeStudent, setActiveStudent] = useState<GreetedStudent | null>(DEFAULT_GREETED_STUDENT);
-  const [history, setHistory] = useState<GreetedStudent[]>([DEFAULT_GREETED_STUDENT]);
+  const [activeStudent, setActiveStudent] = useState<GreetedStudent | null>(null);
+  const [history, setHistory] = useState<GreetedStudent[]>([]);
+  const [greetingIndex, setGreetingIndex] = useState(0);
   const [isLoadingBackend, setIsLoadingBackend] = useState(false);
 
   // Sync with real backend recognition history and registered students
@@ -76,37 +71,49 @@ export function BiometricVoiceGreetingConsole({
         const studentItems = Array.isArray(stData?.items) ? stData.items : [];
 
         if (recItems.length > 0) {
-          const mapped: GreetedStudent[] = recItems.slice(0, 5).map((item: any, idx: number) => ({
-            id: item.id || `rec-${idx}`,
-            name: item.studentName || `Talaba #${idx + 1}`,
-            studentCode: `STD-${1000 + idx}`,
-            className: 'Asosiy guruh',
-            nextRoom: `${200 + idx}-Auditoriya`,
-            nextSubject: 'Dasturlash va Fanlar',
-            startTime: '08:30',
-            financialStatus: 'paid',
-            balanceFormatted: '0 UZS',
-            greetedAt: item.createdAt ? new Date(item.createdAt).toLocaleTimeString() : '08:20:00',
-            spokenText: `Xush kelibsiz, ${item.studentName || 'Talaba'}! Darsingiz ${200 + idx}-xonada boshlanadi.`,
-          }));
+          // Faqat javobda mavjud bo'lgan maydonlar — xona, fan, balans va to'lov
+          // holati o'ylab topilmaydi.
+          const mapped: GreetedStudent[] = recItems.slice(0, 5).map((item: any, idx: number) => {
+            const name = item.studentName || item.student?.firstName || '';
+            const room = item.roomName || item.room || '';
+            const subject = item.subjectName || item.subject || '';
+            return {
+              id: item.id || `rec-${idx}`,
+              name: name || '—',
+              studentCode: item.studentCode || item.code || '—',
+              className: item.groupName || item.group?.name || '—',
+              nextRoom: room || '—',
+              nextSubject: subject || '—',
+              startTime: item.startTime || '—',
+              financialStatus: 'unknown',
+              balanceFormatted: '—',
+              greetedAt: item.createdAt ? new Date(item.createdAt).toLocaleTimeString() : '—',
+              spokenText: room
+                ? `Xush kelibsiz, ${name}! Darsingiz ${room}da boshlanadi.`
+                : `Xush kelibsiz, ${name || 'mehmon'}!`,
+            };
+          });
           setHistory(mapped);
           setActiveStudent(mapped[0]);
         } else if (studentItems.length > 0) {
           const mapped: GreetedStudent[] = studentItems.slice(0, 5).map((st: any, idx: number) => {
-            const fullName = `${st.firstName} ${st.lastName || ''}`.trim();
-            const groupName = st.groups?.[0]?.group?.name || 'Asosiy guruh';
+            const fullName = `${st.user?.firstName || st.firstName || ''} ${
+              st.user?.lastName || st.lastName || ''
+            }`.trim();
+            const groupName = st.groups?.[0]?.group?.name || '';
             return {
               id: st.id || `st-${idx}`,
-              name: fullName,
-              studentCode: `STD-${1000 + idx}`,
-              className: groupName,
-              nextRoom: `${101 + idx}-Xona`,
-              nextSubject: groupName,
-              startTime: '08:30',
-              financialStatus: 'paid',
-              balanceFormatted: '+100,000 UZS',
+              name: fullName || '—',
+              studentCode: st.studentCode || st.code || '—',
+              className: groupName || '—',
+              nextRoom: '—',
+              nextSubject: groupName || '—',
+              startTime: '—',
+              financialStatus: 'unknown',
+              balanceFormatted:
+                st.balance != null ? `${Number(st.balance).toLocaleString('uz-UZ')} UZS` : '—',
               greetedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              spokenText: `Xush kelibsiz, ${fullName}! Darsingiz ${101 + idx}-xonada boshlanadi.`,
+              spokenText: `Xush kelibsiz, ${fullName || 'mehmon'}!`,
             };
           });
           setHistory(mapped);
@@ -167,55 +174,48 @@ export function BiometricVoiceGreetingConsole({
   );
 
   const handleSimulateGreeting = useCallback(() => {
-    const names = [
-      'Shahnoza Umurzoqova',
-      'Bekzod Yo‘ldoshev',
-      'Kamron Saidov',
-      'Nigora Rustamova',
-      'Temur Boboyev',
-    ];
-    const rooms = ['102-Kutubxona', '305-Laboratoriya', '401-Katta Zal', '204-Media Xona'];
-    const subjects = ['Ingliz tili IELTS', 'Fizika Optika', 'Algoritmlar', 'Robototexnika'];
-
-    const chosenName = names[Math.floor(Math.random() * names.length)];
-    const chosenRoom = rooms[Math.floor(Math.random() * rooms.length)];
-    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
-    const timeNow = new Date().toLocaleTimeString();
-
-    let greetingText = '';
-    if (language === 'uz') {
-      greetingText = `Xush kelibsiz, ${chosenName}! Darsingiz ${chosenRoom}da, fan: ${chosenSubject}.`;
-    } else if (language === 'ru') {
-      greetingText = `Добро пожаловать, ${chosenName}! Ваш урок в кабинете ${chosenRoom}, предмет: ${chosenSubject}.`;
-    } else {
-      greetingText = `Welcome, ${chosenName}! Your class is in room ${chosenRoom}, subject: ${chosenSubject}.`;
+    if (history.length === 0) {
+      toast.error('Talaba topilmadi', "Avval talabalar ro'yxati yuklanishi kerak");
+      return;
     }
 
-    const newStudent: GreetedStudent = {
-      id: `sim-${Date.now()}`,
-      name: chosenName,
-      studentCode: `STD-${Math.floor(1000 + Math.random() * 9000)}`,
-      className: '10-A Standart',
-      nextRoom: chosenRoom,
-      nextSubject: chosenSubject,
-      startTime: '08:45',
-      financialStatus: Math.random() > 0.3 ? 'paid' : 'grace_period',
-      balanceFormatted: Math.random() > 0.3 ? '+150,000 UZS' : '-35,000 UZS',
-      greetedAt: timeNow,
+    const nextIndex = (greetingIndex + 1) % history.length;
+    const student = history[nextIndex];
+
+    const hasRoom = Boolean(student.nextRoom) && student.nextRoom !== '—';
+    const greetingText =
+      language === 'uz'
+        ? hasRoom
+          ? `Xush kelibsiz, ${student.name}! Darsingiz ${student.nextRoom}da, fan: ${student.nextSubject}.`
+          : `Xush kelibsiz, ${student.name}!`
+        : language === 'ru'
+          ? hasRoom
+            ? `Добро пожаловать, ${student.name}! Ваш урок в кабинете ${student.nextRoom}, предмет: ${student.nextSubject}.`
+            : `Добро пожаловать, ${student.name}!`
+          : hasRoom
+            ? `Welcome, ${student.name}! Your class is in room ${student.nextRoom}, subject: ${student.nextSubject}.`
+            : `Welcome, ${student.name}!`;
+
+    const updated: GreetedStudent = {
+      ...student,
+      id: `${student.id}-${Date.now()}`,
+      greetedAt: new Date().toLocaleTimeString(),
       spokenText: greetingText,
     };
 
-    setActiveStudent(newStudent);
-    setHistory((prev) => [newStudent, ...prev.slice(0, 9)]);
+    setGreetingIndex(nextIndex);
+    setActiveStudent(updated);
+    setHistory((prev) => [updated, ...prev].slice(0, 10));
     speakText(greetingText);
-    toast.success('Biometrik ovozli salomlashish ijro etildi', chosenName);
-  }, [language, speakText, toast]);
+    toast.success('Biometrik ovozli salomlashish ijro etildi', student.name);
+  }, [greetingIndex, history, language, speakText, toast]);
 
   const activeBadgeVariant = useMemo(() => {
     if (!activeStudent) return 'neutral';
     if (activeStudent.financialStatus === 'paid') return 'success';
     if (activeStudent.financialStatus === 'grace_period') return 'warning';
-    return 'danger';
+    if (activeStudent.financialStatus === 'pending') return 'danger';
+    return 'neutral';
   }, [activeStudent]);
 
   return (
@@ -318,7 +318,9 @@ export function BiometricVoiceGreetingConsole({
                       ? "To'lov Aktiv"
                       : activeStudent.financialStatus === 'grace_period'
                       ? 'Imtiyozli muddat'
-                      : 'Qarzdorlik'}
+                      : activeStudent.financialStatus === 'pending'
+                      ? 'Qarzdorlik'
+                      : "To'lov holati noma'lum"}
                   </GlassBadge>
                   <span className="text-[10px] font-mono text-cyan-400/80 bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-800/40">
                     {activeStudent.studentCode}

@@ -1,20 +1,87 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExamDto, UpdateExamDto, CreateExamResultDto, PublishExamDto } from './dto/exam.dto';
 import { PaginationParams } from '../common/dto/pagination';
 import { parsePagination } from '../lib/pagination';
 
+export interface ExamRequester {
+  id: string;
+  role: string;
+}
+
 @Injectable()
 export class ExamsService {
   constructor(private prisma: PrismaService) {}
 
+  private async validateTeacherAssignedToGroup(
+    organizationId: string,
+    userId: string,
+    groupId: string,
+  ): Promise<void> {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, organizationId },
+      select: { id: true },
+    });
+    const group = await this.prisma.group.findFirst({
+      where: { id: groupId, organizationId },
+      select: { teacherId: true },
+    });
+    if (!teacher || group?.teacherId !== teacher.id) {
+      throw new ForbiddenException('Teachers can only manage exams for their assigned groups');
+    }
+  }
+
   // ===================== Exam Management =====================
 
-  async findAllExams(organizationId: string, params: PaginationParams) {
+  async findAllExams(
+    organizationId: string,
+    params: PaginationParams,
+    requester?: ExamRequester,
+  ) {
     const { search, examType, isPublished } = params;
 
     const where: Prisma.ExamWhereInput = { organizationId };
+
+    if (requester?.role === Role.TEACHER || requester?.role === Role.ASSISTANT) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      where.group = { teacherId: teacher?.id || '00000000-0000-0000-0000-000000000000' };
+    } else if (requester?.role === Role.STUDENT) {
+      where.isPublished = true;
+      const student = await this.prisma.student.findUnique({
+        where: { userId: requester.id },
+        select: { id: true },
+      });
+      const enrollments = student
+        ? await this.prisma.studentGroup.findMany({
+            where: { studentId: student.id, isActive: true },
+            select: { groupId: true },
+          })
+        : [];
+      where.groupId = { in: enrollments.map((e) => e.groupId) };
+    } else if (requester?.role === Role.PARENT) {
+      where.isPublished = true;
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      const enrollments = await this.prisma.studentGroup.findMany({
+        where: {
+          studentId: { in: children.map((c) => c.studentId) },
+          isActive: true,
+        },
+        select: { groupId: true },
+      });
+      where.groupId = { in: enrollments.map((e) => e.groupId) };
+    }
 
     if (search) {
       where.OR = [
@@ -73,7 +140,30 @@ export class ExamsService {
     };
   }
 
-  async findExamById(organizationId: string, id: string) {
+  async findExamById(
+    organizationId: string,
+    id: string,
+    requester?: ExamRequester,
+  ) {
+    let resultFilter: Prisma.ExamResultWhereInput | undefined;
+
+    if (requester?.role === Role.STUDENT) {
+      const student = await this.prisma.student.findUnique({
+        where: { userId: requester.id },
+        select: { id: true, organizationId: true },
+      });
+      resultFilter =
+        student && student.organizationId === organizationId
+          ? { studentId: student.id }
+          : { studentId: { in: [] } };
+    } else if (requester?.role === Role.PARENT) {
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      resultFilter = { studentId: { in: children.map((c) => c.studentId) } };
+    }
+
     const exam = await this.prisma.exam.findFirst({
       where: { id, organizationId },
       include: {
@@ -82,10 +172,12 @@ export class ExamsService {
             id: true,
             name: true,
             courseId: true,
+            teacherId: true,
             teacher: true,
           },
         },
         results: {
+          ...(resultFilter ? { where: resultFilter } : {}),
           include: {
             student: {
               select: {
@@ -108,10 +200,62 @@ export class ExamsService {
       throw new NotFoundException('Exam not found');
     }
 
+    if (requester?.role === Role.TEACHER || requester?.role === Role.ASSISTANT) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || exam.group?.teacherId !== teacher.id) {
+        throw new ForbiddenException('Teachers can only access exams for their assigned groups');
+      }
+    } else if (requester?.role === Role.STUDENT) {
+      if (!exam.isPublished) {
+        throw new NotFoundException('Exam not found');
+      }
+      const student = await this.prisma.student.findUnique({
+        where: { userId: requester.id },
+        select: { id: true },
+      });
+      const enrollment = student
+        ? await this.prisma.studentGroup.findFirst({
+            where: { studentId: student.id, groupId: exam.groupId, isActive: true },
+          })
+        : null;
+      if (!enrollment) {
+        throw new ForbiddenException('Student is not enrolled in this exam group');
+      }
+    } else if (requester?.role === Role.PARENT) {
+      if (!exam.isPublished) {
+        throw new NotFoundException('Exam not found');
+      }
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      const enrollment = await this.prisma.studentGroup.findFirst({
+        where: {
+          studentId: { in: children.map((c) => c.studentId) },
+          groupId: exam.groupId,
+          isActive: true,
+        },
+      });
+      if (!enrollment) {
+        throw new ForbiddenException('Parent children are not enrolled in this exam group');
+      }
+    }
+
     return exam;
   }
 
-  async createExam(organizationId: string, dto: CreateExamDto) {
+  async createExam(
+    organizationId: string,
+    dto: CreateExamDto,
+    requester?: ExamRequester,
+  ) {
+    if (requester?.role === Role.TEACHER || requester?.role === Role.ASSISTANT) {
+      await this.validateTeacherAssignedToGroup(organizationId, requester.id, dto.groupId);
+    }
+
     // Verify group exists and belongs to organization
     const group = await this.prisma.group.findFirst({
       where: { id: dto.groupId, organizationId },
@@ -138,8 +282,13 @@ export class ExamsService {
     });
   }
 
-  async updateExam(organizationId: string, id: string, dto: UpdateExamDto) {
-    const exam = await this.findExamById(organizationId, id);
+  async updateExam(
+    organizationId: string,
+    id: string,
+    dto: UpdateExamDto,
+    requester?: ExamRequester,
+  ) {
+    const exam = await this.findExamById(organizationId, id, requester);
 
     // Check if exam is already published
     if (exam.isPublished) {
@@ -152,8 +301,12 @@ export class ExamsService {
     });
   }
 
-  async deleteExam(organizationId: string, id: string) {
-    const exam = await this.findExamById(organizationId, id);
+  async deleteExam(
+    organizationId: string,
+    id: string,
+    requester?: ExamRequester,
+  ) {
+    const exam = await this.findExamById(organizationId, id, requester);
 
     // Check if exam is published
     if (exam.isPublished) {
@@ -174,8 +327,13 @@ export class ExamsService {
     });
   }
 
-  async publishExam(organizationId: string, id: string, dto: PublishExamDto) {
-    await this.findExamById(organizationId, id);
+  async publishExam(
+    organizationId: string,
+    id: string,
+    dto: PublishExamDto,
+    requester?: ExamRequester,
+  ) {
+    await this.findExamById(organizationId, id, requester);
 
     // Validate results exist
     const results = await this.prisma.examResult.findMany({
@@ -196,12 +354,52 @@ export class ExamsService {
 
   // ===================== Exam Results =====================
 
-  async getExamResults(organizationId: string, examId: string, studentId?: string) {
-    const exam = await this.findExamById(organizationId, examId);
+  async getExamResults(
+    organizationId: string,
+    examId: string,
+    studentId?: string,
+    requester?: ExamRequester,
+  ) {
+    const exam = await this.findExamById(organizationId, examId, requester);
 
     const where: Prisma.ExamResultWhereInput = { examId, organizationId };
 
-    if (studentId) {
+    if (requester?.role === Role.TEACHER || requester?.role === Role.ASSISTANT) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      if (!teacher || exam.group?.teacherId !== teacher.id) {
+        throw new ForbiddenException('Teachers can only view exam results for their assigned groups');
+      }
+      if (studentId) {
+        where.studentId = studentId;
+      }
+    } else if (requester?.role === Role.STUDENT) {
+      const student = await this.prisma.student.findUnique({
+        where: { userId: requester.id },
+        select: { id: true, organizationId: true },
+      });
+      if (!student || student.organizationId !== organizationId) {
+        return { exam, results: [] };
+      }
+      // Students can ONLY view their own result
+      where.studentId = student.id;
+    } else if (requester?.role === Role.PARENT) {
+      const children = await this.prisma.parentStudent.findMany({
+        where: { parentId: requester.id },
+        select: { studentId: true },
+      });
+      const allowedStudentIds = children.map((c) => c.studentId);
+      if (studentId) {
+        if (!allowedStudentIds.includes(studentId)) {
+          throw new ForbiddenException('Parents can only view their own children exam results');
+        }
+        where.studentId = studentId;
+      } else {
+        where.studentId = { in: allowedStudentIds };
+      }
+    } else if (studentId) {
       where.studentId = studentId;
     }
 
@@ -229,8 +427,17 @@ export class ExamsService {
     };
   }
 
-  async createExamResult(organizationId: string, examId: string, dto: CreateExamResultDto) {
-    const exam = await this.findExamById(organizationId, examId);
+  async createExamResult(
+    organizationId: string,
+    examId: string,
+    dto: CreateExamResultDto,
+    requester?: ExamRequester,
+  ) {
+    const exam = await this.findExamById(organizationId, examId, requester);
+
+    if (requester?.role === Role.TEACHER || requester?.role === Role.ASSISTANT) {
+      await this.validateTeacherAssignedToGroup(organizationId, requester.id, exam.groupId);
+    }
 
     // Cross-tenant guard: the student must belong to this organization.
     const student = await this.prisma.student.findFirst({
@@ -372,17 +579,57 @@ export class ExamsService {
 
   // ===================== Student View =====================
 
-  async getStudentExamResults(organizationId: string, studentId: string) {
+  async getStudentExamResults(
+    organizationId: string,
+    studentId: string,
+    requester?: ExamRequester,
+  ) {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, organizationId },
+      include: {
+        parentStudents: { select: { parentId: true } },
+      },
     });
 
     if (!student) {
       throw new NotFoundException('Student not found');
     }
 
+    // Object-level authorization
+    if (requester?.role === Role.STUDENT) {
+      if (student.userId !== requester.id) {
+        throw new ForbiddenException('Students can only view their own exam results');
+      }
+    } else if (requester?.role === Role.PARENT) {
+      const isChild = student.parentStudents.some((ps) => ps.parentId === requester.id);
+      if (!isChild) {
+        throw new ForbiddenException('Parents can only view their own children exam results');
+      }
+    } else if (requester?.role === Role.TEACHER || requester?.role === Role.ASSISTANT) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId: requester.id, organizationId },
+        select: { id: true },
+      });
+      const teachesStudent = await this.prisma.studentGroup.findFirst({
+        where: {
+          studentId: student.id,
+          organizationId,
+          isActive: true,
+          group: { teacherId: teacher?.id || '00000000-0000-0000-0000-000000000000' },
+        },
+      });
+      if (!teachesStudent) {
+        throw new ForbiddenException('Teachers can only view exam results for students in their assigned groups');
+      }
+    }
+
+    const where: Prisma.ExamResultWhereInput = { organizationId, studentId };
+    if (requester?.role === Role.STUDENT || requester?.role === Role.PARENT) {
+      where.exam = { isPublished: true };
+    }
+
     const results = await this.prisma.examResult.findMany({
-      where: { organizationId, studentId },
+      where,
       include: {
         exam: {
           select: {
@@ -404,18 +651,19 @@ export class ExamsService {
     // Calculate statistics
     const passed = results.filter((r) => r.isPassed).length;
     const total = results.length;
-    const average = total > 0
-      ? results.reduce((sum, r) => sum + Number(r.marksObtained), 0) / total
-      : 0;
+    const average =
+      total > 0
+        ? results.reduce((sum, r) => sum + Number(r.marksObtained), 0) / total
+        : 0;
 
     // Standard 4.0 scale GPA calculation weighted by exam totalMarks
     const GRADE_POINTS: Record<string, number> = {
       'A+': 4.0,
-      'A': 4.0,
+      A: 4.0,
       'B+': 3.5,
-      'B': 3.0,
-      'C': 2.0,
-      'F': 0.0,
+      B: 3.0,
+      C: 2.0,
+      F: 0.0,
     };
 
     let totalWeight = 0;
@@ -423,15 +671,21 @@ export class ExamsService {
 
     for (const r of results) {
       const weight = Number(r.exam?.totalMarks || 1);
-      const grade = r.grade || (
-        r.exam?.totalMarks && Number(r.exam.totalMarks) > 0
-          ? (Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.9 ? 'A+' :
-             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.8 ? 'A' :
-             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.7 ? 'B+' :
-             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.6 ? 'B' :
-             Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.5 ? 'C' : 'F')
-          : 'F'
-      );
+      const grade =
+        r.grade ||
+        (r.exam?.totalMarks && Number(r.exam.totalMarks) > 0
+          ? Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.9
+            ? 'A+'
+            : Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.8
+              ? 'A'
+              : Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.7
+                ? 'B+'
+                : Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.6
+                  ? 'B'
+                  : Number(r.marksObtained) / Number(r.exam.totalMarks) >= 0.5
+                    ? 'C'
+                    : 'F'
+          : 'F');
       const points = GRADE_POINTS[grade] ?? 0;
       if (weight > 0) {
         weightedPoints += points * weight;
@@ -439,9 +693,10 @@ export class ExamsService {
       }
     }
 
-    const gpa = total > 0 && totalWeight > 0
-      ? Math.round((weightedPoints / totalWeight) * 100) / 100
-      : 0;
+    const gpa =
+      total > 0 && totalWeight > 0
+        ? Math.round((weightedPoints / totalWeight) * 100) / 100
+        : 0;
 
     return {
       student,
@@ -456,4 +711,4 @@ export class ExamsService {
       },
     };
   }
-}
+}

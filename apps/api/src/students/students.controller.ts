@@ -8,6 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ADMIN_ROLES, STAFF_ROLES } from '../auth/authorization.policy';
+import type { RequestUser } from '../auth/types';
 import { QuotaGuard, RequireQuota } from '../subscriptions/guards/quota.guard';
 
 @ApiTags('Students')
@@ -20,15 +21,49 @@ export class StudentsController {
   @Get()
   @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'List students' })
-  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: StudentQuery) {
-    return this.studentsService.findAll(orgId, query);
+  findAll(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() userOrQuery: RequestUser | StudentQuery,
+    @Query() queryOrUser?: StudentQuery | RequestUser,
+  ) {
+    let user: RequestUser | undefined;
+    let query: StudentQuery = {};
+    if (userOrQuery && typeof userOrQuery === 'object' && ('role' in userOrQuery || 'sub' in userOrQuery)) {
+      user = userOrQuery as RequestUser;
+      query = (queryOrUser as StudentQuery) || {};
+    } else {
+      query = (userOrQuery as StudentQuery) || {};
+      user = queryOrUser && typeof queryOrUser === 'object' && ('role' in queryOrUser || 'sub' in queryOrUser)
+        ? (queryOrUser as RequestUser)
+        : undefined;
+    }
+    return user
+      ? this.studentsService.findAll(orgId, query, user)
+      : this.studentsService.findAll(orgId, query);
   }
 
   @Get(':id')
   @Roles(...STAFF_ROLES)
   @ApiOperation({ summary: 'Get student details' })
-  findOne(@CurrentUser('organizationId') orgId: string, @Param('id') id: string) {
-    return this.studentsService.findOne(orgId, id);
+  findOne(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser() userOrId: RequestUser | string,
+    @Param('id') idOrUser?: string | RequestUser,
+  ) {
+    let user: RequestUser | undefined;
+    let id: string = '';
+    if (typeof userOrId === 'string') {
+      id = userOrId;
+      user = idOrUser && typeof idOrUser === 'object' && ('role' in idOrUser || 'sub' in idOrUser)
+        ? (idOrUser as RequestUser)
+        : undefined;
+    } else {
+      user = userOrId;
+      id = typeof idOrUser === 'string' ? idOrUser : '';
+    }
+    return user
+      ? this.studentsService.findOne(orgId, id, user)
+      : this.studentsService.findOne(orgId, id);
   }
 
   @Post()

@@ -872,8 +872,9 @@ export function WebcamCapture({
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                   const result = ev.target?.result as string;
-                  onCapture(result.split(',')[1]);
+                  if (result) { const parts = result.split(','); onCapture(parts[1] || parts[0]); }
                 };
+                e.target.value = '';
                 reader.readAsDataURL(file);
               }}
             />

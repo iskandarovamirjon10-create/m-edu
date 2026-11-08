@@ -24,7 +24,8 @@ import {
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ErrorBoundaryWrapper, PageFallback, Protected, PublicOnly } from '../App';
-import { STAFF_ROLES } from '@/lib/roles';
+import { useAuth } from '@/auth/AuthContext';
+import { ADMIN_ROLES, STAFF_ROLES, TEACHER_ROLES } from '@/lib/roles';
 import type { Role } from '@/lib/types';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -162,6 +163,7 @@ const InventoryPage            = lazyPage(() => import('@/pages/Inventory'), 'In
 const EarlyWarningPage         = lazyPage(() => import('@/pages/EarlyWarning'), 'EarlyWarningPage');
 const AcademicRiskPage         = lazyPage(() => import('@/pages/AcademicRisk'), 'AcademicRiskPage');
 const GamificationHubPage      = lazyPage(() => import('@/pages/GamificationHub'), 'GamificationHubPage');
+const MindArenaPage            = lazyPage(() => import('@/pages/MindArena'), 'MindArenaPage');
 const TeacherWorkloadPage      = lazyPage(() => import('@/pages/TeacherWorkload'), 'TeacherWorkloadPage');
 const ForecastingPage          = lazyPage(() => import('@/pages/Forecasting'), 'ForecastingPage');
 const ImportExportPage         = lazyPage(() => import('@/pages/ImportExport'), 'ImportExportPage');
@@ -274,10 +276,34 @@ export interface RouteConfig {
   errorLabel?: string;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * SMART WORKSPACE HOME — Role-Based Landing Engine
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+function WorkspaceHome() {
+  const { user } = useAuth();
+  const role = user?.role?.toUpperCase();
+  if (role === 'TEACHER' || role === 'ASSISTANT') {
+    return <Navigate to="/teacher-cockpit" replace />;
+  }
+  if (role === 'PARENT') {
+    return <Navigate to="/parent-portal" replace />;
+  }
+  if (role === 'STUDENT') {
+    return <Navigate to="/schedule" replace />;
+  }
+  return <DashboardPage />;
+}
+
 export const routeConfig: RouteConfig[] = [
   /* ── Standalone Public & Auth Flows ── */
   { path: '/login', element: <LoginPage />, type: 'public', title: 'Sign In', titleKey: 'nav.signIn' },
-  { path: '/register', element: <Navigate to="/login" replace />, type: 'none' },
+  // SC-01: self-registration was disabled by redirecting /register to /login,
+  // which left a 1 366-line page unreachable. The API already owns the policy
+  // (POST /auth/register is @AllowPublic and auth.service enforces
+  // inviteOnly/requireApproval), so the route can safely render the real page.
+  // Centralized IAM: Public registration is strictly prohibited (OWNER_ONLY provisioning).
+  { path: '/register', element: <Navigate to="/login" replace />, type: 'none', title: 'Sign In' },
   { path: '/auth/callback', element: <AuthCallbackPage />, type: 'none', title: 'Authenticating…' },
   { path: '/forgot-password', element: <ForgotPasswordPage />, type: 'public', title: 'Reset Password', titleKey: 'auth.forgotPasswordTitle' },
   { path: '/reset-password', element: <ResetPasswordPage />, type: 'public', title: 'Set New Password', titleKey: 'auth.resetPasswordTitle' },
@@ -294,110 +320,112 @@ export const routeConfig: RouteConfig[] = [
     type: 'protected',
     title: 'M-EDU Workspace',
     children: [
-      { index: true, element: <DashboardPage />, title: 'Dashboard', titleKey: 'nav.dashboard' },
+      { index: true, element: <WorkspaceHome />, title: 'Dashboard', titleKey: 'nav.dashboard' },
 
       // Students
       { path: 'students', element: <StudentsPage />, title: 'Students', titleKey: 'nav.students', roles: STAFF_ROLES },
-      { path: 'students/new', element: <StudentFormPage />, title: 'New Student', titleKey: 'students.formTitle', roles: STAFF_ROLES },
+      { path: 'students/new', element: <StudentFormPage />, title: 'New Student', titleKey: 'students.formTitle', roles: ADMIN_ROLES },
       { path: 'students/:id', element: <StudentDetailPage />, title: 'Student Profile', titleKey: 'students.detailsTitle', roles: STAFF_ROLES },
       { path: 'students/:id/360', element: <Student360Page />, title: 'Student 360°', titleKey: 'students.detailsTitle', roles: STAFF_ROLES },
-      { path: 'students/:id/edit', element: <StudentFormPage />, title: 'Edit Student', titleKey: 'students.formTitle', roles: STAFF_ROLES },
+      { path: 'students/:id/edit', element: <StudentFormPage />, title: 'Edit Student', titleKey: 'students.formTitle', roles: ADMIN_ROLES },
 
       // Education Core (Academic Operating System)
-      { path: 'subjects', element: <SubjectsPage />, title: 'Subjects', titleKey: 'nav.subjects' },
-      { path: 'curriculum', element: <CurriculumPage />, title: 'Curriculum', titleKey: 'nav.curriculum' },
+      { path: 'subjects', element: <SubjectsPage />, title: 'Subjects', titleKey: 'nav.subjects', roles: STAFF_ROLES },
+      { path: 'curriculum', element: <CurriculumPage />, title: 'Curriculum', titleKey: 'nav.curriculum', roles: STAFF_ROLES },
       { path: 'assignments', element: <AssignmentsPage />, title: 'Assignments', titleKey: 'nav.assignments' },
-      { path: 'assessment', element: <AssessmentPage />, title: 'Assessment', titleKey: 'nav.assessment' },
+      { path: 'assessment', element: <AssessmentPage />, title: 'Assessment', titleKey: 'nav.assessment', roles: STAFF_ROLES },
 
       // Teachers / Groups / Courses
-      { path: 'teachers', element: <TeachersPage />, title: 'Teachers', titleKey: 'nav.teachers', roles: STAFF_ROLES },
-      { path: 'teachers/:id', element: <TeachersPage />, title: 'Teacher Profile', titleKey: 'nav.teachers', roles: STAFF_ROLES },
+      { path: 'teachers', element: <TeachersPage />, title: 'Teachers', titleKey: 'nav.teachers', roles: ADMIN_ROLES },
+      { path: 'teachers/:id', element: <TeachersPage />, title: 'Teacher Profile', titleKey: 'nav.teachers', roles: ADMIN_ROLES },
       { path: 'groups', element: <GroupsPage />, title: 'Groups', titleKey: 'nav.groups' },
-      { path: 'groups/new', element: <GroupFormPage />, title: 'New Group', titleKey: 'groups.title', roles: STAFF_ROLES },
+      { path: 'groups/new', element: <GroupFormPage />, title: 'New Group', titleKey: 'groups.title', roles: ADMIN_ROLES },
       { path: 'groups/:id', element: <GroupDetailPage />, title: 'Group Details', titleKey: 'groups.detailsTitle' },
-      { path: 'groups/:id/edit', element: <GroupFormPage />, title: 'Edit Group', titleKey: 'groups.title', roles: STAFF_ROLES },
-      { path: 'courses', element: <CoursesPage />, title: 'Courses', titleKey: 'nav.courses' },
-      { path: 'courses/:id', element: <CoursesPage />, title: 'Course Details', titleKey: 'nav.courses' },
+      { path: 'groups/:id/edit', element: <GroupFormPage />, title: 'Edit Group', titleKey: 'groups.title', roles: ADMIN_ROLES },
+      { path: 'courses', element: <CoursesPage />, title: 'Courses', titleKey: 'nav.courses', roles: STAFF_ROLES },
+      { path: 'courses/:id', element: <CoursesPage />, title: 'Course Details', titleKey: 'nav.courses', roles: STAFF_ROLES },
 
       // Attendance & Biometrics
-      { path: 'attendance', element: <AttendancePage />, title: 'Attendance', titleKey: 'nav.attendance' },
+      { path: 'attendance', element: <AttendancePage />, title: 'Attendance', titleKey: 'nav.attendance', roles: STAFF_ROLES },
       { path: 'face', element: <FaceRecognitionPage />, title: 'Face Recognition', titleKey: 'nav.faceRecognition', roles: STAFF_ROLES },
       { path: 'face/enroll', element: <FaceEnrollmentPage />, title: 'Face Enrollment', titleKey: 'faceEnrollment.title', roles: STAFF_ROLES },
 
-      // Finance & CRM
-      { path: 'payments', element: <PaymentsPage />, title: 'Payments', titleKey: 'nav.payments', roles: STAFF_ROLES },
-      { path: 'payments/:id', element: <PaymentsPage />, title: 'Payment Details', titleKey: 'nav.payments', roles: STAFF_ROLES },
-      { path: 'invoices', element: <InvoicesPage />, title: 'Invoices', titleKey: 'nav.invoices', roles: STAFF_ROLES },
-      { path: 'reports', element: <ReportsPage />, title: 'Reports', titleKey: 'nav.reports', roles: STAFF_ROLES },
-      { path: 'expenses', element: <ExpensesPage />, title: 'Expenses', titleKey: 'nav.expenses', roles: STAFF_ROLES },
-      { path: 'leads', element: <LeadsPage />, title: 'Leads', titleKey: 'nav.leads', roles: STAFF_ROLES },
-      { path: 'leads/:id', element: <LeadsPage />, title: 'Lead Details', titleKey: 'nav.leads', roles: STAFF_ROLES },
+      // Finance & CRM (Admin Only)
+      { path: 'payments', element: <PaymentsPage />, title: 'Payments', titleKey: 'nav.payments', roles: ADMIN_ROLES },
+      { path: 'payments/:id', element: <PaymentsPage />, title: 'Payment Details', titleKey: 'nav.payments', roles: ADMIN_ROLES },
+      { path: 'invoices', element: <InvoicesPage />, title: 'Invoices', titleKey: 'nav.invoices', roles: ADMIN_ROLES },
+      { path: 'reports', element: <ReportsPage />, title: 'Reports', titleKey: 'nav.reports', roles: ADMIN_ROLES },
+      { path: 'expenses', element: <ExpensesPage />, title: 'Expenses', titleKey: 'nav.expenses', roles: ADMIN_ROLES },
+      { path: 'leads', element: <LeadsPage />, title: 'Leads', titleKey: 'nav.leads', roles: ADMIN_ROLES },
+      { path: 'leads/:id', element: <LeadsPage />, title: 'Lead Details', titleKey: 'nav.leads', roles: ADMIN_ROLES },
 
-      // Security & System Administration
-      { path: 'cameras', element: <CamerasPage />, title: 'Cameras', titleKey: 'nav.cameras', roles: STAFF_ROLES },
-      { path: 'users', element: <UsersPage />, title: 'Users', titleKey: 'nav.users', roles: STAFF_ROLES },
-      { path: 'users/:id', element: <UsersPage />, title: 'User Profile', titleKey: 'nav.users', roles: STAFF_ROLES },
-      { path: 'audit', element: <AuditPage />, title: 'Audit Log', titleKey: 'nav.audit', roles: STAFF_ROLES },
-      { path: 'audit-timeline', element: <AuditTimelinePage />, title: 'Audit Timeline', titleKey: 'auditTimeline.title', roles: STAFF_ROLES },
+      // Security & System Administration (Admin Only)
+      { path: 'cameras', element: <CamerasPage />, title: 'Cameras', titleKey: 'nav.cameras', roles: ADMIN_ROLES },
+      { path: 'users', element: <UsersPage />, title: 'Users', titleKey: 'nav.users', roles: ADMIN_ROLES },
+      { path: 'users/:id', element: <UsersPage />, title: 'User Profile', titleKey: 'nav.users', roles: ADMIN_ROLES },
+      { path: 'audit', element: <AuditPage />, title: 'Audit Log', titleKey: 'nav.audit', roles: ADMIN_ROLES },
+      { path: 'audit-timeline', element: <AuditTimelinePage />, title: 'Audit Timeline', titleKey: 'auditTimeline.title', roles: ADMIN_ROLES },
       { path: 'search', element: <UniversalSearchPage />, title: 'Universal Search', titleKey: 'search.title' },
-      { path: 'data-quality', element: <DataQualityCenterPage />, title: 'Data Quality Center', roles: STAFF_ROLES },
+      { path: 'data-quality', element: <DataQualityCenterPage />, title: 'Data Quality Center', roles: ADMIN_ROLES },
       { path: 'documents', element: <DocumentsPage />, title: 'Documents', titleKey: 'documents.title' },
-      { path: 'resources', element: <ResourceBookingPage />, title: 'Resource Booking', titleKey: 'resourceBooking.title' },
-      { path: 'feature-flags', element: <FeatureFlagsPage />, title: 'Feature Flags', titleKey: 'featureFlags.title', roles: STAFF_ROLES },
-      { path: 'security', element: <SecurityCenterPage />, title: 'Security Center', roles: STAFF_ROLES },
-      { path: 'system-health', element: <SystemHealthPage />, title: 'System Health', titleKey: 'systemHealth.title', roles: STAFF_ROLES },
+      { path: 'resources', element: <ResourceBookingPage />, title: 'Resource Booking', titleKey: 'resourceBooking.title', roles: ADMIN_ROLES },
+      { path: 'feature-flags', element: <FeatureFlagsPage />, title: 'Feature Flags', titleKey: 'featureFlags.title', roles: ADMIN_ROLES },
+      { path: 'security', element: <SecurityCenterPage />, title: 'Security Center', roles: ADMIN_ROLES },
+      { path: 'system-health', element: <SystemHealthPage />, title: 'System Health', titleKey: 'systemHealth.title', roles: ADMIN_ROLES },
       { path: 'settings', element: <SettingsPage />, title: 'Settings', titleKey: 'nav.settings' },
-      { path: 'settings/billing', element: <BillingSettingsPage />, title: 'Billing & Subscription', titleKey: 'nav.billing', roles: STAFF_ROLES },
+      { path: 'settings/billing', element: <BillingSettingsPage />, title: 'Billing & Subscription', titleKey: 'nav.billing', roles: ADMIN_ROLES },
       { path: 'super-admin', element: <SuperAdminPage />, title: 'Super Admin Control Plane', roles: ['PLATFORM_OWNER'] },
 
       // Academic Tools
-      { path: 'teacher-cockpit', element: <TeacherCockpitPage />, title: 'Teacher Cockpit', titleKey: 'nav.teacherCockpit', roles: STAFF_ROLES },
+      { path: 'teacher-cockpit', element: <TeacherCockpitPage />, title: 'Teacher Cockpit', titleKey: 'nav.teacherCockpit', roles: [...TEACHER_ROLES, ...ADMIN_ROLES] },
       { path: 'homework', element: <HomeworkPage />, title: 'Homework', titleKey: 'nav.homework' },
       { path: 'grades', element: <GradesPage />, title: 'Grades', titleKey: 'grades.title' },
       { path: 'schedule', element: <SchedulePage />, title: 'Schedule', titleKey: 'nav.schedule' },
       { path: 'library', element: <LibraryPage />, title: 'Library', titleKey: 'nav.library' },
       { path: 'library/books/:id', element: <LibraryPage />, title: 'Book Details', titleKey: 'nav.library' },
-      { path: 'exams', element: <ExamsPage />, title: 'Exams', titleKey: 'nav.exams' },
-      { path: 'certificates', element: <CertificatesPage />, title: 'Certificates', titleKey: 'nav.certificates' },
-      { path: 'certificates/:id', element: <CertificatesPage />, title: 'Certificate Details', titleKey: 'nav.certificates' },
+      { path: 'exams', element: <ExamsPage />, title: 'Exams', titleKey: 'nav.exams', roles: STAFF_ROLES },
+      { path: 'certificates', element: <CertificatesPage />, title: 'Certificates', titleKey: 'nav.certificates', roles: STAFF_ROLES },
+      { path: 'certificates/:id', element: <CertificatesPage />, title: 'Certificate Details', titleKey: 'nav.certificates', roles: STAFF_ROLES },
 
       // Operations & Analytics
-      { path: 'hr', element: <HRPage />, title: 'HR & Payroll', titleKey: 'nav.hrPayroll', roles: STAFF_ROLES },
-      { path: 'hr/employees/:id', element: <HRPage />, title: 'Employee Profile', titleKey: 'nav.hrPayroll', roles: STAFF_ROLES },
-      { path: 'inventory', element: <InventoryPage />, title: 'Inventory', titleKey: 'nav.inventory', roles: STAFF_ROLES },
-      { path: 'early-warning', element: <EarlyWarningPage />, title: 'Early Warning', titleKey: 'earlyWarning.title', roles: STAFF_ROLES },
-      { path: 'academic-risk', element: <AcademicRiskPage />, title: 'Academic Risk', titleKey: 'academicRisk.title', roles: STAFF_ROLES },
+      { path: 'hr', element: <HRPage />, title: 'HR & Payroll', titleKey: 'nav.hrPayroll', roles: ADMIN_ROLES },
+      { path: 'hr/employees/:id', element: <HRPage />, title: 'Employee Profile', titleKey: 'nav.hrPayroll', roles: ADMIN_ROLES },
+      { path: 'inventory', element: <InventoryPage />, title: 'Inventory', titleKey: 'nav.inventory', roles: ADMIN_ROLES },
+      { path: 'early-warning', element: <EarlyWarningPage />, title: 'Early Warning', titleKey: 'earlyWarning.title', roles: ADMIN_ROLES },
+      { path: 'academic-risk', element: <AcademicRiskPage />, title: 'Academic Risk', titleKey: 'academicRisk.title', roles: ADMIN_ROLES },
       { path: 'gamification', element: <GamificationHubPage />, title: 'Gamification & M-Coins', titleKey: 'nav.gamification' },
-      { path: 'teacher-workload', element: <TeacherWorkloadPage />, title: 'Teacher Workload', titleKey: 'teacherWorkload.title', roles: STAFF_ROLES },
-      { path: 'forecast', element: <ForecastingPage />, title: 'Forecasting', titleKey: 'forecasting.title', roles: STAFF_ROLES },
-      { path: 'import-export', element: <ImportExportPage />, title: 'Import / Export', titleKey: 'importExport.title', roles: STAFF_ROLES },
-      { path: 'relationships', element: <RelationshipGraphPage />, title: 'Relationship Graph', titleKey: 'relationshipGraph.title', roles: STAFF_ROLES },
+      { path: 'arena', element: <MindArenaPage />, title: 'Mind Arena (Aql Duellari)' },
+      { path: 'mind-arena', element: <MindArenaPage />, title: 'Mind Arena (Aql Duellari)' },
+      { path: 'teacher-workload', element: <TeacherWorkloadPage />, title: 'Teacher Workload', titleKey: 'teacherWorkload.title', roles: ADMIN_ROLES },
+      { path: 'forecast', element: <ForecastingPage />, title: 'Forecasting', titleKey: 'forecasting.title', roles: ADMIN_ROLES },
+      { path: 'import-export', element: <ImportExportPage />, title: 'Import / Export', titleKey: 'importExport.title', roles: ADMIN_ROLES },
+      { path: 'relationships', element: <RelationshipGraphPage />, title: 'Relationship Graph', titleKey: 'relationshipGraph.title', roles: ADMIN_ROLES },
       { path: 'notifications', element: <NotificationsCenterPage />, title: 'Notifications', titleKey: 'notifications.title' },
       { path: 'what-changed', element: <WhatChangedPage />, title: 'What Changed?', titleKey: 'whatChanged.title' },
       { path: 'chat', element: <ChatPage />, title: 'Messages', titleKey: 'chat.title' },
 
       // AI Copilot & Enterprise Modules
       { path: 'ai-copilot', element: <AiCopilotPage />, title: 'AI Copilot', titleKey: 'nav.aiCopilot', roles: STAFF_ROLES },
-      { path: 'parent-portal', element: <ParentPortalPage />, roles: ['PARENT'], title: 'Parent Portal', titleKey: 'parentPortal.title' },
-      { path: 'telegram', element: <TelegramPage />, title: 'Telegram Hub', titleKey: 'nav.telegram' },
-      { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: STAFF_ROLES },
+      { path: 'parent-portal', element: <ParentPortalPage />, roles: ['PARENT', ...ADMIN_ROLES], title: 'Parent Portal', titleKey: 'parentPortal.title' },
+      { path: 'telegram', element: <TelegramPage />, title: 'Telegram Hub', titleKey: 'nav.telegram', roles: ADMIN_ROLES },
+      { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: ADMIN_ROLES },
       { path: 'executive', element: <Navigate to="/executive-dashboard" replace /> },
-      { path: 'automation', element: <AutomationEnginePage />, title: 'Automation Engine', titleKey: 'nav.automation', roles: STAFF_ROLES },
-      { path: 'payroll', element: <PayrollPage />, title: 'Payroll', titleKey: 'nav.payrollRuns', roles: STAFF_ROLES },
-      { path: 'financial-analytics', element: <FinancialAnalyticsPage />, title: 'Financial Analytics', titleKey: 'nav.financialAnalytics', roles: STAFF_ROLES },
-      { path: 'payroll-analytics', element: <PayrollAnalyticsPage />, title: 'Payroll Analytics', titleKey: 'nav.payrollAnalytics', roles: STAFF_ROLES },
-      { path: 'crm-analytics', element: <CRMAnalyticsPage />, title: 'CRM Analytics', titleKey: 'nav.crmAnalytics', roles: STAFF_ROLES },
-      { path: 'follow-up-automation', element: <FollowUpAutomationPage />, title: 'Follow-Up Automation', titleKey: 'nav.followUpRules', roles: STAFF_ROLES },
-      { path: 'branches', element: <BranchesPage />, title: 'Branches', titleKey: 'nav.branches', roles: STAFF_ROLES },
-      { path: 'data-governance', element: <DataGovernancePage />, title: 'Data Governance', titleKey: 'nav.dataGovernance', roles: STAFF_ROLES },
-      { path: 'anomaly-detection', element: <AnomalyDetectionPage />, title: 'Anomaly Detection', titleKey: 'nav.anomalyDetection', roles: STAFF_ROLES },
+      { path: 'automation', element: <AutomationEnginePage />, title: 'Automation Engine', titleKey: 'nav.automation', roles: ADMIN_ROLES },
+      { path: 'payroll', element: <PayrollPage />, title: 'Payroll', titleKey: 'nav.payrollRuns', roles: ADMIN_ROLES },
+      { path: 'financial-analytics', element: <FinancialAnalyticsPage />, title: 'Financial Analytics', titleKey: 'nav.financialAnalytics', roles: ADMIN_ROLES },
+      { path: 'payroll-analytics', element: <PayrollAnalyticsPage />, title: 'Payroll Analytics', titleKey: 'nav.payrollAnalytics', roles: ADMIN_ROLES },
+      { path: 'crm-analytics', element: <CRMAnalyticsPage />, title: 'CRM Analytics', titleKey: 'nav.crmAnalytics', roles: ADMIN_ROLES },
+      { path: 'follow-up-automation', element: <FollowUpAutomationPage />, title: 'Follow-Up Automation', titleKey: 'nav.followUpRules', roles: ADMIN_ROLES },
+      { path: 'branches', element: <BranchesPage />, title: 'Branches', titleKey: 'nav.branches', roles: ADMIN_ROLES },
+      { path: 'data-governance', element: <DataGovernancePage />, title: 'Data Governance', titleKey: 'nav.dataGovernance', roles: ADMIN_ROLES },
+      { path: 'anomaly-detection', element: <AnomalyDetectionPage />, title: 'Anomaly Detection', titleKey: 'nav.anomalyDetection', roles: ADMIN_ROLES },
 
       // DevOps & Observability
-      { path: 'api-keys', element: <ApiKeysPage />, title: 'API Keys', titleKey: 'apiKeys.title', roles: STAFF_ROLES },
-      { path: 'observability', element: <ObservabilityPage />, title: 'Observability', titleKey: 'obs.title', roles: STAFF_ROLES },
-      { path: 'performance', element: <PerformanceMonitorPage />, title: 'Performance Monitor', titleKey: 'performance.title', roles: STAFF_ROLES },
-      { path: 'reconciliation', element: <ReconciliationPage />, title: 'Reconciliation', titleKey: 'reconciliation.title', roles: STAFF_ROLES },
-      { path: 'communication-history', element: <CommunicationHistoryPage />, title: 'Communication History', titleKey: 'communication.title', roles: STAFF_ROLES },
+      { path: 'api-keys', element: <ApiKeysPage />, title: 'API Keys', titleKey: 'apiKeys.title', roles: ADMIN_ROLES },
+      { path: 'observability', element: <ObservabilityPage />, title: 'Observability', titleKey: 'obs.title', roles: ADMIN_ROLES },
+      { path: 'performance', element: <PerformanceMonitorPage />, title: 'Performance Monitor', titleKey: 'performance.title', roles: ADMIN_ROLES },
+      { path: 'reconciliation', element: <ReconciliationPage />, title: 'Reconciliation', titleKey: 'reconciliation.title', roles: ADMIN_ROLES },
+      { path: 'communication-history', element: <CommunicationHistoryPage />, title: 'Communication History', titleKey: 'communication.title', roles: ADMIN_ROLES },
 
       // Fallbacks
       { path: 'unauthorized', element: <UnauthorizedPage />, type: 'none', title: 'Unauthorized', titleKey: 'error.forbiddenTitle' },

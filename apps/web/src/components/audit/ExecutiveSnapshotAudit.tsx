@@ -4,7 +4,7 @@
  * Generates an immutable SHA-256 cryptographic seal with PDF/JSON export for internal audits.
  */
 
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
@@ -48,6 +48,13 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [snapshot, setSnapshot] = useState<SnapshotData | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const generateCryptographicSnapshot = useCallback(async () => {
     setIsGenerating(true);
@@ -86,7 +93,8 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
       } catch (_) {}
     }
 
-    setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
       setIsGenerating(false);
       setSnapshot({
         ...rawData,

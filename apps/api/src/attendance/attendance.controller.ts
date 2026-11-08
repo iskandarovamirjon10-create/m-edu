@@ -19,19 +19,40 @@ export class AttendanceController {
 
   @Post()
   @ApiOperation({ summary: 'Mark attendance for group session' })
-  markAttendance(@CurrentUser('organizationId') orgId: string, @Body() dto: MarkAttendanceDto) {
+  markAttendance(
+    @CurrentUser('organizationId') orgId: string,
+    @Body() dto: MarkAttendanceDto,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.attendanceService.markAttendance(orgId, dto, user);
+    }
     return this.attendanceService.markAttendance(orgId, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'List attendance records' })
-  findAll(@CurrentUser('organizationId') orgId: string, @Query() query: AttendanceQuery) {
+  findAll(
+    @CurrentUser('organizationId') orgId: string,
+    @Query() query: AttendanceQuery,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.attendanceService.findAll(orgId, query, user);
+    }
     return this.attendanceService.findAll(orgId, query);
   }
 
   @Get('analytics')
   @ApiOperation({ summary: 'Get attendance analytics' })
-  getAnalytics(@CurrentUser('organizationId') orgId: string, @Query() query: AttendanceQuery) {
+  getAnalytics(
+    @CurrentUser('organizationId') orgId: string,
+    @Query() query: AttendanceQuery,
+    @CurrentUser() user?: RequestUser,
+  ) {
+    if (user !== undefined) {
+      return this.attendanceService.getAnalytics(orgId, query, user);
+    }
     return this.attendanceService.getAnalytics(orgId, query);
   }
 

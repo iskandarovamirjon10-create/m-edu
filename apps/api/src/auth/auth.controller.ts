@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException, Optional, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Headers, HttpException, Param, Post, Req, Res, UseGuards, BadRequestException, Optional, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
@@ -21,6 +21,7 @@ import {
   ParentLoginDto,
   RegisterDto,
   ResetPasswordDto,
+  ForceChangePasswordDto,
   UpdateAccessControlSettingsDto,
 } from './dto';
 import { GoogleProfile, RequestUser } from './types';
@@ -54,23 +55,28 @@ export class AuthController {
   @Post('login')
   @AllowPublic()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiOperation({ summary: 'Login with username and password' })
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
     @Req() req?: Request,
   ) {
     const meta = this.extractClientMeta(req);
+    const identifier = dto.username || (dto as any).email;
     const result = meta
-      ? await this.authService.login(dto.email, dto.password, meta)
-      : await this.authService.login(dto.email, dto.password);
+      ? await this.authService.login(identifier, dto.password, meta)
+      : await this.authService.login(identifier, dto.password);
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: authCookieMaxAgeMs(),
     });
-    return { user: result.user };
+    return {
+      user: result.user,
+      accessToken: result.accessToken,
+      mustChangePassword: !!result.mustChangePassword,
+    };
   }
 
 
@@ -93,33 +99,11 @@ export class AuthController {
 
   @Post('register')
   @AllowPublic()
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @ApiOperation({ summary: 'Register a new user and organization' })
-  async register(
-    @Body() dto: RegisterDto,
-    @Res({ passthrough: true }) res: Response,
-    @Req() req?: Request,
-  ) {
-    const meta = this.extractClientMeta(req);
-    const result = meta
-      ? await this.authService.register(dto, meta)
-      : await this.authService.register(dto);
-    if (result.pendingApproval) {
-      return {
-        user: result.user,
-        pendingApproval: true,
-        message: result.message || 'Account registered successfully. Pending administrator approval.',
-      };
-    }
-    // Issue the same HttpOnly session cookie as /auth/login so the newly
-    // registered user lands on the dashboard already authenticated
-    res.cookie('access_token', result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: authCookieMaxAgeMs(),
-    });
-    return { user: result.user };
+  @ApiOperation({ summary: 'Registration is disabled (OWNER_ONLY)' })
+  async register() {
+    throw new ForbiddenException(
+      'Public registration is disabled. Accounts can only be provisioned by the Platform Owner.',
+    );
   }
 
   @Post('invitations/accept')
@@ -132,55 +116,18 @@ export class AuthController {
 
   @Get('google')
   @AllowPublic()
-  @UseGuards(GoogleAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  @ApiOperation({ summary: 'Google auth is disabled' })
   async googleAuth() {
-    // Guard redirects to Google (CSRF state generated in the guard).
+    throw new ForbiddenException('Google authentication is disabled on this platform.');
   }
 
   @Get('google/callback')
   @AllowPublic()
-  @UseGuards(GoogleAuthGuard)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  @ApiOperation({ summary: 'Google OAuth callback' })
-  async googleAuthCallback(@Req() req: Request & { user: GoogleProfile }, @Res() res: Response) {
-    try {
-      const googleUser = req.user;
-      const meta = this.extractClientMeta(req);
-      const result = meta
-        ? await this.authService.googleLogin(googleUser, meta)
-        : await this.authService.googleLogin(googleUser);
-      const exchangeState = this.authService.generateSecureToken();
-      const authCode = await this.authService.generateAuthCode(result.accessToken, result.user.id, exchangeState);
-
-      res.cookie('oauth_exchange_state', exchangeState, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 5 * 60 * 1000,
-      });
-
-      const frontendUrl = resolveFrontendUrl();
-      const redirectUrl = `${frontendUrl}/auth/callback?code=${encodeURIComponent(authCode)}&state=${encodeURIComponent(exchangeState)}`;
-      res.redirect(redirectUrl);
-    } catch (error: unknown) {
-      const frontendUrl = resolveFrontendUrl();
-      // Only client-safe messages reach the frontend: HttpException messages
-      // are already sanitized (global filter contract); anything else becomes
-      // a generic message (no stack traces, no internals).
-      let safeMessage = 'Google sign-in failed. Please try again.';
-      if (error instanceof HttpException) {
-        const body = error.getResponse();
-        if (typeof body === 'string') {
-          safeMessage = body;
-        } else if (body && typeof body === 'object' && (body as { message?: unknown }).message) {
-          const m = (body as { message: unknown }).message;
-          safeMessage = typeof m === 'string' ? m : JSON.stringify(m);
-        }
-      }
-      res.redirect(`${frontendUrl}/auth/callback?error=${encodeURIComponent(safeMessage)}`);
-    }
+  @ApiOperation({ summary: 'Google OAuth callback is disabled' })
+  async googleAuthCallback() {
+    throw new ForbiddenException('Google authentication is disabled on this platform.');
   }
 
   @Post('oauth/exchange')
@@ -343,7 +290,7 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Request a password reset link' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto.email);
+    return this.authService.forgotPassword(dto.username || (dto as any).email || '');
   }
 
   @Post('reset-password')
@@ -363,7 +310,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
     @Req() req?: Request,
   ) {
-    const parent = await this.parentPortalService.authenticate(dto.email, dto.password, dto.organizationId);
+    const parent = await this.parentPortalService.authenticate(dto.username || (dto as any).email || '', dto.password, dto.organizationId);
     const meta = this.extractClientMeta(req);
     
     // Issue token specifically for parents using authService
@@ -514,4 +461,44 @@ export class AuthController {
       req.user.organizationId,
     );
   }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Change password (mandatory initial change or self-service)' })
+  async changePassword(
+    @Body() dto: ForceChangePasswordDto,
+    @Req() req: Request & { user: RequestUser },
+  ) {
+    return this.authService.changePassword(
+      req.user.sub,
+      dto.currentPassword,
+      dto.newPassword,
+      req.user.sid,
+    );
+  }
+
+  @Post('switch-organization')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Switch active organization among authorized memberships' })
+  async switchOrganization(
+    @Body('organizationId') targetOrgId: string,
+    @Req() req: Request & { user: RequestUser },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const meta = this.extractClientMeta(req);
+    const result = await this.authService.switchOrganization(
+      req.user.sub,
+      targetOrgId,
+      req.user.sid,
+      meta,
+    );
+    res.cookie('access_token', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: authCookieMaxAgeMs(),
+    });
+    return { user: result.user, accessToken: result.accessToken };
+  }
+
 }

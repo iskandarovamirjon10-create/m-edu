@@ -231,7 +231,7 @@ export function KPICard({
       : 'negative';
   const trendConfig = LIQUID_TREND_PALETTE[trendTone];
 
-  const isHexAccent = /^#([0-9a-f]{3,8})\$/i.test(accentColor);
+  const isHexAccent = /^#([0-9a-f]{3,8})$/i.test(accentColor);
   const tone = isHexAccent ? 'blue' : resolveTone(accentColor);
   const gradientId = `kpi-spark-${uid}`;
 

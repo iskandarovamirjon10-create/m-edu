@@ -46,6 +46,8 @@ export function useListKeyboardNavigation<T>({
   rowIdPrefix,
 }: UseListKeyboardNavigationOptions<T>) {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const focusedIndexRef = useRef(focusedIndex);
+  focusedIndexRef.current = focusedIndex;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { playTick, playPop } = usePremiumSound();
 
@@ -187,27 +189,30 @@ export function useListKeyboardNavigation<T>({
 
       // ' ' (Space) -> Quick Look on focused item
       if (e.key === ' ') {
-        if (focusedIndex !== null && itemsRef.current[focusedIndex]) {
+        const curIdx = focusedIndexRef.current;
+        if (curIdx !== null && itemsRef.current[curIdx]) {
           e.preventDefault();
-          onQuickLookRef.current?.(itemsRef.current[focusedIndex]);
+          onQuickLookRef.current?.(itemsRef.current[curIdx]);
         }
         return;
       }
 
       // 'Enter' -> Open full record on focused item
       if (e.key === 'Enter') {
-        if (focusedIndex !== null && itemsRef.current[focusedIndex]) {
+        const curIdx = focusedIndexRef.current;
+        if (curIdx !== null && itemsRef.current[curIdx]) {
           e.preventDefault();
-          onOpenRef.current?.(itemsRef.current[focusedIndex]);
+          onOpenRef.current?.(itemsRef.current[curIdx]);
         }
         return;
       }
 
       // 'e' -> Edit focused item
       if (e.key === 'e') {
-        if (focusedIndex !== null && itemsRef.current[focusedIndex]) {
+        const curIdx = focusedIndexRef.current;
+        if (curIdx !== null && itemsRef.current[curIdx]) {
           e.preventDefault();
-          onEditRef.current?.(itemsRef.current[focusedIndex]);
+          onEditRef.current?.(itemsRef.current[curIdx]);
         }
         return;
       }
@@ -227,7 +232,7 @@ export function useListKeyboardNavigation<T>({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, playTick, toggleSelect, focusedIndex, getId]);
+  }, [enabled, playTick, toggleSelect, getId]);
 
   return {
     focusedIndex,

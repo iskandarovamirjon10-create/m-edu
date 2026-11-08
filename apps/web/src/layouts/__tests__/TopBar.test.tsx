@@ -65,8 +65,8 @@ describe('TopBar component tests', () => {
 
       expect(trigger).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByText(/tezkor yaratish markazi/i)).toBeInTheDocument();
-      expect(screen.getByText("Yangi O'quvchi")).toBeInTheDocument();
-      expect(screen.getByText("To'lov Qabul Qilish")).toBeInTheDocument();
+      expect(screen.getByText(/Yangi O[‘']quvchi/)).toBeInTheDocument();
+      expect(screen.getByText(/To[‘']lov Qabul Qilish/)).toBeInTheDocument();
       expect(screen.getByText("Yangi Guruh")).toBeInTheDocument();
       expect(screen.getByText("Dars Belgilash")).toBeInTheDocument();
       expect(screen.getByText("Sertifikat Berish")).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('TopBar component tests', () => {
 
       expect(screen.getByRole('menu', { name: /theme selector/i })).toBeInTheDocument();
       expect(screen.getByText(/Mavzular Palitrasi/i)).toBeInTheDocument();
-      expect(screen.getByText("Yorug'")).toBeInTheDocument();
+      expect(screen.getByText(/Yorug[‘']/)).toBeInTheDocument();
       expect(screen.getByText('Tungi')).toBeInTheDocument();
       expect(screen.getByText('OLED Qora')).toBeInTheDocument();
       expect(screen.getByText('Sepiya')).toBeInTheDocument();

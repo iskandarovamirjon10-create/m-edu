@@ -43,11 +43,12 @@ export class ConversationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(context: AiContext, title?: string): Promise<AiConversation> {
+    const cleanTitle = title?.trim() ? title.trim().slice(0, 200) : null;
     const row = await this.prisma.aiConversation.create({
       data: {
         organizationId: context.organizationId,
         createdBy: context.userId,
-        title: title ?? null,
+        title: cleanTitle,
       },
       include: { _count: { select: { messages: true } } },
     });
@@ -99,9 +100,13 @@ export class ConversationService {
 
   async rename(context: AiContext, id: string, title: string): Promise<AiConversation> {
     await this.assertOwned(context, id);
+    if (!title || !title.trim()) {
+      throw new AiException(AiErrorCode.AI_INVALID_INPUT, 'Title cannot be empty');
+    }
+    const cleanTitle = title.trim().slice(0, 200);
     const row = await this.prisma.aiConversation.update({
       where: { id },
-      data: { title },
+      data: { title: cleanTitle },
       include: { _count: { select: { messages: true } } },
     });
     return toAiConversation(row);
@@ -153,6 +158,8 @@ export class ConversationService {
   }
 
   async appendMessage(context: AiContext, input: AppendMessageInput): Promise<AiMessage> {
+    await this.assertOwned(context, input.conversationId);
+
     const row = await this.prisma.aiMessage.create({
       data: {
         organizationId: context.organizationId,
@@ -177,6 +184,7 @@ export class ConversationService {
 
   /** Bounded history for the model prompt (most recent `limit` turns). */
   async recentMessages(context: AiContext, id: string, limit = 20): Promise<AiMessage[]> {
+    await this.assertOwned(context, id);
     const rows = await this.prisma.aiMessage.findMany({
       where: { organizationId: context.organizationId, conversationId: id },
       orderBy: { createdAt: 'desc' },

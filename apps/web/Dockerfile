@@ -23,6 +23,12 @@ COPY turbo.json turbo.json
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
 
+# PERF-01: production images must ship minified bundles. The app defaults to
+# esbuild minification; this build arg exists so an operator can opt out
+# explicitly (VITE_MINIFY=false) when debugging a low-memory host.
+ARG VITE_MINIFY=true
+ENV VITE_MINIFY=${VITE_MINIFY}
+
 RUN npx turbo build --filter=@medu/web...
 
 FROM nginx:alpine AS runner

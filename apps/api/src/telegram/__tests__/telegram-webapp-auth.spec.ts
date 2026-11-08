@@ -35,6 +35,7 @@ describe('TelegramWebAppAuthService', () => {
     configService = {
       get: vi.fn((key: string) => {
         if (key === 'TELEGRAM_BOT_TOKEN') return BOT_TOKEN;
+        if (key === 'TELEGRAM_AUTH_MAX_AGE_SECONDS') return '7200';
         return undefined;
       }),
     };
@@ -52,6 +53,8 @@ describe('TelegramWebAppAuthService', () => {
     };
     limiter = {
       tryClaimOnce: vi.fn().mockResolvedValue(true),
+      isBlocked: vi.fn().mockResolvedValue(false),
+      hit: vi.fn().mockResolvedValue(1),
     };
 
     service = new TelegramWebAppAuthService(
@@ -250,6 +253,44 @@ describe('TelegramWebAppAuthService', () => {
         expect.objectContaining({ id: 'parent-99', role: 'PARENT' }),
         undefined,
       );
+    });
+
+    it('supports idempotent re-authentication within the active freshness window without throwing replay error', async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const initData = createSignedInitData(BOT_TOKEN, {
+        auth_date: String(nowSec),
+        user: JSON.stringify({ id: 887766, first_name: 'IdempotentUser' }),
+      });
+
+      const mockOrg = { id: 'org-1', name: 'Al-Xorazmiy School' };
+      const mockUser = {
+        id: 'usr-888',
+        email: 'user888@school.uz',
+        firstName: 'Idempotent',
+        lastName: 'User',
+        role: 'STUDENT',
+        organizationId: 'org-1',
+        organization: mockOrg,
+        isActive: true,
+      };
+
+      prisma.telegramAccount.findFirst.mockResolvedValue({
+        id: 'tg-acc-idem',
+        telegramUserId: '887766',
+        status: 'ACTIVE',
+        user: mockUser,
+      });
+
+      // First authentication succeeds
+      const firstRes = await service.authenticate(initData);
+      expect(firstRes.authenticated).toBe(true);
+      expect(firstRes.accessToken).toBe('mock_jwt_token_123');
+
+      // Subsequent call with the exact same initData (e.g. client page refresh / retry)
+      // returns the cached session seamlessly without failing claim
+      const secondRes = await service.authenticate(initData);
+      expect(secondRes.authenticated).toBe(true);
+      expect(secondRes.accessToken).toBe(firstRes.accessToken);
     });
 
     it('throws UnauthorizedException when initData is replayed (tryClaimOnce returns false)', async () => {

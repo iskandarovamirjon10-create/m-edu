@@ -55,24 +55,22 @@ export const AiHomeworkFeedbackStudio: React.FC = () => {
         if (!active) return;
         const list: Student[] = res?.data || res?.items || (Array.isArray(res) ? res : []);
         setStudents(list);
-        if (list.length > 0 && !selectedStudentId) {
-          setSelectedStudentId(list[0].id);
-        }
+        setSelectedStudentId((prev) => prev || (list[0]?.id ?? ''));
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [selectedStudentId]);
+  }, []);
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) || students[0] || null;
   }, [students, selectedStudentId]);
 
   const studentName = useMemo(() => {
-    if (!selectedStudent) return "Amirjon Iskandarov";
+    if (!selectedStudent) return "Talaba tanlanmagan";
     return (
       [selectedStudent.user?.firstName, selectedStudent.user?.lastName].filter(Boolean).join(' ') ||
       (selectedStudent as any).name ||
-      "Amirjon Iskandarov"
+      "Talaba"
     );
   }, [selectedStudent]);
 

@@ -33,37 +33,6 @@ export interface StudentChurnPredictionRadarProps {
   readonly className?: string;
 }
 
-const DEFAULT_AT_RISK_STUDENTS: readonly AtRiskStudent[] = [
-  {
-    id: 'risk-1',
-    name: 'Javohir Ergashev',
-    group: 'Node.js Backend Pro',
-    churnProbability: 88,
-    riskTier: 'critical',
-    factors: {
-      attendanceDropDays: 4,
-      overdueBalanceUzs: 650000,
-      homeworkDropPct: 45,
-      daysInactive: 7,
-    },
-    primaryReason: "Ketma-ket 4 ta dars qoldirilgan va 650,000 UZS to'lov kechikkan",
-  },
-  {
-    id: 'risk-2',
-    name: 'Malika Samadova',
-    group: 'UI/UX Design Master',
-    churnProbability: 54,
-    riskTier: 'moderate',
-    factors: {
-      attendanceDropDays: 2,
-      overdueBalanceUzs: 0,
-      homeworkDropPct: 20,
-      daysInactive: 3,
-    },
-    primaryReason: "Oxirgi 2 ta uy vazifasi topshirilmadi, faollik pasaygan",
-  },
-];
-
 export function StudentChurnPredictionRadar({
   onInterventionTriggered,
   className,
@@ -71,10 +40,10 @@ export function StudentChurnPredictionRadar({
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [students, setStudents] = useState<readonly AtRiskStudent[]>(DEFAULT_AT_RISK_STUDENTS);
+  const [students, setStudents] = useState<readonly AtRiskStudent[]>([]);
   const [filterTier, setFilterTier] = useState<ChurnRiskTier | 'all'>('all');
-  const [selectedStudent, setSelectedStudent] = useState<AtRiskStudent | null>(DEFAULT_AT_RISK_STUDENTS[0]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<AtRiskStudent | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Connect to live backend academic risk & real student records
   useEffect(() => {

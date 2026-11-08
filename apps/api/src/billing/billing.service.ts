@@ -207,6 +207,8 @@ export class BillingService {
         const isCancelled = payment.status === 'CANCELLED';
         const cancelTime = isCancelled ? (payment.updatedAt || new Date()).getTime() : 0;
         const state = payment.status === 'PAID' ? 2 : isCancelled ? (payment.performedAt ? -2 : -1) : 1;
+        const storedPayload = (payment.rawPayload && typeof payment.rawPayload === 'object') ? (payment.rawPayload as Record<string, any>) : {};
+        const cancelReason = isCancelled ? (Number(storedPayload.cancelReason) || 1) : null;
 
         return {
           id: body.id,
@@ -216,7 +218,7 @@ export class BillingService {
             cancel_time: cancelTime,
             transaction: payment.id,
             state,
-            reason: null,
+            reason: cancelReason,
           },
         };
       }
@@ -234,6 +236,9 @@ export class BillingService {
           return { id: body.id, error: PAYME_ERRORS.CANT_PERFORM };
         }
 
+        const existingPayload = (payment.rawPayload && typeof payment.rawPayload === 'object') ? (payment.rawPayload as Record<string, any>) : {};
+        const updatedPayload = { ...existingPayload, cancelReason: reason };
+
         if (payment.status === 'CANCELLED') {
           return {
             id: body.id,
@@ -241,6 +246,7 @@ export class BillingService {
               transaction: payment.id,
               cancel_time: payment.updatedAt.getTime(),
               state: payment.performedAt ? -2 : -1,
+              reason: Number(existingPayload.cancelReason) || reason,
             },
           };
         }
@@ -250,7 +256,10 @@ export class BillingService {
         if (payment.status === 'PENDING') {
           await this.prisma.subscriptionPayment.update({
             where: { id: payment.id },
-            data: { status: 'CANCELLED' },
+            data: {
+              status: 'CANCELLED',
+              rawPayload: updatedPayload,
+            },
           });
 
           return {
@@ -259,6 +268,7 @@ export class BillingService {
               transaction: payment.id,
               cancel_time: now.getTime(),
               state: -1,
+              reason,
             },
           };
         }
@@ -267,7 +277,10 @@ export class BillingService {
         await this.prisma.$transaction([
           this.prisma.subscriptionPayment.update({
             where: { id: payment.id },
-            data: { status: 'CANCELLED' },
+            data: {
+              status: 'CANCELLED',
+              rawPayload: updatedPayload,
+            },
           }),
           this.prisma.subscriptionInvoice.update({
             where: { id: payment.invoiceId },
@@ -288,6 +301,7 @@ export class BillingService {
             transaction: payment.id,
             cancel_time: now.getTime(),
             state: -2,
+            reason,
           },
         };
       }
@@ -447,6 +461,10 @@ export class BillingService {
    * Retrieves all subscription invoices for an organization.
    */
   async getOrganizationInvoices(organizationId: string) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('Organization ID is required');
+    }
+
     const invoices = await this.prisma.subscriptionInvoice.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
@@ -467,6 +485,13 @@ export class BillingService {
    * Generates instant checkout URLs for Payme and Click.
    */
   async getPaymentLinks(organizationId: string, invoiceNumber: string) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('Organization ID is required');
+    }
+    if (!invoiceNumber?.trim()) {
+      throw new BadRequestException('Invoice number is required');
+    }
+
     const invoice = await (this.prisma.subscriptionInvoice.findFirst
       ? this.prisma.subscriptionInvoice.findFirst({ where: { invoiceNumber, organizationId } })
       : this.prisma.subscriptionInvoice.findUnique({ where: { invoiceNumber } }));

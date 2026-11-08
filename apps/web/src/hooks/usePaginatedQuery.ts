@@ -9,7 +9,12 @@ export function usePaginatedQuery<T>(
 ) {
   const pageSize = options?.pageSize ?? 20;
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const [search, setSearchState] = useState('');
+
+  const setSearch = (value: string | ((prev: string) => string)) => {
+    setSearchState(value);
+    setPage(1);
+  };
 
   const params = useMemo(() => ({ page, limit: pageSize, search }), [page, pageSize, search]);
 

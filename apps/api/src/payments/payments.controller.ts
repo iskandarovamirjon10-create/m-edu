@@ -2,7 +2,12 @@ import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } 
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PaymentsService, PaymeJsonRpcRequest, ClickWebhookPayload } from './payments.service';
 import { CreatePaymentDto, UpdatePaymentDto } from '../common/dto';
-import { CloseCashierShiftDto, ZReportQueryDto } from './dto/z-report.dto';
+import {
+  CloseCashierShiftDto,
+  OpenCashShiftDto,
+  CashShiftQueryDto,
+  ZReportQueryDto,
+} from './dto/z-report.dto';
 import { PaymentQuery } from '../common/dto/query';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -45,6 +50,37 @@ export class PaymentsController {
   @ApiOperation({ summary: 'List payments' })
   findAll(@CurrentUser('organizationId') orgId: string, @Query() query: PaymentQuery) {
     return this.paymentsService.findAll(orgId, query);
+  }
+
+  @Post('cashier/shift/open')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Open a new cashier shift with opening drawer balance' })
+  openCashierShift(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser('sub') userId: string,
+    @Body() dto: OpenCashShiftDto,
+  ) {
+    return this.paymentsService.openCashShift(orgId, userId, dto);
+  }
+
+  @Get('cashier/shift/current')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Get current active cashier shift and live drawer balance' })
+  getCurrentShift(
+    @CurrentUser('organizationId') orgId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.paymentsService.getCurrentShift(orgId, userId);
+  }
+
+  @Get('cashier/shift/history')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'List cashier shift history with reconciliation metrics' })
+  getCashierShifts(
+    @CurrentUser('organizationId') orgId: string,
+    @Query() query: CashShiftQueryDto,
+  ) {
+    return this.paymentsService.getCashierShifts(orgId, query);
   }
 
   @Get('cashier/z-report/summary')
@@ -94,8 +130,12 @@ export class PaymentsController {
     @Body() dto: CreatePaymentDto,
     @Headers('idempotency-key') idempotencyKey?: string,
     @Headers('x-idempotency-key') xIdempotencyKey?: string,
+    @CurrentUser('sub') userId?: string,
   ) {
     const key = idempotencyKey || xIdempotencyKey;
+    if (userId) {
+      return this.paymentsService.create(orgId, dto, key, userId);
+    }
     return key
       ? this.paymentsService.create(orgId, dto, key)
       : this.paymentsService.create(orgId, dto);

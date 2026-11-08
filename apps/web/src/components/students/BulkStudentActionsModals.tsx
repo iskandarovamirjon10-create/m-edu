@@ -836,7 +836,8 @@ export const BulkBadgesStudioModal = memo(function BulkBadgesStudioModal({
               const activeGroup =
                 (student.groups ?? []).find((g) => g.isActive)?.group?.name ||
                 'Asosiy Oqim';
-              const studentCode = student.id.slice(0, 8).toUpperCase();
+              const studentIdStr = String(student.id || '');
+              const studentCode = studentIdStr.slice(0, 8).toUpperCase();
               const isDarkPass = passTheme === 'obsidian';
 
               return (
@@ -955,7 +956,7 @@ export const BulkBadgesStudioModal = memo(function BulkBadgesStudioModal({
                     {/* Scannable Optical QR */}
                     <div className="shrink-0 rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-sm">
                       <RealQrCode
-                        value={`student:${student.id}`}
+                        value={`student:${studentIdStr}`}
                         margin={1}
                         title={`QR for ${name}`}
                         className="h-16 w-16"
@@ -973,7 +974,7 @@ export const BulkBadgesStudioModal = memo(function BulkBadgesStudioModal({
                       }`}
                     >
                       <VectorCode128Barcode
-                        value={student.id.toUpperCase()}
+                        value={studentIdStr.toUpperCase()}
                         className="h-5 w-full"
                       />
                       <div className="mt-1 flex items-center justify-between font-mono text-[8.5px] tracking-[0.22em] opacity-70">
@@ -1084,8 +1085,8 @@ export const BulkNotificationModal = memo(function BulkNotificationModal({
   const sampleStudent = students[0];
   const sampleFullName = sampleStudent
     ? fullName(sampleStudent.user?.firstName, sampleStudent.user?.lastName) ||
-      'Amirjon Iskandarov'
-    : 'Amirjon Iskandarov';
+      'Talaba'
+    : 'Talaba';
   const sampleFirstName = sampleFullName.split(' ')[0] || sampleFullName;
   const sampleLastName = sampleFullName.split(' ').slice(1).join(' ') || '';
   const sampleGroup =

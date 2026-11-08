@@ -36,52 +36,11 @@ const DEFAULT_TIME_SLOTS = [
   '16:00 - 17:30',
 ] as const;
 
-const DEFAULT_SCHEDULE_SLOTS: readonly ScheduleSlot[] = [
-  {
-    id: 'slot-1',
-    day: 'Dushanba',
-    time: '09:00 - 10:30',
-    roomId: 'room-1',
-    roomName: 'Auditoriya 1',
-    capacity: 25,
-    groupName: 'Frontend React 101',
-    teacherName: 'Aziz Rahimov',
-    enrolledStudents: 22,
-    hasConflict: true,
-    conflictReason: "Ayni vaqtda xonada boshqa mashg'ulot ham mavjud!",
-  },
-  {
-    id: 'slot-2',
-    day: 'Dushanba',
-    time: '09:00 - 10:30',
-    roomId: 'room-1',
-    roomName: 'Auditoriya 1',
-    capacity: 25,
-    groupName: 'Python Backend 202',
-    teacherName: 'Bobur Mirzayev',
-    enrolledStudents: 18,
-    hasConflict: true,
-    conflictReason: "Auditoriya 1 vaqt oralig'i to'qnashuvi",
-  },
-  {
-    id: 'slot-3',
-    day: 'Dushanba',
-    time: '11:00 - 12:30',
-    roomId: 'room-2',
-    roomName: 'Auditoriya 2',
-    capacity: 25,
-    groupName: 'UI/UX Design Master',
-    teacherName: 'Kamola Karimova',
-    enrolledStudents: 20,
-    hasConflict: false,
-  },
-];
-
 export function TimetableConflictMatrix({ className }: TimetableConflictMatrixProps): JSX.Element {
   const sound = usePremiumSound();
   const toast = useToast();
 
-  const [schedule, setSchedule] = useState<readonly ScheduleSlot[]>(DEFAULT_SCHEDULE_SLOTS);
+  const [schedule, setSchedule] = useState<readonly ScheduleSlot[]>([]);
   const [rooms, setRooms] = useState<readonly { id: string; name: string; capacity: number }[]>([
     { id: 'room-1', name: 'Auditoriya 1', capacity: 25 },
     { id: 'room-2', name: 'Auditoriya 2', capacity: 25 },

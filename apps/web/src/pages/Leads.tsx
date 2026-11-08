@@ -1,18 +1,31 @@
+'use client';
+
 /**
- * M-EDU LeadsPage —  & Liquid Glass CRM Edition 
+ * ============================================================================
+ * M-EDU LeadsPage — iOS 27 / visionOS "Liquid Glass CRM & Pipeline Studio"
+ * ============================================================================
  *
- * Module Features:
- *  - 100% Backend API, Query Keys, URL SearchParams & Trial Funnel compatibility preserved
- *  - Dual View Engine: Seamless Animated List View & 5-Stage Kanban Pipeline Board
- *  - Multi-segment Live CRM Pipeline Telemetry Bar (iOS Storage style)
- *  - Interactive KPI Cards (click any KPI card to filter pipeline stage)
- *  - 1-Click Copy-to-Clipboard for Phone & Email with haptic sound + toast feedback
- *  - Pure SVG vector geometry (zero raw emojis/unicode hacks, zero `any` types)
- *  - Upgraded Modals: Squircle FieldIcons, Quick Source Preset Chips, iOS Segmented Stage & Attendance Cards
- *  - Parallelized Bulk Operations (Promise.allSettled) + Master Select-All Toggle
+ * Module Features & Upgrades:
+ *  • 100% Backend API, Query Keys, URL SearchParams & Trial Funnel compatibility
+ *  • Quad View Engine: Animated List, 5-Stage Kanban, Pipeline Studio & Auto-Nurturing
+ *  • Unblocked Studio & Nurturing tabs even when current list/search filter is empty
+ *  • Multi-segment Live CRM Pipeline Telemetry Bar (iOS Storage style)
+ *  • Interactive KPI Cards (click any KPI card to filter pipeline stage)
+ *  • 1-Click Copy-to-Clipboard for Phone & Email with haptic sound + toast feedback
+ *  • Pure SVG vector geometry (zero raw emojis, zero `\u00A0` non-breaking spaces)
+ *  • Light/Dark/OLED adaptive `StageSegmented` & Trial Attendance radio cards
+ *  • Concurrency-locked Parallel Bulk Operations (Promise.allSettled)
+ * ============================================================================
  */
 
-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  memo,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, LayoutGroup, type Variants } from 'framer-motion';
@@ -34,6 +47,7 @@ import {
 } from '@/components/ui';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { useDebounce } from '@/hooks/useDebounce';
+import { cn, usePrefersReducedMotion } from '@/lib/design';
 import { formatDate } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Lead, LeadStage } from '@/lib/types';
@@ -46,30 +60,32 @@ import { LeadCourseAdvisorModal } from '@/components/leads/LeadCourseAdvisorModa
 import { SmartOmnichannelFollowup } from '@/components/leads/SmartOmnichannelFollowup';
 
 /* ============================================================================
- * APPLE SPRING PHYSICS & MOTION TOKENS
+ * iOS 27 SPRING PHYSICS & LIQUID GLASS TOKENS
  * ========================================================================== */
 
 const SPRING = {
-  snappy: { type: 'spring', stiffness: 520, damping: 32, mass: 0.65 },
-  smooth: { type: 'spring', stiffness: 340, damping: 30, mass: 0.85 },
-  soft:   { type: 'spring', stiffness: 220, damping: 28, mass: 1.0 },
-  liquid: { type: 'spring', stiffness: 400, damping: 35, mass: 0.8 },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 32, mass: 0.65 },
+  smooth: { type: 'spring' as const, stiffness: 360, damping: 31, mass: 0.82 },
+  soft: { type: 'spring' as const, stiffness: 220, damping: 28, mass: 1.0 },
+  liquid: { type: 'spring' as const, stiffness: 420, damping: 35, mass: 0.78 },
+  gel: { type: 'spring' as const, stiffness: 740, damping: 25, mass: 0.34 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.045, delayChildren: 0.04 },
+    transition: { staggerChildren: 0.045, delayChildren: 0.02 },
   },
 };
 
+// WebKit-safe card variants (no filter:blur to prevent backdrop-filter drop)
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14, filter: 'blur(4px)' },
+  hidden: { opacity: 0, y: 14, scale: 0.992 },
   visible: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
+    scale: 1,
     transition: SPRING.smooth,
   },
 };
@@ -84,8 +100,25 @@ const rowVariants: Variants = {
   },
 };
 
+const LIQUID_SURFACE = cn(
+  'relative isolate overflow-hidden',
+  'border border-white/75 bg-white/[0.80] backdrop-blur-3xl backdrop-saturate-[205%]',
+  'shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.95),inset_0_-1px_0_0_rgba(0,122,255,0.1),0_16px_44px_-12px_rgba(15,23,42,0.08)]',
+  'dark:border-white/[0.12] dark:bg-surface-900/[0.82]',
+  'dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.2),inset_0_-1px_0_0_rgba(10,132,255,0.16),0_20px_52px_-12px_rgba(0,0,0,0.65)]',
+);
+
+const TopSpecular = memo(function TopSpecular({ inset = 'inset-x-8' }: { inset?: string }) {
+  return (
+    <div aria-hidden="true" className={cn('pointer-events-none absolute top-0 z-10', inset)}>
+      <div className="h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/30" />
+      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#007AFF]/30 to-transparent dark:via-[#38BDF8]/25" />
+    </div>
+  );
+});
+
 /* ============================================================================
- * SVG VECTOR ICON SYSTEM
+ * SVG VECTOR ICON SYSTEM (100% Pure Vector Geometry)
  * ========================================================================== */
 
 const ICON_STROKE = 1.85;
@@ -202,6 +235,19 @@ const I: Record<string, string[]> = {
     'M4 4h4v16H4z',
     'M10 4h4v11h-4z',
     'M16 4h4v14h-4z',
+  ],
+  briefcase: [
+    'M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16',
+    'M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z',
+  ],
+  bolt: ['M13 2L3 14h9l-1 8 10-12h-9l1-8z'],
+  bot: [
+    'M12 8V4H8',
+    'M4 12a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6z',
+    'M2 14h2',
+    'M20 14h2',
+    'M15 13v2',
+    'M9 13v2',
   ],
   refresh: [
     'M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
@@ -383,7 +429,7 @@ const STAGE_CONFIG: Record<
   },
 };
 
-const QUICK_SOURCES = ['Instagram', 'Telegram', 'Tavsiya', 'Web-sayt', 'Walk-in'];
+const QUICK_SOURCES = ['Instagram', 'Telegram', 'Tavsiya', 'Web-sayt', 'Walk-in'] as const;
 
 function stageKey(stage: string): string {
   return `leads.stage.${stage}`;
@@ -398,7 +444,7 @@ const AVATAR_PALETTES = [
   ['#0EA5E9', '#2563EB'],
   ['#14B8A6', '#059669'],
   ['#EC4899', '#8B5CF6'],
-];
+] as const;
 
 function getAvatarGradientStyle(name: string): string {
   let hash = 0;
@@ -412,7 +458,7 @@ function formatLeadName(lead: Lead): string {
 }
 
 function getInitials(name?: string | null): string {
-  if (!name || typeof name !== 'string') return '—';
+  if (!name || typeof name !== 'string' || name === '—') return '—';
   return (
     name
       .trim()
@@ -477,14 +523,40 @@ const INITIAL_FORM: LeadFormState = {
   notes: '',
 };
 
+function createInitialTrialForm(): TrialSchedulePayload {
+  return {
+    trialDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 16),
+    subject: 'General English / Matematika',
+    teacherName: '',
+    notes: 'Bepul sinov darsi belgilandi',
+  };
+}
+
+function createInitialAttendanceForm(): TrialAttendancePayload {
+  return {
+    attended: true,
+    feedback: 'O‘quvchiga dars yoqdi, guruhga yozilishga tayyor',
+    nextAction: 'To‘lov invoysini chiqarish',
+  };
+}
+
 /* ============================================================================
  * LIQUID GLASS SUB-COMPONENTS
  * ========================================================================== */
 
-function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; radius?: string }) {
+function Shimmer({
+  className = '',
+  radius = '0.75rem',
+}: {
+  className?: string;
+  radius?: string;
+}) {
   return (
     <div
-      className={`relative overflow-hidden bg-slate-200/60 dark:bg-white/[0.06] ${className}`}
+      className={cn(
+        'relative overflow-hidden bg-slate-200/60 dark:bg-white/[0.06]',
+        className,
+      )}
       style={{ borderRadius: radius }}
     >
       <motion.div
@@ -519,31 +591,53 @@ function LeadSkeletonRow() {
   );
 }
 
-function CountUp({
+/** Smoothly interpolates from previous value to new value without resetting to 0 */
+const CountUp = memo(function CountUp({
   value,
-  duration = 0.95,
+  duration = 0.85,
   suffix = '',
 }: {
   value: number;
   duration?: number;
   suffix?: string;
 }) {
-  const [n, setN] = useState(0);
-  const startRef = useRef<number | null>(null);
+  const reduced = usePrefersReducedMotion();
+  const [n, setN] = useState(value);
+  const prevValueRef = useRef(0);
 
   useEffect(() => {
-    let raf: number;
-    startRef.current = null;
+    if (reduced) {
+      setN(value);
+      prevValueRef.current = value;
+      return;
+    }
+    const from = prevValueRef.current;
+    const to = value;
+    if (from === to) {
+      setN(to);
+      return;
+    }
+
+    let raf = 0;
+    let startTs: number | null = null;
     const step = (ts: number) => {
-      if (startRef.current === null) startRef.current = ts;
-      const p = Math.min(1, (ts - startRef.current) / (duration * 1000));
+      if (startTs === null) startTs = ts;
+      const p = Math.min(1, (ts - startTs) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
-      setN(value * eased);
-      if (p < 1) raf = requestAnimationFrame(step);
+      const current = from + (to - from) * eased;
+      setN(current);
+      if (p < 1) {
+        raf = requestAnimationFrame(step);
+      } else {
+        prevValueRef.current = to;
+      }
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [value, duration]);
+    return () => {
+      cancelAnimationFrame(raf);
+      prevValueRef.current = to;
+    };
+  }, [value, duration, reduced]);
 
   return (
     <span className="tabular-nums">
@@ -551,10 +645,16 @@ function CountUp({
       {suffix}
     </span>
   );
-}
+});
 
 /** Squircle leading icon for inputs */
-function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
+const FieldIcon = memo(function FieldIcon({
+  icon,
+  tone = 'blue',
+}: {
+  icon: string[];
+  tone?: Tone;
+}) {
   const c = TONES[tone];
   return (
     <span
@@ -569,10 +669,10 @@ function FieldIcon({ icon, tone = 'blue' }: { icon: string[]; tone?: Tone }) {
       <Icon paths={icon} size={12} strokeWidth={2.2} />
     </span>
   );
-}
+});
 
-/** Apple Liquid Glass KPI Card */
-function KpiTile({
+/** Apple iOS 27 Liquid Glass KPI Card */
+const KpiTile = memo(function KpiTile({
   label,
   value,
   icon,
@@ -594,10 +694,11 @@ function KpiTile({
     <motion.div
       variants={rowVariants}
       whileHover={{ y: -2, scale: 1.01 }}
-      whileTap={onClick ? { scale: 0.98 } : undefined}
+      whileTap={onClick ? { scaleX: 1.03, scaleY: 0.96 } : undefined}
       transition={SPRING.smooth}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
+      aria-pressed={onClick ? active : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
         onClick
@@ -609,36 +710,39 @@ function KpiTile({
             }
           : undefined
       }
-      className={`group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border p-3.5 backdrop-blur-xl transition-all ${
-        onClick ? 'cursor-pointer select-none' : ''
-      } ${
+      className={cn(
+        'group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border p-3.5 backdrop-blur-xl transition-all',
+        onClick && 'cursor-pointer select-none',
         active
-          ? 'bg-white/95 dark:bg-surface-900/95 ring-2'
-          : 'border-slate-200/80 bg-slate-50/60 hover:bg-white/90 dark:border-white/[0.07] dark:bg-white/[0.025] dark:hover:bg-white/[0.05]'
-      }`}
+          ? 'bg-white/95 ring-2 dark:bg-surface-900/95'
+          : 'border-slate-200/80 bg-slate-50/65 hover:bg-white/95 dark:border-white/[0.08] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]',
+      )}
       style={
         active
           ? {
               borderColor: c.fg,
-              boxShadow: `0 10px 26px -10px ${c.glow}, inset 0 1px 0 rgba(255,255,255,0.6)`,
+              boxShadow: `0 10px 26px -10px ${c.glow}, inset 0 1.5px 0 rgba(255,255,255,0.75)`,
             }
           : undefined
       }
     >
+      <TopSpecular inset="inset-x-4" />
       <div
         className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105"
         style={{
           background: active ? c.gradient : c.bg,
           color: active ? '#FFFFFF' : c.fg,
           border: `1px solid ${active ? 'transparent' : c.border}`,
-          boxShadow: active ? `0 6px 14px -4px ${c.glow}` : 'inset 0 1px 0 rgba(255,255,255,0.45)',
+          boxShadow: active
+            ? `0 6px 14px -4px ${c.glow}`
+            : 'inset 0 1px 0 rgba(255,255,255,0.45)',
         }}
       >
         <Icon paths={icon} size={18} strokeWidth={2.1} />
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="text-[22px] font-bold tracking-tighter leading-none text-slate-900 dark:text-slate-100">
+        <div className="text-[22px] font-bold leading-none tracking-tighter text-slate-900 dark:text-slate-100">
           <CountUp value={value} suffix={suffix} />
         </div>
         <div className="mt-1.5 truncate text-[10.5px] font-bold uppercase tracking-[0.11em] text-slate-500 dark:text-slate-400">
@@ -647,10 +751,10 @@ function KpiTile({
       </div>
     </motion.div>
   );
-}
+});
 
 /** iOS Storage-style Live CRM Pipeline Telemetry Bar */
-function PipelineTelemetryBar({
+const PipelineTelemetryBar = memo(function PipelineTelemetryBar({
   leads,
   activeStage,
   onSelectStage,
@@ -679,8 +783,8 @@ function PipelineTelemetryBar({
   if (total === 0) return null;
 
   return (
-    <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/50 p-3.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+    <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/55 p-3.5 dark:border-white/[0.07] dark:bg-white/[0.025]">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
           CRM Pipeline Telemetry · {total}
         </span>
@@ -694,13 +798,14 @@ function PipelineTelemetryBar({
                 key={st}
                 type="button"
                 onClick={() => onSelectStage(isSelected ? '' : st)}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all ${
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all',
                   isSelected
                     ? `${cfg.bg} ${cfg.text} ring-1 ${cfg.ring}`
-                    : 'text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]'
-                }`}
+                    : 'text-slate-600 hover:bg-black/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.06]',
+                )}
               >
-                <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
+                <span className={cn('h-2 w-2 rounded-full', cfg.dot)} />
                 <span>{t(stageKey(st))}:</span>
                 <span className="font-bold tabular-nums">{count}</span>
               </button>
@@ -709,7 +814,7 @@ function PipelineTelemetryBar({
         </div>
       </div>
 
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/[0.07] p-0.5 gap-0.5">
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-slate-200/70 p-0.5 dark:bg-white/[0.07]">
         {LEAD_STAGES.filter((st) => counts[st] > 0).map((st) => {
           const pct = Math.max(3, (counts[st] / total) * 100);
           return (
@@ -719,7 +824,7 @@ function PipelineTelemetryBar({
               animate={{ width: `${pct}%` }}
               transition={SPRING.liquid}
               onClick={() => onSelectStage(activeStage === st ? '' : st)}
-              className="h-full cursor-pointer first:rounded-l-full last:rounded-r-full transition-opacity hover:opacity-85"
+              className="h-full cursor-pointer transition-opacity first:rounded-l-full last:rounded-r-full hover:opacity-85"
               style={{
                 background: STAGE_CONFIG[st].hex,
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
@@ -731,9 +836,9 @@ function PipelineTelemetryBar({
       </div>
     </div>
   );
-}
+});
 
-/** Tone-aware  Stage Segmented Control (used inside Create/Edit Modal) */
+/** Tone-aware Stage Segmented Control (Light, Dark & OLED Adaptive) */
 function StageSegmented({
   value,
   onChange,
@@ -747,7 +852,7 @@ function StageSegmented({
     <div
       role="radiogroup"
       aria-label={t('leads.col.stage') || 'Bosqich'}
-      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
+      className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
     >
       {LEAD_STAGES.map((st) => {
         const active = value === st;
@@ -760,28 +865,34 @@ function StageSegmented({
             aria-checked={active}
             onClick={() => onChange(st)}
             whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.96 }}
-            transition={SPRING.snappy}
-            className="relative flex flex-col items-center gap-1.5 rounded-2xl border px-2.5 py-2.5 text-[11px] font-bold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors"
-            style={{
-              borderColor: active ? c.fg : 'rgba(148,163,184,0.18)',
-              background: active ? c.bg : 'rgba(255,255,255,0.35)',
-              color: active ? c.fg : '#64748B',
-              boxShadow: active
-                ? `inset 0 1px 0 rgba(255,255,255,0.65), 0 8px 18px -8px ${c.glow}`
-                : 'inset 0 1px 0 rgba(255,255,255,0.25)',
-            }}
+            whileTap={{ scaleX: 1.04, scaleY: 0.94 }}
+            transition={SPRING.gel}
+            className={cn(
+              'relative flex flex-col items-center gap-1.5 rounded-2xl border px-2.5 py-2.5 text-[11px] font-bold tracking-tight outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-500',
+              !active &&
+                'border-black/[0.08] bg-white/60 text-slate-500 hover:bg-white/90 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]',
+            )}
+            style={
+              active
+                ? {
+                    borderColor: c.fg,
+                    background: c.bg,
+                    color: c.fg,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.55), 0 8px 18px -8px ${c.glow}`,
+                  }
+                : undefined
+            }
           >
             <span
               className="flex h-6 w-6 items-center justify-center rounded-lg"
               style={{
-                background: active ? c.gradient : 'rgba(100,116,139,0.08)',
+                background: active ? c.gradient : 'rgba(100,116,139,0.12)',
                 color: active ? '#FFFFFF' : '#64748B',
               }}
             >
               <Icon paths={STAGE_ICON[st]} size={13} strokeWidth={2.2} />
             </span>
-            <span className="truncate max-w-full uppercase tracking-[0.06em]">
+            <span className="max-w-full truncate uppercase tracking-[0.06em]">
               {t(stageKey(st))}
             </span>
           </motion.button>
@@ -799,38 +910,35 @@ export function LeadsPage() {
   const { t } = useSafeI18n();
   usePageTitle(t('leads.title') || 'Leads');
   const sound = usePremiumSound();
+  const soundRef = useRef(sound);
+  useEffect(() => {
+    soundRef.current = sound;
+  }, [sound]);
+
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
   /* ── Filter & View State ──────────────────────────────────────────── */
   const [searchParams] = useSearchParams();
+  const urlSearchParam = searchParams.get('search') || searchParams.get('q') || '';
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState('');
-  const [search, setSearch] = useState(
-    () => searchParams.get('search') || searchParams.get('q') || '',
+  const [search, setSearch] = useState(() => urlSearchParam);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'studio' | 'nurturing'>(
+    'list',
   );
-  const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'studio' | 'nurturing'>('list');
   const [isCourseAdvisorOpen, setIsCourseAdvisorOpen] = useState(false);
+  const [isBatchBusy, setIsBatchBusy] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  /* ── Global `/` Shortcut to Focus Search ──────────────────────────── */
+  // Sync search state if URL search params change externally (e.g. Spotlight navigation)
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInput =
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
-        target?.tagName === 'SELECT' ||
-        target?.isContentEditable;
-      if (!isInput && e.key === '/') {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+    if (urlSearchParam) {
+      setSearch(urlSearchParam);
+      setPage(1);
+    }
+  }, [urlSearchParam]);
 
   /* ── Modal States ─────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
@@ -840,19 +948,52 @@ export function LeadsPage() {
   const [convertTarget, setConvertTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [trialTarget, setTrialTarget] = useState<Lead | null>(null);
-  const [trialForm, setTrialForm] = useState<TrialSchedulePayload>({
-    trialDate: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-    subject: 'General English / Matematika',
-    teacherName: '',
-    notes: 'Bepul sinov darsi belgilandi',
-  });
+  const [trialForm, setTrialForm] = useState<TrialSchedulePayload>(createInitialTrialForm);
 
   const [attendanceTarget, setAttendanceTarget] = useState<Lead | null>(null);
-  const [attendanceForm, setAttendanceForm] = useState<TrialAttendancePayload>({
-    attended: true,
-    feedback: "O'quvchiga dars yoqdi, guruhga yozilishga tayyor",
-    nextAction: "To'lov invoysini chiqarish",
-  });
+  const [attendanceForm, setAttendanceForm] = useState<TrialAttendancePayload>(
+    createInitialAttendanceForm,
+  );
+
+  const openTrialModal = useCallback((lead: Lead) => {
+    soundRef.current?.playPop?.();
+    setTrialForm(createInitialTrialForm());
+    setTrialTarget(lead);
+  }, []);
+
+  const openAttendanceModal = useCallback((lead: Lead) => {
+    soundRef.current?.playPop?.();
+    setAttendanceForm(createInitialAttendanceForm());
+    setAttendanceTarget(lead);
+  }, []);
+
+  /* ── Global `/` Shortcut to Focus Search (Guarded when dialogs open) ── */
+  const hasAnyModalOpen = Boolean(
+    modalOpen ||
+      convertTarget ||
+      deleteTarget ||
+      trialTarget ||
+      attendanceTarget ||
+      isCourseAdvisorOpen,
+  );
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (hasAnyModalOpen || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const isInput =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        Boolean(target?.isContentEditable);
+      if (!isInput && e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [hasAnyModalOpen]);
 
   /* ── Trial Analytics Query ────────────────────────────────────────── */
   const trialAnalytics = useQuery({
@@ -864,7 +1005,7 @@ export function LeadsPage() {
     mutationFn: ({ id, data }: { id: string; data: TrialSchedulePayload }) =>
       leadsApi.scheduleTrial(id, data),
     onSuccess: () => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       push('success', t('leads.trialScheduleSuccess'));
       setTrialTarget(null);
       qc.invalidateQueries({ queryKey: ['leads'] });
@@ -877,7 +1018,7 @@ export function LeadsPage() {
     mutationFn: ({ id, data }: { id: string; data: TrialAttendancePayload }) =>
       leadsApi.markTrialAttendance(id, data),
     onSuccess: () => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       push('success', t('leads.trialAttendanceSuccess'));
       setAttendanceTarget(null);
       qc.invalidateQueries({ queryKey: ['leads'] });
@@ -888,7 +1029,9 @@ export function LeadsPage() {
 
   /* ── Form State ───────────────────────────────────────────────────── */
   const [form, setForm] = useState<LeadFormState>(INITIAL_FORM);
-  const [formErrors, setFormErrors] = useState<Partial<Record<keyof LeadFormState, string>>>({});
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<keyof LeadFormState, string>>
+  >({});
 
   /* ── Build Query Params ───────────────────────────────────────────── */
   const params = useMemo<LeadFilters>(
@@ -913,8 +1056,14 @@ export function LeadsPage() {
   const totalLeads = data?.total || 0;
 
   /* ── Derived KPIs ─────────────────────────────────────────────────── */
-  const wonCount = useMemo(() => leadList.filter((l) => l.stage === 'WON').length, [leadList]);
-  const newCount = useMemo(() => leadList.filter((l) => l.stage === 'NEW').length, [leadList]);
+  const wonCount = useMemo(
+    () => leadList.filter((l) => l.stage === 'WON').length,
+    [leadList],
+  );
+  const newCount = useMemo(
+    () => leadList.filter((l) => l.stage === 'NEW').length,
+    [leadList],
+  );
   const activeFunnelCount = useMemo(
     () => leadList.filter((l) => l.stage !== 'WON' && l.stage !== 'LOST').length,
     [leadList],
@@ -935,16 +1084,19 @@ export function LeadsPage() {
       return editingId ? leadsApi.update(editingId, payload) : leadsApi.create(payload);
     },
     onSuccess: () => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       push(
         'success',
-        editingId ? t('leads.updated') || 'Lead updated' : t('leads.created') || 'Lead created',
+        editingId
+          ? t('leads.updated') || 'Lead updated'
+          : t('leads.created') || 'Lead created',
       );
       setModalOpen(false);
       setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
       qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -956,6 +1108,7 @@ export function LeadsPage() {
     onSuccess: () => {
       push('success', t('leads.deleted') || 'Lead deleted');
       qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -966,7 +1119,7 @@ export function LeadsPage() {
     mutationFn: ({ id, stage: nextStage }: { id: string; stage: LeadStage }) =>
       leadsApi.updateStage(id, nextStage),
     onSuccess: () => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       push('success', t('leads.stageUpdated') || 'Stage updated');
       qc.invalidateQueries({ queryKey: ['leads'] });
       qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
@@ -979,9 +1132,10 @@ export function LeadsPage() {
   const convert = useMutation({
     mutationFn: (id: string) => leadsApi.convert(id, {}),
     onSuccess: () => {
-      sound.playPop();
+      soundRef.current?.playPop?.();
       push('success', t('leads.converted') || 'Lead converted to student');
       qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
       qc.invalidateQueries({ queryKey: queryKeys.students.all() });
       qc.invalidateQueries({ queryKey: queryKeys.students.selectors() });
       qc.invalidateQueries({ queryKey: queryKeys.students.faces() });
@@ -1012,23 +1166,27 @@ export function LeadsPage() {
     setPage(1);
   }, []);
 
-  const handleStageFilterChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setStage(e.target.value);
-    setPage(1);
-  }, []);
+  const handleStageFilterChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setStage(e.target.value);
+      setPage(1);
+    },
+    [],
+  );
 
   const handleResetFilters = useCallback(() => {
-    sound.playPop();
+    soundRef.current?.playPop?.();
     setStage('');
     setSearch('');
     setPage(1);
-  }, [sound]);
+  }, []);
 
+  const mutateStage = updateStage.mutate;
   const handleUpdateStage = useCallback(
     (leadId: string, newStage: LeadStage) => {
-      updateStage.mutate({ id: leadId, stage: newStage });
+      mutateStage({ id: leadId, stage: newStage });
     },
-    [updateStage],
+    [mutateStage],
   );
 
   const handleCopyText = useCallback(
@@ -1038,7 +1196,7 @@ export function LeadsPage() {
         navigator.clipboard
           .writeText(text)
           .then(() => {
-            sound.playTick();
+            soundRef.current?.playTick?.();
             push('success', `${label} nusxalandi: ${text}`);
           })
           .catch(() => {
@@ -1046,7 +1204,7 @@ export function LeadsPage() {
           });
       }
     },
-    [sound, push],
+    [push],
   );
 
   const handleConvert = useCallback((leadId: string) => {
@@ -1070,7 +1228,7 @@ export function LeadsPage() {
 
   const handleOpenLeadSidecar = useCallback(
     (lead: Lead) => {
-      sound.playTick();
+      soundRef.current?.playTick?.();
       const fullNameStr = formatLeadName(lead);
       const stageName = t(stageKey(lead.stage));
 
@@ -1085,10 +1243,10 @@ export function LeadsPage() {
             lead.stage === 'WON'
               ? 'emerald'
               : lead.stage === 'LOST'
-              ? 'rose'
-              : lead.stage === 'TRIAL_LESSON'
-              ? 'purple'
-              : 'blue',
+                ? 'rose'
+                : lead.stage === 'TRIAL_LESSON'
+                  ? 'purple'
+                  : 'blue',
         },
         avatar: {
           text: getInitials(fullNameStr),
@@ -1102,20 +1260,20 @@ export function LeadsPage() {
           },
           {
             label: 'Manba',
-            value: lead.source || "To'g'ridan-to'g'ri",
+            value: lead.source || 'To‘g‘ridan-to‘g‘ri',
             subtext: 'Kanal',
           },
           {
             label: 'Aloqa',
             value: lead.phone || '—',
-            subtext: lead.email || "Email yo'q",
+            subtext: lead.email || 'Email yo‘q',
           },
         ],
         details: [
           { label: 'Telefon', value: lead.phone || '—', copyable: true },
           { label: 'Email', value: lead.email || '—', copyable: true },
           { label: 'Manba', value: lead.source || '—' },
-          { label: 'Qaydlar', value: lead.notes || "Izoh yo'q" },
+          { label: 'Qaydlar', value: lead.notes || 'Izoh yo‘q' },
           { label: 'Sana', value: formatDate(lead.createdAt) },
           { label: 'Lid ID', value: lead.id, copyable: true },
         ],
@@ -1133,7 +1291,7 @@ export function LeadsPage() {
             : undefined,
       });
     },
-    [sound, t, handleEdit, handleConvert],
+    [t, handleEdit, handleConvert],
   );
 
   const handleQuickLook = useCallback(
@@ -1152,10 +1310,10 @@ export function LeadsPage() {
             lead.stage === 'WON'
               ? 'emerald'
               : lead.stage === 'LOST'
-              ? 'rose'
-              : lead.stage === 'TRIAL_LESSON'
-              ? 'purple'
-              : 'blue',
+                ? 'rose'
+                : lead.stage === 'TRIAL_LESSON'
+                  ? 'purple'
+                  : 'blue',
         },
         avatar: {
           text: getInitials(fullNameStr),
@@ -1168,20 +1326,20 @@ export function LeadsPage() {
           },
           {
             label: 'Manba',
-            value: lead.source || "To'g'ridan-to'g'ri",
+            value: lead.source || 'To‘g‘ridan-to‘g‘ri',
             subtext: 'Kanal',
           },
           {
             label: 'Aloqa',
             value: lead.phone || '—',
-            subtext: lead.email || "Email yo'q",
+            subtext: lead.email || 'Email yo‘q',
           },
         ],
         details: [
           { label: 'Telefon', value: lead.phone || '—' },
           { label: 'Email', value: lead.email || '—' },
           { label: 'Manba', value: lead.source || '—' },
-          { label: 'Qaydlar', value: lead.notes || "Izoh yo'q" },
+          { label: 'Qaydlar', value: lead.notes || 'Izoh yo‘q' },
           { label: 'Sana', value: formatDate(lead.createdAt) },
           { label: 'Lid ID', value: lead.id },
         ],
@@ -1239,7 +1397,7 @@ export function LeadsPage() {
     leadList.length > 0 && leadList.every((item) => isSelected(item.id));
 
   const handleToggleSelectAllVisible = useCallback(() => {
-    sound.playTick();
+    soundRef.current?.playTick?.();
     if (allVisibleSelected) {
       clearSelection();
     } else {
@@ -1247,20 +1405,32 @@ export function LeadsPage() {
         if (!isSelected(item.id)) toggleSelection(item.id);
       });
     }
-  }, [allVisibleSelected, clearSelection, leadList, isSelected, toggleSelection, sound]);
+  }, [allVisibleSelected, clearSelection, leadList, isSelected, toggleSelection]);
 
-  /* ── Parallelized Bulk Actions ────────────────────────────────────── */
-  const handleBatchMarkAsWon = async () => {
+  /* ── Concurrency-Locked Parallel Bulk Actions ─────────────────────── */
+  const handleBatchMarkAsWon = useCallback(async () => {
+    if (isBatchBusy) return;
     const ids = Array.from(selectedIds);
-    const results = await Promise.allSettled(
-      ids.map((id) => leadsApi.update(id, { stage: 'WON' })),
-    );
-    const count = results.filter((r) => r.status === 'fulfilled').length;
-    qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
-    qc.invalidateQueries({ queryKey: ['leads'] });
-    clearSelection();
-    push('success', t('leads.batchWonSuccess', { count }));
-  };
+    if (ids.length === 0) return;
+
+    setIsBatchBusy(true);
+    soundRef.current?.playPop?.();
+    try {
+      const results = await Promise.allSettled(
+        ids.map((id) => leadsApi.update(id, { stage: 'WON' })),
+      );
+      const count = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      clearSelection();
+      if (count > 0) push('success', t('leads.batchWonSuccess', { count }));
+      if (failed > 0) push('error', `${failed} ta lidni yangilashda xatolik yuz berdi`);
+    } finally {
+      setIsBatchBusy(false);
+    }
+  }, [isBatchBusy, selectedIds, qc, clearSelection, push, t]);
 
   const handleExportCSV = useCallback(
     (rows: Lead[]) => {
@@ -1297,21 +1467,33 @@ export function LeadsPage() {
     [push, t],
   );
 
-  const handleExportSelectedLeadsCSV = () => {
+  const handleExportSelectedLeadsCSV = useCallback(() => {
     const selectedRows = leadList.filter((l) => isSelected(l.id));
     handleExportCSV(selectedRows);
     clearSelection();
-  };
+  }, [leadList, isSelected, handleExportCSV, clearSelection]);
 
-  const handleBatchDeleteLeads = async () => {
+  const handleBatchDeleteLeads = useCallback(async () => {
+    if (isBatchBusy) return;
     const ids = Array.from(selectedIds);
-    const results = await Promise.allSettled(ids.map((id) => leadsApi.remove(id)));
-    const count = results.filter((r) => r.status === 'fulfilled').length;
-    qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
-    qc.invalidateQueries({ queryKey: ['leads'] });
-    clearSelection();
-    push('success', t('leads.batchDeleteSuccess', { count }));
-  };
+    if (ids.length === 0) return;
+
+    setIsBatchBusy(true);
+    soundRef.current?.playPop?.();
+    try {
+      const results = await Promise.allSettled(ids.map((id) => leadsApi.remove(id)));
+      const count = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      clearSelection();
+      if (count > 0) push('success', t('leads.batchDeleteSuccess', { count }));
+      if (failed > 0) push('error', `${failed} ta lidni o‘chirishda xatolik yuz berdi`);
+    } finally {
+      setIsBatchBusy(false);
+    }
+  }, [isBatchBusy, selectedIds, qc, clearSelection, push, t]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -1330,6 +1512,7 @@ export function LeadsPage() {
   }, []);
 
   const handleOpenModal = useCallback(() => {
+    soundRef.current?.playPop?.();
     setEditingId(null);
     setForm(INITIAL_FORM);
     setFormErrors({});
@@ -1343,20 +1526,20 @@ export function LeadsPage() {
    * ========================================================================== */
   return (
     <motion.main
-      className="relative mx-auto max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] space-y-5 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-2 sm:px-6 lg:px-8"
+      className="relative isolate mx-auto max-w-7xl space-y-5 px-4 pb-[max(6rem,env(safe-area-inset-bottom))] pt-2 sm:px-6 lg:px-8 2xl:max-w-[1600px] 3xl:max-w-[1800px]"
       aria-label="CRM Leads"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
       <AuroraMesh variant="corporate" opacity={0.65} />
-      {/* ── 1. Apple Liquid Glass Hero Header & Live KPI Strip ──────────── */}
+
+      {/* ── 1. Apple iOS 27 Liquid Glass Hero Header & Live KPI Strip ──── */}
       <motion.section
         variants={cardVariants}
-        className="relative overflow-hidden rounded-3xl border border-black/[0.06] bg-white/80 p-5 sm:p-7 backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card"
+        className={cn(LIQUID_SURFACE, 'rounded-3xl p-5 sm:p-7')}
       >
-        {/* Top Specular Highlight & Ambient Mesh */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/15 z-10" />
+        <TopSpecular inset="inset-x-10" />
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/15"
@@ -1367,7 +1550,7 @@ export function LeadsPage() {
         />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start sm:items-center gap-4">
+          <div className="flex items-start gap-4 sm:items-center">
             <motion.div
               whileHover={{ scale: 1.05, rotate: -3 }}
               transition={SPRING.smooth}
@@ -1375,36 +1558,38 @@ export function LeadsPage() {
               style={{
                 background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
                 boxShadow:
-                  '0 12px 28px -8px rgba(0, 122, 255, 0.55), inset 0 1px 0 rgba(255,255,255,0.45)',
+                  '0 12px 28px -8px rgba(0, 122, 255, 0.55), inset 0 1.5px 0 rgba(255,255,255,0.5)',
               }}
             >
               <span
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 rounded-2xl"
                 style={{
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.42), transparent 55%)',
+                  background:
+                    'linear-gradient(180deg, rgba(255,255,255,0.42), transparent 55%)',
                 }}
               />
               <Icon paths={I.target} size={27} strokeWidth={2.1} className="relative" />
             </motion.div>
 
             <div>
-              <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-blue-400">
                   <Icon paths={I.sparkles} size={10} strokeWidth={2.5} />
                   CRM Pipeline
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                   {wonCount} Won
                 </span>
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tighter text-slate-900 dark:text-slate-100 sm:text-3xl">
+              <h1 className="text-2xl font-bold tracking-tighter text-slate-900 sm:text-3xl dark:text-slate-100">
                 {t('leads.title') || 'Leads & CRM'}
               </h1>
               <p className="mt-0.5 text-[13px] font-medium text-slate-500 dark:text-slate-400">
-                {t('leads.pageSubtitle') || 'Student recruitment pipeline and lead qualification'}
+                {t('leads.pageSubtitle') ||
+                  'Student recruitment pipeline and lead qualification'}
               </p>
             </div>
           </div>
@@ -1414,15 +1599,16 @@ export function LeadsPage() {
             <motion.button
               type="button"
               onClick={() => {
-                sound.playPop();
+                soundRef.current?.playPop?.();
                 void leads.refetch();
                 void trialAnalytics.refetch();
               }}
               whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.94 }}
-              transition={SPRING.snappy}
+              whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
+              transition={SPRING.gel}
               title="Yangilash"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-slate-600 hover:text-slate-900 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:text-white transition-colors"
+              aria-label="Yangilash"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-slate-600 transition-colors hover:text-slate-900 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:text-white"
             >
               <Icon
                 paths={I.refresh}
@@ -1437,9 +1623,9 @@ export function LeadsPage() {
                 type="button"
                 onClick={() => handleExportCSV(leadList)}
                 whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={SPRING.snappy}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.08] bg-white/70 px-3.5 text-[12.5px] font-semibold text-slate-800 hover:bg-white dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.08] transition-colors"
+                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
+                transition={SPRING.gel}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.08] bg-white/70 px-3.5 text-[12.5px] font-semibold text-slate-800 transition-colors hover:bg-white dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.08]"
               >
                 <Icon paths={I.download} size={14} strokeWidth={2.2} />
                 <span className="hidden sm:inline">CSV</span>
@@ -1448,8 +1634,8 @@ export function LeadsPage() {
 
             <motion.div
               whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              transition={SPRING.snappy}
+              whileTap={{ scaleX: 1.04, scaleY: 0.94 }}
+              transition={SPRING.gel}
             >
               <GlassButton
                 type="button"
@@ -1459,7 +1645,7 @@ export function LeadsPage() {
               >
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.plus} size={15} strokeWidth={2.5} />
-                  {t('leads.add') || "Yangi lid qo'shish"}
+                  {t('leads.add') || 'Yangi lid qo‘shish'}
                 </span>
               </GlassButton>
             </motion.div>
@@ -1467,7 +1653,7 @@ export function LeadsPage() {
         </div>
 
         {/* Interactive KPI Cards Strip */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-3.5 border-t border-slate-200/70 dark:border-white/[0.06] pt-5">
+        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200/70 pt-5 sm:grid-cols-4 sm:gap-3.5 dark:border-white/[0.06]">
           <KpiTile
             label={t('leads.totalLeads') || 'Jami lidlar'}
             value={totalLeads}
@@ -1536,17 +1722,21 @@ export function LeadsPage() {
                 {t('leads.trialFunnelTitle')}
               </span>
               <span className="rounded-lg bg-amber-500/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 dark:text-amber-100">
-                {t('leads.conversionRateLabel', { rate: trialAnalytics.data.conversionRate })}
+                {t('leads.conversionRateLabel', {
+                  rate: trialAnalytics.data.conversionRate,
+                })}
               </span>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 text-xs">
+            <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs sm:grid-cols-4">
               <div className="rounded-xl border border-amber-500/15 bg-white/70 p-2.5 dark:bg-black/30">
                 <span className="text-slate-500 dark:text-slate-400">
                   {t('leads.trialScheduled')}:
                 </span>
                 <p className="mt-0.5 text-sm font-bold text-slate-900 dark:text-slate-100">
-                  {t('leads.trialUnit', { count: trialAnalytics.data.totalTrialScheduled })}
+                  {t('leads.trialUnit', {
+                    count: trialAnalytics.data.totalTrialScheduled,
+                  })}
                 </p>
               </div>
               <div className="rounded-xl border border-amber-500/15 bg-white/70 p-2.5 dark:bg-black/30">
@@ -1570,7 +1760,9 @@ export function LeadsPage() {
                   {t('leads.trialPendingAttendance')}:
                 </span>
                 <p className="mt-0.5 text-sm font-bold text-amber-600 dark:text-amber-400">
-                  {t('leads.trialUnit', { count: trialAnalytics.data.pendingAttendance })}
+                  {t('leads.trialUnit', {
+                    count: trialAnalytics.data.pendingAttendance,
+                  })}
                 </p>
               </div>
             </div>
@@ -1581,10 +1773,11 @@ export function LeadsPage() {
       {/* ── 2. Filter, Search & View Switcher Toolbar ───────────────────── */}
       <motion.section
         variants={cardVariants}
-        className="rounded-2xl border border-black/[0.06] bg-white/80 p-4 shadow-sm backdrop-blur-2xl dark:border-white/[0.08] dark:bg-surface-900/80 space-y-3"
+        className={cn(LIQUID_SURFACE, 'space-y-3 rounded-2xl p-4')}
       >
+        <TopSpecular inset="inset-x-8" />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:flex-1">
+          <div className="grid grid-cols-1 gap-3 sm:flex-1 sm:grid-cols-2">
             {/* Search Input with Squircle Icon */}
             <div className="relative">
               <FieldIcon icon={I.search} tone="blue" />
@@ -1592,12 +1785,13 @@ export function LeadsPage() {
                 ref={searchInputRef}
                 placeholder={
                   t('leads.searchPlaceholder') ||
-                  "Ism, telefon yoki email bo'yicha qidiruv... (/)"
+                  'Ism, telefon yoki email bo‘yicha qidiruv... (/)'
                 }
                 value={search}
                 onChange={handleSearchChange}
                 aria-label={t('leads.searchPlaceholder') || 'Qidiruv'}
-                type="search"
+                type="text"
+                role="searchbox"
                 className="pl-11 pr-8"
               />
               {search && (
@@ -1621,7 +1815,7 @@ export function LeadsPage() {
               <GlassSelect
                 value={stage}
                 onChange={handleStageFilterChange}
-                aria-label={t('leads.filterHint') || "Bosqich bo'yicha filtr"}
+                aria-label={t('leads.filterHint') || 'Bosqich bo‘yicha filtr'}
                 className="pl-11"
               >
                 <option value="">{t('leads.allStages') || 'Barcha bosqichlar'}</option>
@@ -1634,46 +1828,57 @@ export function LeadsPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-3 sm:shrink-0 sm:pl-2">
+          <div className="flex items-center justify-between gap-3 sm:shrink-0 sm:justify-end sm:pl-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {totalLeads === 1
                 ? t('leads.foundCountOne')
                 : t('leads.foundCount', { count: totalLeads })}
             </span>
 
-            {/* Segmented View Switcher: List vs Kanban Board vs Studio vs Nurturing */}
+            {/* Segmented View Switcher: List vs Kanban vs Studio vs Nurturing (Pure SVG Icons) */}
             <div className="flex items-center gap-2">
               <GlassButton
                 type="button"
                 variant="secondary"
                 size="sm"
                 onClick={() => {
-                  sound.playPop?.();
+                  soundRef.current?.playPop?.();
                   setIsCourseAdvisorOpen(true);
                 }}
                 title="Lead Course Advisor & Karyera ROI Taklifnomasi"
-                className="border-blue-500/30 bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+                className="border-blue-500/30 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 dark:text-blue-400"
               >
-                <span className="inline-flex items-center gap-1.5 font-semibold text-xs">
-                  <span>💼</span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                  <Icon paths={I.briefcase} size={13} strokeWidth={2.2} />
                   <span className="hidden sm:inline">Taklifnoma (ROI)</span>
                 </span>
               </GlassButton>
 
               <LayoutGroup id="leads-view-switcher">
                 <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
-                  {(['list', 'kanban', 'studio', 'nurturing'] as const).map((mode) => {
-                    const active = viewMode === mode;
+                  {(
+                    [
+                      { id: 'list', label: 'List', icon: I.list },
+                      { id: 'kanban', label: 'Kanban', icon: I.kanban },
+                      { id: 'studio', label: 'Studio', icon: I.bolt },
+                      { id: 'nurturing', label: 'Avto-Lid', icon: I.bot },
+                    ] as const
+                  ).map((mode) => {
+                    const active = viewMode === mode.id;
                     return (
                       <button
-                        key={mode}
+                        key={mode.id}
                         type="button"
-                        onClick={() => setViewMode(mode)}
-                        className={`relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                        onClick={() => {
+                          soundRef.current?.playTick?.();
+                          setViewMode(mode.id);
+                        }}
+                        className={cn(
+                          'relative inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors',
                           active
                             ? 'text-slate-900 dark:text-white'
-                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                        }`}
+                            : 'text-slate-500 hover:text-slate-900 dark:text-slate-400',
+                        )}
                       >
                         {active && (
                           <motion.span
@@ -1683,13 +1888,13 @@ export function LeadsPage() {
                           />
                         )}
                         <Icon
-                          paths={mode === 'list' ? I.list : mode === 'kanban' ? I.kanban : I.sparkles}
+                          paths={mode.icon}
                           size={13}
                           strokeWidth={2.2}
                           className="relative z-10"
                         />
                         <span className="relative z-10 uppercase tracking-wider">
-                          {mode === 'list' ? 'List' : mode === 'kanban' ? 'Kanban' : mode === 'studio' ? '⚡ Studio' : '🤖 Avto-Lid'}
+                          {mode.label}
                         </span>
                       </button>
                     );
@@ -1701,29 +1906,35 @@ export function LeadsPage() {
         </div>
 
         {/* Quick Stage Filter Chips & Master Select-All Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-black/[0.04] dark:border-white/[0.05]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.04] pt-2 dark:border-white/[0.05]">
           <div className="flex flex-wrap items-center gap-1.5">
-            {leadList.length > 0 && (
+            {viewMode === 'list' && leadList.length > 0 && (
               <button
                 type="button"
                 onClick={handleToggleSelectAllVisible}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors',
                   allVisibleSelected
-                    ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
-                    : 'bg-black/[0.03] text-slate-600 hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400'
-                }`}
+                    ? 'border border-blue-500/30 bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                    : 'bg-black/[0.03] text-slate-600 hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
+                )}
               >
                 <span
-                  className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${
+                  className={cn(
+                    'flex h-3.5 w-3.5 items-center justify-center rounded border',
                     allVisibleSelected
                       ? 'border-blue-500 bg-blue-500 text-white'
-                      : 'border-slate-400/60'
-                  }`}
+                      : 'border-slate-400/60',
+                  )}
                 >
-                  {allVisibleSelected && <Icon paths={I.check} size={9} strokeWidth={3.5} />}
+                  {allVisibleSelected && (
+                    <Icon paths={I.check} size={9} strokeWidth={3.5} />
+                  )}
                 </span>
                 <span>
-                  {selectedCount > 0 ? `${selectedCount} tanlandi` : 'Barchasini tanlash'}
+                  {selectedCount > 0
+                    ? `${selectedCount} tanlandi`
+                    : 'Barchasini tanlash'}
                 </span>
               </button>
             )}
@@ -1739,13 +1950,14 @@ export function LeadsPage() {
                     setStage(active ? '' : st);
                     setPage(1);
                   }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
                     active
                       ? `${cfg.bg} ${cfg.text} ring-1 ${cfg.ring}`
-                      : 'bg-black/[0.03] text-slate-500 hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400'
-                  }`}
+                      : 'bg-black/[0.03] text-slate-500 hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
+                  )}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+                  <span className={cn('h-1.5 w-1.5 rounded-full', cfg.dot)} />
                   {t(stageKey(st))}
                 </button>
               );
@@ -1755,7 +1967,7 @@ export function LeadsPage() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-500/20 dark:text-rose-400 transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2.5 py-1 text-[11px] font-bold text-rose-600 transition-colors hover:bg-rose-500/20 dark:text-rose-400"
               >
                 <Icon paths={I.x} size={11} strokeWidth={2.5} />
                 Tozalash
@@ -1765,9 +1977,38 @@ export function LeadsPage() {
         </div>
       </motion.section>
 
-      {/* ── 3. Leads List OR Kanban Pipeline Board ──────────────────────── */}
+      {/* ── 3. Leads View Engine (Studio & Nurturing Never Blocked by Empty List) ── */}
       <section className="space-y-3">
-        {leads.isLoading && !data ? (
+        {viewMode === 'nurturing' ? (
+          /* ── OMNICHANNEL CADENCE NURTURING STUDIO ── */
+          <motion.div
+            key="lead-nurturing-studio"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={SPRING.smooth}
+            className="pt-1"
+          >
+            <SmartOmnichannelFollowup />
+          </motion.div>
+        ) : viewMode === 'studio' ? (
+          /* ── 5-STAGE CRM ADMISSION KANBAN STUDIO ── */
+          <motion.div
+            key="lead-kanban-studio"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={SPRING.smooth}
+            className="pt-1"
+          >
+            <LeadPipelineKanbanStudio
+              onLeadEnrolled={() => {
+                void qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+                void qc.invalidateQueries({ queryKey: ['leads'] });
+              }}
+            />
+          </motion.div>
+        ) : leads.isLoading && !data ? (
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((idx) => (
               <LeadSkeletonRow key={idx} />
@@ -1776,13 +2017,14 @@ export function LeadsPage() {
         ) : leads.isError ? (
           <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-center backdrop-blur-md">
             <GlassErrorState
-              title={t('leads.loadFailed') || "Lidlarni yuklab bo'lmadi"}
+              title={t('leads.loadFailed') || 'Lidlarni yuklab bo‘lmadi'}
               message={getErrorMessage(leads.error as Error)}
               onRetry={() => leads.refetch()}
             />
           </div>
         ) : leadList.length === 0 ? (
-          <div className="rounded-3xl border border-black/[0.06] bg-white/80 p-12 text-center backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 shadow-card">
+          <div className={cn(LIQUID_SURFACE, 'rounded-3xl p-12 text-center')}>
+            <TopSpecular inset="inset-x-10" />
             <GlassEmptyState
               title={
                 hasActiveFilters
@@ -1791,7 +2033,7 @@ export function LeadsPage() {
               }
               message={
                 hasActiveFilters
-                  ? t('common.adjustFilters') || "Filtrlarni o'zgartirib ko'ring"
+                  ? t('common.adjustFilters') || 'Filtrlarni o‘zgartirib ko‘ring'
                   : t('leads.addHint') || 'Yangi lid kiritish uchun tugmani bosing'
               }
             />
@@ -1826,23 +2068,24 @@ export function LeadsPage() {
                       handleQuickLook(lead);
                     }
                   }}
-                  className={`group relative flex flex-col gap-4 rounded-2xl border p-4 shadow-card transition-all duration-200 focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between ${
+                  className={cn(
+                    'group relative flex flex-col gap-4 rounded-2xl border p-4 shadow-card transition-all duration-200 focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between',
                     isRowFocused
-                      ? 'ring-2 ring-[#007AFF] bg-[#007AFF]/[0.06] border-[#007AFF]/40'
+                      ? 'border-[#007AFF]/40 bg-[#007AFF]/[0.06] ring-2 ring-[#007AFF]'
                       : isRowSelected
-                      ? 'bg-[#007AFF]/[0.04] border-[#007AFF]/30'
-                      : 'border-black/[0.06] bg-white/85 hover:bg-white backdrop-blur-xl dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-800/85'
-                  }`}
+                        ? 'border-[#007AFF]/30 bg-[#007AFF]/[0.04]'
+                        : 'border-black/[0.06] bg-white/85 backdrop-blur-xl hover:bg-white dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-800/85',
+                  )}
                 >
                   {/* Left: Checkbox + Glossy Avatar + Contact Metadata */}
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex min-w-0 items-center gap-3.5">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelection(lead.id);
                       }}
-                      className="h-9 w-9 min-h-[44px] min-w-[44px] -m-2 inline-flex items-center justify-center shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors"
+                      className="-m-2 inline-flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
                       aria-label={
                         isRowSelected
                           ? t('leads.deselectRowAria', { name: fullNameStr })
@@ -1850,20 +2093,23 @@ export function LeadsPage() {
                       }
                     >
                       <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-md border transition-all ${
+                        className={cn(
+                          'flex h-5 w-5 items-center justify-center rounded-md border transition-all',
                           isRowSelected
-                            ? 'border-blue-500 bg-blue-500 text-white scale-105'
-                            : 'border-zinc-300 bg-white/50 hover:border-blue-400 dark:border-zinc-700 dark:bg-zinc-800/50'
-                        }`}
+                            ? 'scale-105 border-blue-500 bg-blue-500 text-white'
+                            : 'border-zinc-300 bg-white/50 hover:border-blue-400 dark:border-zinc-700 dark:bg-zinc-800/50',
+                        )}
                       >
-                        {isRowSelected && <Icon paths={I.check} size={11} strokeWidth={3.5} />}
+                        {isRowSelected && (
+                          <Icon paths={I.check} size={11} strokeWidth={3.5} />
+                        )}
                       </span>
                     </button>
 
                     {/* Glossy Squircle Avatar */}
                     <div
                       onClick={() => handleOpenLeadSidecar(lead)}
-                      className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl text-sm font-bold text-white shadow-sm ring-2 ring-white/60 dark:ring-zinc-800 transition-transform duration-200 group-hover:scale-105"
+                      className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl text-sm font-bold text-white shadow-sm ring-2 ring-white/60 transition-transform duration-200 group-hover:scale-105 dark:ring-zinc-800"
                       style={{
                         background: getAvatarGradientStyle(fullNameStr),
                         boxShadow:
@@ -1885,13 +2131,18 @@ export function LeadsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h3
                           onClick={() => handleOpenLeadSidecar(lead)}
-                          className="cursor-pointer truncate font-bold text-zinc-900 hover:text-blue-600 dark:text-zinc-50 dark:hover:text-blue-400 transition-colors"
+                          className="cursor-pointer truncate font-bold text-zinc-900 transition-colors hover:text-blue-600 dark:text-zinc-50 dark:hover:text-blue-400"
                         >
                           {fullNameStr}
                         </h3>
                         {lead.source && (
                           <span className="inline-flex items-center gap-1 rounded-md border border-black/[0.06] bg-zinc-100/80 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-600 dark:border-white/[0.08] dark:bg-zinc-800 dark:text-zinc-300">
-                            <Icon paths={I.compass} size={10} strokeWidth={2.2} className="opacity-70" />
+                            <Icon
+                              paths={I.compass}
+                              size={10}
+                              strokeWidth={2.2}
+                              className="opacity-70"
+                            />
                             {lead.source}
                           </span>
                         )}
@@ -1906,10 +2157,15 @@ export function LeadsPage() {
                               handleCopyText(lead.phone || '', 'Telefon');
                             }}
                             title="Nusxalash uchun bosing"
-                            className="inline-flex items-center gap-1 rounded-md px-1 -mx-1 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 transition-colors hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
                           >
-                            <Icon paths={I.phone} size={12} strokeWidth={2} className="opacity-75" />
-                            <span className="tabular-nums font-medium">{lead.phone}</span>
+                            <Icon
+                              paths={I.phone}
+                              size={12}
+                              strokeWidth={2}
+                              className="opacity-75"
+                            />
+                            <span className="font-medium tabular-nums">{lead.phone}</span>
                           </button>
                         )}
                         {lead.email && (
@@ -1920,14 +2176,24 @@ export function LeadsPage() {
                               handleCopyText(lead.email || '', 'Email');
                             }}
                             title="Nusxalash uchun bosing"
-                            className="inline-flex items-center gap-1 rounded-md px-1 -mx-1 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 transition-colors hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
                           >
-                            <Icon paths={I.mail} size={12} strokeWidth={2} className="opacity-75" />
+                            <Icon
+                              paths={I.mail}
+                              size={12}
+                              strokeWidth={2}
+                              className="opacity-75"
+                            />
                             <span>{lead.email}</span>
                           </button>
                         )}
                         <span className="inline-flex items-center gap-1 tabular-nums">
-                          <Icon paths={I.calendar} size={11} strokeWidth={2} className="opacity-65" />
+                          <Icon
+                            paths={I.calendar}
+                            size={11}
+                            strokeWidth={2}
+                            className="opacity-65"
+                          />
                           {formatDate(lead.createdAt)}
                         </span>
                         {lead.notes && (
@@ -1943,14 +2209,21 @@ export function LeadsPage() {
                   </div>
 
                   {/* Right: Stage Switcher Pill & Action Buttons */}
-                  <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2.5 pt-2 sm:pt-0 border-t sm:border-0 border-black/[0.05] dark:border-white/[0.06]">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-black/[0.05] pt-2 sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.06]">
                     {/* Stage Select Pill */}
                     <div className="relative">
                       <select
                         value={lead.stage}
                         disabled={isUpdatingStage}
-                        onChange={(e) => handleUpdateStage(lead.id, e.target.value as LeadStage)}
-                        className={`cursor-pointer appearance-none rounded-xl pl-3 pr-7 py-1.5 text-xs font-bold ring-1 transition-all ${stageStyle.bg} ${stageStyle.text} ${stageStyle.ring} focus:outline-none focus:ring-2`}
+                        onChange={(e) =>
+                          handleUpdateStage(lead.id, e.target.value as LeadStage)
+                        }
+                        className={cn(
+                          'cursor-pointer appearance-none rounded-xl py-1.5 pl-3 pr-7 text-xs font-bold ring-1 transition-all focus:outline-none focus:ring-2',
+                          stageStyle.bg,
+                          stageStyle.text,
+                          stageStyle.ring,
+                        )}
                         aria-label={t('leads.updateStageAria', { name: fullNameStr })}
                       >
                         {LEAD_STAGES.map((st) => (
@@ -1975,7 +2248,7 @@ export function LeadsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleQuickLook(lead)}
-                        className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-blue-600 dark:text-blue-400 font-semibold focus-visible:ring-2 focus-visible:ring-blue-500"
+                        className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-400"
                         title="Quick-Look (Space)"
                       >
                         <span className="inline-flex items-center gap-1.5">
@@ -2003,8 +2276,8 @@ export function LeadsPage() {
                             type="button"
                             variant="secondary"
                             size="sm"
-                            onClick={() => setTrialTarget(lead)}
-                            className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-amber-600 dark:text-amber-400 focus-visible:ring-2 focus-visible:ring-amber-500"
+                            onClick={() => openTrialModal(lead)}
+                            className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-400"
                           >
                             <span className="inline-flex items-center gap-1.5">
                               <Icon paths={I.calendar} size={13.5} strokeWidth={2.1} />
@@ -2017,11 +2290,15 @@ export function LeadsPage() {
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => setAttendanceTarget(lead)}
-                              className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-indigo-600 dark:text-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                              onClick={() => openAttendanceModal(lead)}
+                              className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-indigo-600 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-400"
                             >
                               <span className="inline-flex items-center gap-1.5">
-                                <Icon paths={I.checkCircle} size={13.5} strokeWidth={2.2} />
+                                <Icon
+                                  paths={I.checkCircle}
+                                  size={13.5}
+                                  strokeWidth={2.2}
+                                />
                                 <span>{t('leads.attendance')}</span>
                               </span>
                             </GlassButton>
@@ -2045,13 +2322,13 @@ export function LeadsPage() {
                         </>
                       )}
 
-                      {/* Sidecar Split-View Trigger (Pure SF Symbol `sidebar.right`) */}
+                      {/* Sidecar Split-View Trigger */}
                       <button
                         type="button"
                         onClick={() => handleOpenLeadSidecar(lead)}
                         aria-label={t('leads.sidecarAria')}
                         title={t('leads.sidecarTitle')}
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl border border-slate-200/80 bg-white/70 text-slate-600 hover:text-slate-950 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                        className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/70 text-slate-600 transition-colors hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white"
                       >
                         <Icon paths={I.sidebarRight} size={14} strokeWidth={2.1} />
                       </button>
@@ -2062,7 +2339,7 @@ export function LeadsPage() {
                         size="sm"
                         onClick={() => handleDelete(lead.id)}
                         disabled={remove.isPending && remove.variables === lead.id}
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] p-0 inline-flex items-center justify-center rounded-xl text-xs opacity-80 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
+                        className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-0 text-xs opacity-80 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
                         aria-label={t('leads.deleted')}
                       >
                         <Icon paths={I.trash} size={14} strokeWidth={2.1} />
@@ -2073,9 +2350,9 @@ export function LeadsPage() {
               );
             })}
           </motion.div>
-        ) : viewMode === 'kanban' ? (
+        ) : (
           /* ── APPLE KANBAN PIPELINE BOARD VIEW ───────────────────── */
-          <div className="flex md:grid overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 gap-3.5 md:grid-cols-3 lg:grid-cols-5 no-scrollbar snap-x snap-mandatory">
+          <div className="no-scrollbar flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-4 md:grid md:grid-cols-3 md:overflow-x-visible md:pb-0 lg:grid-cols-5">
             {LEAD_STAGES.map((colStage) => {
               const colLeads = leadList.filter((l) => l.stage === colStage);
               const cfg = STAGE_CONFIG[colStage];
@@ -2097,7 +2374,8 @@ export function LeadsPage() {
                   onDrop={(e) => {
                     e.preventDefault();
                     setDragOverStage(null);
-                    const droppedId = e.dataTransfer.getData('text/plain') || draggedLeadId;
+                    const droppedId =
+                      e.dataTransfer.getData('text/plain') || draggedLeadId;
                     if (droppedId) {
                       const targetLead = leadList.find((l) => l.id === droppedId);
                       if (targetLead && targetLead.stage === colStage) {
@@ -2108,22 +2386,27 @@ export function LeadsPage() {
                       setDraggedLeadId(null);
                     }
                   }}
-                  className={`flex flex-col rounded-2xl border transition-all duration-200 ${
+                  className={cn(
+                    'flex min-h-[340px] min-w-[280px] flex-shrink-0 snap-center flex-col rounded-2xl border p-3 backdrop-blur-xl transition-all duration-200 md:min-w-0 md:flex-shrink',
                     dragOverStage === colStage
                       ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30'
-                      : 'border-black/[0.06] bg-white/60 dark:border-white/[0.08] dark:bg-surface-900/60'
-                  } p-3 backdrop-blur-xl min-h-[340px] min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink snap-center`}
+                      : 'border-black/[0.06] bg-white/65 dark:border-white/[0.08] dark:bg-surface-900/65',
+                  )}
                 >
                   {/* Column Header */}
-                  <div className="flex items-center justify-between gap-2 pb-3 mb-2.5 border-b border-black/[0.05] dark:border-white/[0.06]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`h-2.5 w-2.5 rounded-full ${cfg.dot}`} />
+                  <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-black/[0.05] pb-3 dark:border-white/[0.06]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className={cn('h-2.5 w-2.5 rounded-full', cfg.dot)} />
                       <h3 className="truncate text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
                         {t(stageKey(colStage))}
                       </h3>
                     </div>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${cfg.bg} ${cfg.text}`}
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                        cfg.bg,
+                        cfg.text,
+                      )}
                     >
                       {colLeads.length}
                     </span>
@@ -2132,15 +2415,18 @@ export function LeadsPage() {
                   {/* Column Cards */}
                   <div className="flex-1 space-y-2.5">
                     {colLeads.length === 0 ? (
-                      <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-white/[0.06] text-[11px] font-medium text-slate-400">
-                        Bo'sh
+                      <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-slate-200 text-[11px] font-medium text-slate-400 dark:border-white/[0.06]">
+                        Bo‘sh
                       </div>
                     ) : (
                       colLeads.map((lead) => {
                         const fullNameStr = formatLeadName(lead);
-                        const prevStage = stageIndex > 0 ? LEAD_STAGES[stageIndex - 1] : null;
+                        const prevStage =
+                          stageIndex > 0 ? LEAD_STAGES[stageIndex - 1] : null;
                         const nextStage =
-                          stageIndex < LEAD_STAGES.length - 1 ? LEAD_STAGES[stageIndex + 1] : null;
+                          stageIndex < LEAD_STAGES.length - 1
+                            ? LEAD_STAGES[stageIndex + 1]
+                            : null;
 
                         return (
                           <div
@@ -2155,7 +2441,11 @@ export function LeadsPage() {
                               setDraggedLeadId(null);
                               setDragOverStage(null);
                             }}
-                            className={draggedLeadId === lead.id ? 'opacity-40 scale-95 transition-all' : 'transition-all'}
+                            className={
+                              draggedLeadId === lead.id
+                                ? 'scale-95 opacity-40 transition-all'
+                                : 'transition-all'
+                            }
                           >
                             <motion.div
                               layout
@@ -2164,86 +2454,100 @@ export function LeadsPage() {
                               whileHover={{ y: -2 }}
                               transition={SPRING.snappy}
                               onClick={() => handleOpenLeadSidecar(lead)}
-                              className="group cursor-grab active:cursor-grabbing rounded-xl border border-black/[0.06] bg-white/95 p-3 shadow-xs hover:shadow-md dark:border-white/[0.08] dark:bg-surface-800/90 transition-all"
+                              className="group cursor-grab rounded-xl border border-black/[0.06] bg-white/95 p-3 shadow-xs transition-all hover:shadow-md active:cursor-grabbing dark:border-white/[0.08] dark:bg-surface-800/90"
                             >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <div
-                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white"
-                                  style={{ background: getAvatarGradientStyle(fullNameStr) }}
-                                >
-                                  {getInitials(fullNameStr)}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold text-white"
+                                    style={{
+                                      background: getAvatarGradientStyle(fullNameStr),
+                                    }}
+                                  >
+                                    {getInitials(fullNameStr)}
+                                  </div>
+                                  <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
+                                    {fullNameStr}
+                                  </p>
                                 </div>
-                                <p className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
-                                  {fullNameStr}
+                              </div>
+
+                              {lead.phone && (
+                                <p className="mt-2 flex items-center gap-1 text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
+                                  <Icon paths={I.phone} size={10} strokeWidth={2.2} />
+                                  {lead.phone}
                                 </p>
-                              </div>
-                            </div>
+                              )}
 
-                            {lead.phone && (
-                              <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
-                                <Icon paths={I.phone} size={10} strokeWidth={2.2} />
-                                {lead.phone}
-                              </p>
-                            )}
+                              {lead.source && (
+                                <span className="mt-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
+                                  {lead.source}
+                                </span>
+                              )}
 
-                            {lead.source && (
-                              <span className="mt-2 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
-                                {lead.source}
-                              </span>
-                            )}
+                              {/* Quick Stage Shift Bar */}
+                              <div
+                                className="mt-3 flex items-center justify-between border-t border-black/[0.04] pt-2 dark:border-white/[0.06]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center gap-1">
+                                  {prevStage && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStage(lead.id, prevStage)}
+                                      title={`← ${t(stageKey(prevStage))}`}
+                                      className="rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
+                                    >
+                                      <Icon
+                                        paths={I.chevronLeft}
+                                        size={12}
+                                        strokeWidth={2.5}
+                                      />
+                                    </button>
+                                  )}
+                                  {nextStage && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateStage(lead.id, nextStage)}
+                                      title={`${t(stageKey(nextStage))} →`}
+                                      className="rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
+                                    >
+                                      <Icon
+                                        paths={I.chevronRight}
+                                        size={12}
+                                        strokeWidth={2.5}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
 
-                            {/* Quick Stage Shift Bar */}
-                            <div
-                              className="mt-3 flex items-center justify-between border-t border-black/[0.04] dark:border-white/[0.06] pt-2"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <div className="flex items-center gap-1">
-                                {prevStage && (
+                                <div className="flex items-center gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdateStage(lead.id, prevStage)}
-                                    title={`← ${t(stageKey(prevStage))}`}
-                                    className="rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
+                                    onClick={() => handleEdit(lead)}
+                                    className="rounded-md p-1 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+                                    title={t('common.edit')}
                                   >
-                                    <Icon paths={I.chevronLeft} size={12} strokeWidth={2.5} />
+                                    <Icon paths={I.edit} size={12} strokeWidth={2.2} />
                                   </button>
-                                )}
-                                {nextStage && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateStage(lead.id, nextStage)}
-                                    title={`${t(stageKey(nextStage))} →`}
-                                    className="rounded-md p-1 text-slate-400 hover:bg-black/5 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
-                                  >
-                                    <Icon paths={I.chevronRight} size={12} strokeWidth={2.5} />
-                                  </button>
-                                )}
+                                  {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleConvert(lead.id)}
+                                      className="rounded-md p-1 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"
+                                      title={t('leads.convert')}
+                                    >
+                                      <Icon
+                                        paths={I.userPlus}
+                                        size={12}
+                                        strokeWidth={2.2}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEdit(lead)}
-                                  className="rounded-md p-1 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
-                                  title={t('common.edit')}
-                                >
-                                  <Icon paths={I.edit} size={12} strokeWidth={2.2} />
-                                </button>
-                                {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleConvert(lead.id)}
-                                    className="rounded-md p-1 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"
-                                    title={t('leads.convert')}
-                                  >
-                                    <Icon paths={I.userPlus} size={12} strokeWidth={2.2} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        </div>
+                            </motion.div>
+                          </div>
                         );
                       })
                     )}
@@ -2252,77 +2556,57 @@ export function LeadsPage() {
               );
             })}
           </div>
-        ) : viewMode === 'nurturing' ? (
-          /* ── OMNICHANNEL CADENCE NURTURING STUDIO ── */
-          <motion.div
-            key="lead-nurturing-studio"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={SPRING.smooth}
-            className="pt-2"
-          >
-            <SmartOmnichannelFollowup />
-          </motion.div>
-        ) : (
-          /* ── 5-STAGE CRM ADMISSION KANBAN STUDIO ── */
-          <motion.div
-            key="lead-kanban-studio"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={SPRING.smooth}
-            className="pt-2"
-          >
-            <LeadPipelineKanbanStudio
-              onLeadEnrolled={() => {
-                void qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
-              }}
-            />
-          </motion.div>
         )}
 
-        {/* Pagination */}
-        {data && (data.totalPages ?? 1) > 1 && (
-          <div className="pt-4">
-            <GlassPagination
-              page={page}
-              totalPages={data.totalPages ?? 1}
-              onPageChange={setPage}
-            />
-          </div>
-        )}
+        {/* Pagination (Only in List & Kanban views) */}
+        {(viewMode === 'list' || viewMode === 'kanban') &&
+          data &&
+          (data.totalPages ?? 1) > 1 && (
+            <div className="pt-4">
+              <GlassPagination
+                page={page}
+                totalPages={data.totalPages ?? 1}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
       </section>
 
-      {/* ── Fast Floating Action Island ────────────────────────────── */}
-      <FloatingActionIsland
-        selectedCount={selectedCount}
-        onClearSelection={clearSelection}
-        entityName={t('leads.entityName')}
-        actions={[
-          {
-            label: t('leads.bulkMarkWon'),
-            shortcut: 'W',
-            icon: <Icon paths={I.check} size={14} strokeWidth={2.5} />,
-            variant: 'primary',
-            onClick: handleBatchMarkAsWon,
-          },
-          {
-            label: t('leads.bulkExportCsv'),
-            shortcut: 'C',
-            icon: <Icon paths={I.download} size={14} strokeWidth={2.2} />,
-            variant: 'default',
-            onClick: handleExportSelectedLeadsCSV,
-          },
-          {
-            label: t('leads.bulkDelete'),
-            shortcut: 'D',
-            icon: <Icon paths={I.trash} size={14} strokeWidth={2.2} />,
-            variant: 'destructive',
-            onClick: handleBatchDeleteLeads,
-          },
-        ]}
-      />
+      {/* ── Fast Floating Action Island (List View Only) ────────────── */}
+      {viewMode === 'list' && (
+        <FloatingActionIsland
+          selectedCount={selectedCount}
+          onClear={clearSelection}
+          onClearSelection={clearSelection}
+          entityName={t('leads.entityName')}
+          actions={[
+            {
+              label: t('leads.bulkMarkWon'),
+              shortcut: 'W',
+              shortcutBadge: 'w',
+              icon: <Icon paths={I.check} size={14} strokeWidth={2.5} />,
+              variant: 'primary',
+              onClick: handleBatchMarkAsWon,
+            },
+            {
+              label: t('leads.bulkExportCsv'),
+              shortcut: 'C',
+              shortcutBadge: 'c',
+              icon: <Icon paths={I.download} size={14} strokeWidth={2.2} />,
+              variant: 'default',
+              onClick: handleExportSelectedLeadsCSV,
+            },
+            {
+              label: t('leads.bulkDelete'),
+              shortcut: 'D',
+              shortcutBadge: 'd',
+              icon: <Icon paths={I.trash} size={14} strokeWidth={2.2} />,
+              variant: 'destructive',
+              onClick: handleBatchDeleteLeads,
+            },
+          ]}
+        />
+      )}
 
       {/* ── 4. Add/Edit Lead Modal (Upgraded with Squircle Icons & Presets) ─ */}
       <GlassModal
@@ -2357,7 +2641,9 @@ export function LeadsPage() {
                 />
               </div>
               {formErrors.firstName && (
-                <span className="mt-1 block text-xs text-rose-500">{formErrors.firstName}</span>
+                <span className="mt-1 block text-xs text-rose-500">
+                  {formErrors.firstName}
+                </span>
               )}
             </GlassField>
 
@@ -2402,7 +2688,9 @@ export function LeadsPage() {
                 />
               </div>
               {formErrors.email && (
-                <span className="mt-1 block text-xs text-rose-500">{formErrors.email}</span>
+                <span className="mt-1 block text-xs text-rose-500">
+                  {formErrors.email}
+                </span>
               )}
             </GlassField>
 
@@ -2424,11 +2712,12 @@ export function LeadsPage() {
                       key={src}
                       type="button"
                       onClick={() => setForm((p) => ({ ...p, source: src }))}
-                      className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                      className={cn(
+                        'rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all',
                         form.source === src
                           ? 'bg-purple-600 text-white shadow-xs'
-                          : 'bg-black/[0.04] text-slate-600 hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-slate-300'
-                      }`}
+                          : 'bg-black/[0.04] text-slate-600 hover:bg-black/[0.08] dark:bg-white/[0.06] dark:text-slate-300',
+                      )}
                     >
                       {src}
                     </button>
@@ -2438,10 +2727,10 @@ export function LeadsPage() {
             </div>
           </div>
 
-          {/*  Segmented Stage Selector */}
+          {/* Segmented Stage Selector */}
           <div>
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-              {t('leads.col.stage') || "Boshlang'ich bosqich"}
+              {t('leads.col.stage') || 'Boshlang‘ich bosqich'}
             </p>
             <StageSegmented
               value={form.stage}
@@ -2450,7 +2739,7 @@ export function LeadsPage() {
             />
           </div>
 
-          <GlassField label={t('common.notes') || "Qo'shimcha izoh"}>
+          <GlassField label={t('common.notes') || 'Qo‘shimcha izoh'}>
             <div className="relative">
               <FieldIcon icon={I.note} tone="gray" />
               <GlassInput
@@ -2462,41 +2751,36 @@ export function LeadsPage() {
             </div>
           </GlassField>
 
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200/80 dark:border-white/[0.08]">
-            {(() => {
-              const isSubmitting = create.isPending;
-              return (
-                <>
-                  <GlassButton
-                    type="button"
-                    variant="secondary"
-                    onClick={handleCloseModal}
-                    disabled={isSubmitting}
-                  >
-                    {t('common.cancel') || 'Bekor qilish'}
-                  </GlassButton>
-                  <GlassButton type="submit" variant="primary" disabled={isSubmitting}>
-                    <span className="inline-flex items-center gap-2">
-                      {isSubmitting ? (
-                        <>
-                          <motion.span
-                            className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                          />
-                          {t('common.saving') || 'Saqlanmoqda...'}
-                        </>
-                      ) : (
-                        <>
-                          <Icon paths={I.check} size={14} strokeWidth={2.5} />
-                          {editingId ? t('common.save') || 'Saqlash' : t('leads.add') || "Qo'shish"}
-                        </>
-                      )}
-                    </span>
-                  </GlassButton>
-                </>
-              );
-            })()}
+          <div className="flex justify-end gap-2.5 border-t border-slate-200/80 pt-3 dark:border-white/[0.08]">
+            <GlassButton
+              type="button"
+              variant="secondary"
+              onClick={handleCloseModal}
+              disabled={create.isPending}
+            >
+              {t('common.cancel') || 'Bekor qilish'}
+            </GlassButton>
+            <GlassButton type="submit" variant="primary" disabled={create.isPending}>
+              <span className="inline-flex items-center gap-2">
+                {create.isPending ? (
+                  <>
+                    <motion.span
+                      className="inline-block h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white"
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                    />
+                    {t('common.saving') || 'Saqlanmoqda...'}
+                  </>
+                ) : (
+                  <>
+                    <Icon paths={I.check} size={14} strokeWidth={2.5} />
+                    {editingId
+                      ? t('common.save') || 'Saqlash'
+                      : t('leads.add') || 'Qo‘shish'}
+                  </>
+                )}
+              </span>
+            </GlassButton>
           </div>
         </form>
       </GlassModal>
@@ -2508,7 +2792,7 @@ export function LeadsPage() {
         onConfirm={confirmConvert}
         description={
           t('leads.convertConfirm') ||
-          "Ushbu lidni talabalar safiga o'tkazishni tasdiqlaysizmi?"
+          'Ushbu lidni talabalar safiga o‘tkazishni tasdiqlaysizmi?'
         }
         confirmLabel={t('leads.convert') || 'Talabaga aylantirish'}
         tone="primary"
@@ -2520,9 +2804,9 @@ export function LeadsPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         description={
-          t('leads.deleteConfirm') || "Lidni butunlay o'chirib tashlamoqchimisiz?"
+          t('leads.deleteConfirm') || 'Lidni butunlay o‘chirib tashlamoqchimisiz?'
         }
-        confirmLabel={t('common.delete') || "O'chirish"}
+        confirmLabel={t('common.delete') || 'O‘chirish'}
         tone="danger"
         loading={remove.isPending}
       />
@@ -2550,11 +2834,12 @@ export function LeadsPage() {
               </div>
               <div>
                 <p className="font-bold">
-                  {trialTarget.firstName} {trialTarget.lastName || ''} uchun bepul sinov darsi
+                  {trialTarget.firstName} {trialTarget.lastName || ''} uchun bepul sinov
+                  darsi
                 </p>
                 <p className="mt-1 text-[11px] opacity-85">
                   Sinov darsi belgilangach, lid avtomatik tarzda «TRIAL_LESSON» bosqichiga
-                  o'tkaziladi va CRM voronkasida qayd etiladi.
+                  o‘tkaziladi va CRM voronkasida qayd etiladi.
                 </p>
               </div>
             </div>
@@ -2565,7 +2850,9 @@ export function LeadsPage() {
                 <GlassInput
                   type="datetime-local"
                   value={trialForm.trialDate}
-                  onChange={(e) => setTrialForm({ ...trialForm, trialDate: e.target.value })}
+                  onChange={(e) =>
+                    setTrialForm({ ...trialForm, trialDate: e.target.value })
+                  }
                   required
                   className="pl-11"
                 />
@@ -2578,7 +2865,9 @@ export function LeadsPage() {
                   <FieldIcon icon={I.book} tone="blue" />
                   <GlassInput
                     value={trialForm.subject}
-                    onChange={(e) => setTrialForm({ ...trialForm, subject: e.target.value })}
+                    onChange={(e) =>
+                      setTrialForm({ ...trialForm, subject: e.target.value })
+                    }
                     placeholder="Masalan: General English B1"
                     required
                     className="pl-11"
@@ -2586,33 +2875,39 @@ export function LeadsPage() {
                 </div>
               </GlassField>
 
-              <GlassField label="O'qituvchi (ixtiyoriy)">
+              <GlassField label="O‘qituvchi (ixtiyoriy)">
                 <div className="relative">
                   <FieldIcon icon={I.user} tone="indigo" />
                   <GlassInput
                     value={trialForm.teacherName}
-                    onChange={(e) => setTrialForm({ ...trialForm, teacherName: e.target.value })}
-                    placeholder="O'qituvchi ismi..."
+                    onChange={(e) =>
+                      setTrialForm({ ...trialForm, teacherName: e.target.value })
+                    }
+                    placeholder="O‘qituvchi ismi..."
                     className="pl-11"
                   />
                 </div>
               </GlassField>
             </div>
 
-            <GlassField label="Qo'shimcha izoh">
+            <GlassField label="Qo‘shimcha izoh">
               <div className="relative">
                 <FieldIcon icon={I.note} tone="gray" />
                 <GlassInput
                   value={trialForm.notes}
                   onChange={(e) => setTrialForm({ ...trialForm, notes: e.target.value })}
-                  placeholder="Talabaning boshlang'ich bilimi yoki talabi..."
+                  placeholder="Talabaning boshlang‘ich bilimi yoki talabi..."
                   className="pl-11"
                 />
               </div>
             </GlassField>
 
             <div className="flex justify-end gap-2 pt-2">
-              <GlassButton type="button" variant="secondary" onClick={() => setTrialTarget(null)}>
+              <GlassButton
+                type="button"
+                variant="secondary"
+                onClick={() => setTrialTarget(null)}
+              >
                 Bekor qilish
               </GlassButton>
               <GlassButton
@@ -2655,71 +2950,86 @@ export function LeadsPage() {
               </div>
               <div>
                 <p className="font-bold">
-                  {attendanceTarget.firstName} {attendanceTarget.lastName || ''} — Dars natijasi
+                  {attendanceTarget.firstName} {attendanceTarget.lastName || ''} — Dars
+                  natijasi
                 </p>
                 <p className="mt-1 text-[11px] opacity-85">
-                  O'quvchining sinov darsidagi taassuroti va keyingi harakatni belgilang.
+                  O‘quvchining sinov darsidagi taassuroti va keyingi harakatni belgilang.
                 </p>
               </div>
             </div>
 
             <GlassField label="Darsga qatnashdimi?" required>
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 pt-1">
+              <div className="grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-2">
                 <motion.button
                   type="button"
                   whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setAttendanceForm({ ...attendanceForm, attended: true })}
-                  className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-all ${
+                  whileTap={{ scaleX: 1.03, scaleY: 0.96 }}
+                  transition={SPRING.gel}
+                  onClick={() =>
+                    setAttendanceForm({ ...attendanceForm, attended: true })
+                  }
+                  className={cn(
+                    'flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-all',
                     attendanceForm.attended
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/25'
-                      : 'border-slate-200/80 bg-white/50 text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-400'
-                  }`}
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 ring-2 ring-emerald-500/25 dark:text-emerald-300'
+                      : 'border-slate-200/80 bg-white/50 text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-400',
+                  )}
                 >
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
                       attendanceForm.attended
                         ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-200/70 dark:bg-white/10'
-                    }`}
+                        : 'bg-slate-200/70 dark:bg-white/10',
+                    )}
                   >
                     <Icon paths={I.checkCircle} size={18} strokeWidth={2.2} />
                   </span>
                   <div>
                     <div className="text-xs font-bold">Ha, qatnashdi</div>
-                    <div className="text-[10.5px] opacity-75">Sinov darsi muvaffaqiyatli o'tdi</div>
+                    <div className="text-[10.5px] opacity-75">
+                      Sinov darsi muvaffaqiyatli o‘tdi
+                    </div>
                   </div>
                 </motion.button>
 
                 <motion.button
                   type="button"
                   whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setAttendanceForm({ ...attendanceForm, attended: false })}
-                  className={`flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-all ${
+                  whileTap={{ scaleX: 1.03, scaleY: 0.96 }}
+                  transition={SPRING.gel}
+                  onClick={() =>
+                    setAttendanceForm({ ...attendanceForm, attended: false })
+                  }
+                  className={cn(
+                    'flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-all',
                     !attendanceForm.attended
-                      ? 'border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 ring-2 ring-rose-500/25'
-                      : 'border-slate-200/80 bg-white/50 text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-400'
-                  }`}
+                      ? 'border-rose-500 bg-rose-500/10 text-rose-700 ring-2 ring-rose-500/25 dark:text-rose-300'
+                      : 'border-slate-200/80 bg-white/50 text-slate-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-400',
+                  )}
                 >
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                    className={cn(
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
                       !attendanceForm.attended
                         ? 'bg-rose-500 text-white'
-                        : 'bg-slate-200/70 dark:bg-white/10'
-                    }`}
+                        : 'bg-slate-200/70 dark:bg-white/10',
+                    )}
                   >
                     <Icon paths={I.xCircle} size={18} strokeWidth={2.2} />
                   </span>
                   <div>
-                    <div className="text-xs font-bold">Yo'q, kelmadi (No-show)</div>
-                    <div className="text-[10.5px] opacity-75">Qayta bog'lanish talab etiladi</div>
+                    <div className="text-xs font-bold">Yo‘q, kelmadi (No-show)</div>
+                    <div className="text-[10.5px] opacity-75">
+                      Qayta bog‘lanish talab etiladi
+                    </div>
                   </div>
                 </motion.button>
               </div>
             </GlassField>
 
-            <GlassField label="O'qituvchi / Talaba fikri (Feedback)" required>
+            <GlassField label="O‘qituvchi / Talaba fikri (Feedback)" required>
               <div className="relative">
                 <FieldIcon icon={I.note} tone="indigo" />
                 <GlassInput
@@ -2727,7 +3037,7 @@ export function LeadsPage() {
                   onChange={(e) =>
                     setAttendanceForm({ ...attendanceForm, feedback: e.target.value })
                   }
-                  placeholder="Dars yaxshi o'tdi, guruhga mos keladi..."
+                  placeholder="Dars yaxshi o‘tdi, guruhga mos keladi..."
                   required
                   className="pl-11"
                 />
@@ -2742,7 +3052,7 @@ export function LeadsPage() {
                   onChange={(e) =>
                     setAttendanceForm({ ...attendanceForm, nextAction: e.target.value })
                   }
-                  placeholder="Masalan: Ota-onasiga qo'ng'iroq qilish va to'lov invoysini yuborish..."
+                  placeholder="Masalan: Ota-onasiga qo‘ng‘iroq qilish va to‘lov invoysini yuborish..."
                   className="pl-11"
                 />
               </div>
@@ -2763,7 +3073,9 @@ export function LeadsPage() {
               >
                 <span className="inline-flex items-center gap-2">
                   <Icon paths={I.check} size={14} strokeWidth={2.5} />
-                  {markAttendanceMutation.isPending ? 'Saqlanmoqda...' : 'Natijani saqlash'}
+                  {markAttendanceMutation.isPending
+                    ? 'Saqlanmoqda...'
+                    : 'Natijani saqlash'}
                 </span>
               </GlassButton>
             </div>

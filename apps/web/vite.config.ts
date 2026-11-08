@@ -14,6 +14,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
     strictPort: true,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
@@ -33,9 +34,14 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     cssCodeSplit: true,
     target: 'es2022',
-    // On 8GB Windows dev machines, esbuild parallel chunk minification across 3,350+ modules
-    // exceeds pagefile commitment limits (errno 1455). Default to safe, lightning-fast build.
-    minify: process.env.VITE_MINIFY === 'true' ? 'esbuild' : false,
+    // PERF-01: production bundles MUST be minified (smaller payload, no readable
+    // source in the browser). The old default disabled minification unless
+    // VITE_MINIFY=true was passed, and neither the Dockerfile nor docker-compose
+    // ever passed it — so every production image shipped unminified JS.
+    // Opt OUT explicitly (VITE_MINIFY=false) only for low-memory local debugging:
+    // on 8GB Windows machines esbuild parallel chunk minification across 3,350+
+    // modules can exceed pagefile limits (errno 1455).
+    minify: process.env.VITE_MINIFY === 'false' ? false : 'esbuild',
     modulePreload: {
       polyfill: false,
     },
