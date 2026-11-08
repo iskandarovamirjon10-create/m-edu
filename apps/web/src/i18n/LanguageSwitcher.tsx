@@ -312,6 +312,7 @@ export const LanguageSwitcher = memo(function LanguageSwitcher({
       {/* Accessible native select for Screen Readers & Tests */}
       <select
         id={selectId}
+        name="language-select"
         ref={selectRef}
         value={locale}
         onChange={handleSelectChange}

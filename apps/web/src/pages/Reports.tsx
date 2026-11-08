@@ -893,12 +893,15 @@ export function ReportsPage() {
               <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {/* Dimension */}
                 <div>
-                  <label className="mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
+                  <label htmlFor="reports-dimension-select" className="mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     {t('reports.dimensionLabel')}
                   </label>
                   <div className="relative">
                     <FieldIcon icon={I.database} tone={dimensionTone} />
                     <GlassSelect
+                      id="reports-dimension-select"
+                      name="reports-dimension"
+                      aria-label={t('reports.dimensionLabel')}
                       value={dimension}
                       onChange={(e) => {
                         sound.playTick();
@@ -918,12 +921,15 @@ export function ReportsPage() {
 
                 {/* Date from */}
                 <div>
-                  <label className="mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
+                  <label htmlFor="reports-date-from" className="mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     {t('reports.fromDate')}
                   </label>
                   <div className="relative">
                     <FieldIcon icon={I.calendar} tone="green" />
                     <GlassInput
+                      id="reports-date-from"
+                      name="reports-date-from"
+                      aria-label={t('reports.fromDate')}
                       type="date"
                       value={dateFrom}
                       onChange={(e) => {
@@ -937,12 +943,15 @@ export function ReportsPage() {
 
                 {/* Date to */}
                 <div>
-                  <label className="mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
+                  <label htmlFor="reports-date-to" className="mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B]">
                     {t('reports.toDate')}
                   </label>
                   <div className="relative">
                     <FieldIcon icon={I.calendarEnd} tone="red" />
                     <GlassInput
+                      id="reports-date-to"
+                      name="reports-date-to"
+                      aria-label={t('reports.toDate')}
                       type="date"
                       value={dateTo}
                       onChange={(e) => {
@@ -1124,6 +1133,9 @@ export function ReportsPage() {
               <div className="relative w-full sm:w-64">
                 <FieldIcon icon={I.search} tone="gray" />
                 <GlassInput
+                  id="reports-search-query"
+                  name="reports-search-query"
+                  aria-label={t('reports.searchRows')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('reports.searchRows')}

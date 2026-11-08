@@ -18,6 +18,7 @@
  */
 
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { paymentsApi, studentsApi } from '@/lib/api';
@@ -852,6 +853,7 @@ export function PaymentsPage() {
   const [activeTab, setActiveTab] = useState<'ledger' | 'analytics' | 'cashflow'>('ledger');
 
   /* ── Filter & Sort state ──────────────────────────────────────────── */
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const [methodFilter, setMethodFilter] = useState<PaymentMethod | ''>('');
@@ -1244,6 +1246,16 @@ export function PaymentsPage() {
     setSplitCalcOpen(false);
     setModalOpen(true);
   }, []);
+
+  /* ── Deep-link query param listener (?action=new) ───────────────── */
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      handleOpenModal();
+      const next = new URLSearchParams(searchParams);
+      next.delete('action');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, handleOpenModal, setSearchParams]);
 
   const { refetch: refetchPayments } = payments;
   const handleRetry = useCallback(() => {

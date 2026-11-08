@@ -2080,6 +2080,8 @@ export function AttendancePage() {
                 <div className="relative">
                   <FieldIcon icon={I.usersRound} tone="purple" />
                   <GlassSelect
+                    id="attendance-group-filter"
+                    name="attendance-group-filter"
                     value={groupId}
                     onChange={handleFilterChange(setGroupId)}
                     aria-label={t('students.filterGroupLabel')}
@@ -2098,6 +2100,8 @@ export function AttendancePage() {
                 <div className="relative">
                   <FieldIcon icon={I.calendar} tone="blue" />
                   <GlassInput
+                    id="attendance-date-filter"
+                    name="attendance-date-filter"
                     type="date"
                     value={date}
                     onChange={handleFilterChange(setDate)}
@@ -2110,6 +2114,8 @@ export function AttendancePage() {
                 <div className="relative">
                   <FieldIcon icon={I.filter} tone="orange" />
                   <GlassSelect
+                    id="attendance-status-filter"
+                    name="attendance-status-filter"
                     value={status}
                     onChange={handleFilterChange(setStatus)}
                     aria-label={t('attendance.filterByStatus')}
@@ -2128,6 +2134,8 @@ export function AttendancePage() {
                 <div className="relative">
                   <FieldIcon icon={I.sort} tone="emerald" />
                   <GlassSelect
+                    id="attendance-sort-by"
+                    name="attendance-sort-by"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as SortOption)}
                     aria-label="Saralash"

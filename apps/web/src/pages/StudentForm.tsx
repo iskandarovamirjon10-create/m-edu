@@ -1324,12 +1324,11 @@ export function StudentFormPage() {
                     <GlassField
                       label={t('common.email')}
                       hint={t('studentForm.emailHint')}
-                      error={formErrors.email}
+                      error={formErrors.email} htmlFor="student-email"
                     >
                       <div className="relative">
                         <GlassInput
-                          type="email"
-                          value={form.email}
+                          id="student-email" type="email" value={form.email}
                           onChange={(e) => set('email', e.target.value)}
                           aria-invalid={Boolean(formErrors.email)}
                           aria-describedby={formErrors.email ? 'email-error' : undefined}

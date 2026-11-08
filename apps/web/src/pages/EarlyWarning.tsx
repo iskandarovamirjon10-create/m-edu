@@ -801,6 +801,9 @@ export function EarlyWarningPage() {
               <Icon paths={ICONS.search} size={16} />
             </span>
             <input
+              id="early-warning-search"
+              name="early-warning-search"
+              aria-label={t('common.search') || 'Search warnings'}
               type="text"
               value={searchQuery}
               onChange={(e) => {

@@ -173,7 +173,7 @@ function useSocket() {
     if (!socketRef.current) {
       socketRef.current = io(`${getSocketBaseUrl()}/chat`, {
         withCredentials: true,
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
       });
     }
     return socketRef.current;

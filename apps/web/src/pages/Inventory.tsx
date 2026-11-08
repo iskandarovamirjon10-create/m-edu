@@ -918,9 +918,12 @@ export function InventoryPage() {
                 <Icon paths={I.search} size={16} />
               </span>
               <input
+                id="inventory-search"
+                name="inventory-search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label={t('inventory.searchPlaceholder') || 'Search items by name, category, or location...'}
                 placeholder={t('inventory.searchPlaceholder') || 'Search items by name, category, or location...'}
                 className="w-full min-h-[44px] rounded-xl bg-slate-100/80 dark:bg-white/5 border border-slate-200/70 dark:border-white/10 pl-10 pr-9 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all backdrop-blur-md"
               />

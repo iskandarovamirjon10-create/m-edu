@@ -553,6 +553,9 @@ export function UsersPage() {
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
+              id="users-search-input"
+              name="users-search-input"
+              aria-label={t('common.search') || 'Foydalanuvchilarni qidirish...'}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

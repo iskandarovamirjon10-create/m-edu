@@ -121,6 +121,8 @@ export function storeLocale(locale: Locale): void {
   }
 }
 
+const WARNED_KEYS = new Set<string>();
+
 const MISSING_KEY = (key: string, locale: Locale) =>
   `[i18n:${locale}] missing key "${key}"`;
 
@@ -128,8 +130,8 @@ const MISSING_KEY = (key: string, locale: Locale) =>
  * Translate `key` for `locale`.
  *
  * Fallthrough: locale dictionary → English dictionary → the key itself.
- * In development a missing non-English key is logged once per key so the
- * translation gap is discoverable without breaking the UI.
+ * In development a missing non-English key is logged once per key after the dictionary
+ * has finished loading, so translation gaps are discoverable without spamming or false-positives.
  */
 export function translate(
   locale: Locale,
@@ -144,14 +146,23 @@ export function translate(
 
   if (template === undefined && locale !== DEFAULT_LOCALE) {
     template = DICTIONARIES[DEFAULT_LOCALE]?.[key];
-    if (template !== undefined && import.meta.env.DEV) {
-      // Rate: keep it cheap — one warn per key per session is fine.
-      console.warn(MISSING_KEY(key, locale));
+    if (template !== undefined && import.meta.env.DEV && isLocaleLoaded(locale)) {
+      const warnId = `${locale}:${key}`;
+      if (!WARNED_KEYS.has(warnId)) {
+        WARNED_KEYS.add(warnId);
+        console.warn(MISSING_KEY(key, locale));
+      }
     }
   }
 
   if (template === undefined) {
-    if (import.meta.env.DEV) console.warn(MISSING_KEY(key, locale));
+    if (import.meta.env.DEV && isLocaleLoaded(locale)) {
+      const warnId = `${locale}:${key}`;
+      if (!WARNED_KEYS.has(warnId)) {
+        WARNED_KEYS.add(warnId);
+        console.warn(MISSING_KEY(key, locale));
+      }
+    }
     return fb ?? key;
   }
 

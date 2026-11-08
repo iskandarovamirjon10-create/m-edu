@@ -447,6 +447,7 @@ export function CommandPalette() {
 
   const roleFilteredActions = useMemo(() => {
     return QUICK_ACTIONS.filter((item) => {
+      if (userRole === 'PLATFORM_OWNER' || userRole === 'SUPER_ADMIN') return true;
       if (item.href && !isRouteAllowedForRole(item.href, userRole)) return false;
       if (!item.roles || item.roles.length === 0) return true;
       if (!userRole) return false;
@@ -456,6 +457,7 @@ export function CommandPalette() {
 
   const roleFilteredItems = useMemo(() => {
     return NAV_ITEMS.filter((item) => {
+      if (userRole === 'PLATFORM_OWNER' || userRole === 'SUPER_ADMIN') return true;
       if (item.href && !isRouteAllowedForRole(item.href, userRole)) return false;
       if (!item.roles || item.roles.length === 0) return true;
       if (!userRole) return false;
@@ -464,7 +466,8 @@ export function CommandPalette() {
   }, [userRole]);
 
   const filtered = useMemo(() => {
-    const value = query.trim().toLowerCase();
+    const normalize = (s: string) => s.toLowerCase().replace(/['`‘’ʻʼ]/g, '').trim();
+    const value = normalize(query);
 
     if (!value) {
       return [...roleFilteredActions, ...roleFilteredItems];
@@ -478,7 +481,7 @@ export function CommandPalette() {
         ...(item.keywords ?? []),
       ]
         .filter(Boolean)
-        .some((field) => field!.toLowerCase().includes(value));
+        .some((field) => normalize(field!).includes(value));
     });
 
     const matchedActions = roleFilteredActions.filter((item) => {
@@ -489,7 +492,7 @@ export function CommandPalette() {
         ...(item.keywords ?? []),
       ]
         .filter(Boolean)
-        .some((field) => field!.toLowerCase().includes(value));
+        .some((field) => normalize(field!).includes(value));
     });
 
     return [...liveResults, ...matchedActions, ...matchedNav];
@@ -645,6 +648,8 @@ export function CommandPalette() {
 
           <input
             ref={inputRef}
+            id="command-palette-search"
+            name="command-palette-search"
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

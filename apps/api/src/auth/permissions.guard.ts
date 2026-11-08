@@ -42,6 +42,10 @@ export class PermissionsGuard implements CanActivate {
       throw new UnauthorizedException('Authenticated user is required.');
     }
 
+    if (user.role === 'PLATFORM_OWNER' || user.role === 'SUPER_ADMIN') {
+      return true;
+    }
+
     const userPermissions = Object.prototype.hasOwnProperty.call(RolePermissions, user.role)
       ? RolePermissions[user.role as keyof typeof RolePermissions]
       : undefined;

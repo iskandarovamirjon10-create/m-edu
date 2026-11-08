@@ -1323,6 +1323,9 @@ export function GroupsPage() {
               ref={searchInputRef}
               type="text"
               data-testid="groups-search-input"
+              id="groups-search-input"
+              name="groups-search-input"
+              aria-label="Guruh nomi, kurs, xona yoki o'qituvchi bo'yicha qidirish"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Guruh nomi, kurs, xona yoki o'qituvchi bo'yicha qidirish..."
@@ -1465,6 +1468,8 @@ export function GroupsPage() {
             {/* Course dropdown */}
             {courseList.length > 0 && (
               <select
+                id="groups-course-filter"
+                name="groups-course-filter"
                 value={courseFilter}
                 onChange={(e) => setCourseFilter(e.target.value)}
                 className="h-8.5 px-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
@@ -1482,6 +1487,8 @@ export function GroupsPage() {
             {/* Teacher dropdown */}
             {teacherList.length > 0 && (
               <select
+                id="groups-teacher-filter"
+                name="groups-teacher-filter"
                 value={teacherFilter}
                 onChange={(e) => setTeacherFilter(e.target.value)}
                 className="h-8.5 px-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
@@ -1498,6 +1505,8 @@ export function GroupsPage() {
 
             {/* Capacity filter */}
             <select
+              id="groups-capacity-filter"
+              name="groups-capacity-filter"
               value={capacityFilter}
               onChange={(e) => setCapacityFilter(e.target.value as CapacityFilter)}
               className="h-8.5 px-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
@@ -1535,6 +1544,8 @@ export function GroupsPage() {
                 className="pointer-events-none absolute left-2.5 text-[var(--text-tertiary)]"
               />
               <select
+                id="groups-sort-by"
+                name="groups-sort-by"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortMode)}
                 aria-label="Tartiblash turi"
@@ -1628,6 +1639,8 @@ export function GroupsPage() {
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
+                id="groups-select-all"
+                name="groups-select-all"
                 aria-label="Barcha guruhlarni tanlash"
                 checked={
                   filteredGroups.length > 0 && selectedCount === filteredGroups.length
@@ -1702,6 +1715,8 @@ export function GroupsPage() {
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <input
                     type="checkbox"
+                    id={`group-select-${group.id}`}
+                    name={`group-select-${group.id}`}
                     checked={isRowSelected}
                     onChange={(e) => {
                       e.stopPropagation();

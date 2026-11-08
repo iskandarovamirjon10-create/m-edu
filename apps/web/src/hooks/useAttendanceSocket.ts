@@ -36,7 +36,7 @@ export function useAttendanceSocket() {
     if (!sharedSocket) {
       sharedSocket = io(`${getSocketBaseUrl()}/attendance`, {
         withCredentials: true,
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,

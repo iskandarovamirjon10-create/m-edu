@@ -1215,6 +1215,9 @@ export function SettingsPage() {
                 🔍
               </span>
               <input
+                id="settings-search-query"
+                name="settings-search-query"
+                aria-label={t('settings.searchPlaceholder')}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

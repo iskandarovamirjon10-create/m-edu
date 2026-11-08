@@ -867,6 +867,8 @@ export function GradesPage() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
+                            id={`grade-select-card-${g.id}`}
+                            name={`grade-select-card-${g.id}`}
                             type="checkbox"
                             checked={isSel}
                             onChange={() => {
@@ -949,6 +951,8 @@ export function GradesPage() {
                       <th className="py-3.5 pl-6 pr-3 w-12">
                         <label className="flex h-11 w-11 items-center justify-center cursor-pointer -m-3">
                           <input
+                            id="grade-select-all"
+                            name="grade-select-all"
                             type="checkbox"
                             checked={isAllSelected}
                             onChange={() => {
@@ -1006,6 +1010,8 @@ export function GradesPage() {
                               onClick={(e) => e.stopPropagation()}
                             >
                               <input
+                                id={`grade-select-row-${g.id}`}
+                                name={`grade-select-row-${g.id}`}
                                 type="checkbox"
                                 checked={isSel}
                                 onChange={() => {

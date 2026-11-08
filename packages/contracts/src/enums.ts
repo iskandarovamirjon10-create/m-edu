@@ -153,6 +153,7 @@ export const Permissions = {
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
 
 export const RolePermissions: Record<string, Permission[]> = {
+  PLATFORM_OWNER: Object.values(Permissions),
   SUPER_ADMIN: Object.values(Permissions),
   ORG_ADMIN: [
     Permissions.FACE_VIEW,

@@ -151,7 +151,7 @@ export function useArenaBattleSocket() {
 
     const socket = io(`${baseUrl}/arena`, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       auth: { token },
       reconnection: true,
     });

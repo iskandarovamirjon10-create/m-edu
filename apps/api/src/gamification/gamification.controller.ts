@@ -191,7 +191,7 @@ export class GamificationController {
   ) {
     const studentId = await this.resolveStudentId(organizationId, userId);
     if (!studentId) {
-      throw new ForbiddenException('Student profile not found for this account');
+      return null;
     }
     return this.gamification.getMyStats(studentId, organizationId);
   }
@@ -215,7 +215,7 @@ export class GamificationController {
   ) {
     const studentId = await this.resolveStudentId(organizationId, userId);
     if (!studentId) {
-      throw new ForbiddenException('Student profile not found for this account');
+      return { items: [] };
     }
     const events = await this.gamification.getRecentEvents(
       studentId,

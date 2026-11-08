@@ -906,49 +906,60 @@ export function LoginPage() {
               <div className="flex-grow border-t border-black/10 dark:border-white/10" />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-5">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleQuickLogin('superadmin', 'Password123!')}
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-rose-500/25 bg-rose-500/10 p-2 text-center transition-all duration-150 hover:bg-rose-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+              >
+                <span className="text-lg">⚡</span>
+                <span className="mt-1 text-[11.5px] font-bold text-rose-700 dark:text-rose-300">Super Admin</span>
+                <span className="text-[9.5px] text-rose-600/70 dark:text-rose-400/70">SUPER_ADMIN</span>
+              </button>
+
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => handleQuickLogin('admin', 'Password123!')}
-                className="group relative flex flex-col items-center justify-center rounded-2xl border border-blue-500/25 bg-blue-500/10 p-2.5 text-center transition-all duration-150 hover:bg-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-blue-500/25 bg-blue-500/10 p-2 text-center transition-all duration-150 hover:bg-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
               >
-                <span className="text-xl">👑</span>
-                <span className="mt-1 text-[12px] font-bold text-blue-700 dark:text-blue-300">Admin</span>
-                <span className="text-[10px] text-blue-600/70 dark:text-blue-400/70">ORG_ADMIN</span>
+                <span className="text-lg">👑</span>
+                <span className="mt-1 text-[11.5px] font-bold text-blue-700 dark:text-blue-300">Admin</span>
+                <span className="text-[9.5px] text-blue-600/70 dark:text-blue-400/70">ORG_ADMIN</span>
               </button>
 
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => handleQuickLogin('teacher', 'Password123!')}
-                className="group relative flex flex-col items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-2.5 text-center transition-all duration-150 hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-2 text-center transition-all duration-150 hover:bg-emerald-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
               >
-                <span className="text-xl">👨‍🏫</span>
-                <span className="mt-1 text-[12px] font-bold text-emerald-700 dark:text-emerald-300">O'qituvchi</span>
-                <span className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">TEACHER</span>
+                <span className="text-lg">👨‍🏫</span>
+                <span className="mt-1 text-[11.5px] font-bold text-emerald-700 dark:text-emerald-300">O'qituvchi</span>
+                <span className="text-[9.5px] text-emerald-600/70 dark:text-emerald-400/70">TEACHER</span>
               </button>
 
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => handleQuickLogin('student', 'Password123!')}
-                className="group relative flex flex-col items-center justify-center rounded-2xl border border-purple-500/25 bg-purple-500/10 p-2.5 text-center transition-all duration-150 hover:bg-purple-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-purple-500/25 bg-purple-500/10 p-2 text-center transition-all duration-150 hover:bg-purple-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
               >
-                <span className="text-xl">🎓</span>
-                <span className="mt-1 text-[12px] font-bold text-purple-700 dark:text-purple-300">O'quvchi</span>
-                <span className="text-[10px] text-purple-600/70 dark:text-purple-400/70">STUDENT</span>
+                <span className="text-lg">🎓</span>
+                <span className="mt-1 text-[11.5px] font-bold text-purple-700 dark:text-purple-300">O'quvchi</span>
+                <span className="text-[9.5px] text-purple-600/70 dark:text-purple-400/70">STUDENT</span>
               </button>
 
               <button
                 type="button"
                 disabled={busy}
                 onClick={() => handleQuickLogin('parent@medu.test', 'Password123!', true)}
-                className="group relative flex flex-col items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 p-2.5 text-center transition-all duration-150 hover:bg-amber-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40"
+                className="group relative flex flex-col items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 p-2 text-center transition-all duration-150 hover:bg-amber-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40 col-span-2 sm:col-span-1"
               >
-                <span className="text-xl">👨‍👩‍👦</span>
-                <span className="mt-1 text-[12px] font-bold text-amber-700 dark:text-amber-300">Ota-ona</span>
-                <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70">PARENT</span>
+                <span className="text-lg">👨‍👩‍👦</span>
+                <span className="mt-1 text-[11.5px] font-bold text-amber-700 dark:text-amber-300">Ota-ona</span>
+                <span className="text-[9.5px] text-amber-600/70 dark:text-amber-400/70">PARENT</span>
               </button>
             </div>
           </div>

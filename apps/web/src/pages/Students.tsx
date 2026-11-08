@@ -1876,6 +1876,8 @@ const ColumnVisibility = memo(function ColumnVisibility({
         >
           <span>{COLUMN_LABELS[key]}</span>
           <input
+            id={`col-vis-${key}`}
+            name={`col-vis-${key}`}
             type="checkbox"
             checked={visible[key]}
             onChange={(e) => onChange(key, e.target.checked)}
@@ -3080,6 +3082,8 @@ export function StudentsPage() {
                       <th scope="col" className={TH}>
                         <div className="flex items-center gap-3">
                           <input
+                            id="students-select-all"
+                            name="students-select-all"
                             type="checkbox"
                             checked={allSelectedOnPage}
                             onChange={handleSelectAllOnPage}
@@ -3178,6 +3182,8 @@ export function StudentsPage() {
                             />
                             <div className="flex items-center gap-3">
                               <input
+                                id={`student-select-${student.id}`}
+                                name={`student-select-${student.id}`}
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => {}}

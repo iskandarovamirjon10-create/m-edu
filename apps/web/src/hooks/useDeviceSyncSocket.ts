@@ -63,7 +63,7 @@ export function useDeviceSyncSocket() {
 
     const socketInstance = io(`${getSocketBaseUrl()}/sync`, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 10,
       reconnectionDelay: 2500,
       timeout: 10000,
