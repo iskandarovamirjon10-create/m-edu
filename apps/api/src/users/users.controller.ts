@@ -36,7 +36,7 @@ export class UsersController {
   }
 
   @Post()
-  @Roles('PLATFORM_OWNER')
+  @Roles('SUPER_ADMIN', 'ORG_ADMIN')
   @ApiOperation({ summary: 'Create a user' })
   create(
     @CurrentUser('organizationId') orgId: string,

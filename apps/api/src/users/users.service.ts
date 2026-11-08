@@ -105,9 +105,6 @@ export class UsersService {
    * Creates a new user with proper RBAC permission checks.
    */
   async create(organizationId: string, data: CreateUserDto, actorRole?: string) {
-    if (actorRole !== 'PLATFORM_OWNER' && actorRole !== Role.PLATFORM_OWNER) {
-      throw new ForbiddenException('Only the Platform Owner can provision user accounts');
-    }
     if (!organizationId || typeof organizationId !== 'string' || !organizationId.trim()) {
       throw new BadRequestException('Organization context is required');
     }
@@ -137,10 +134,23 @@ export class UsersService {
     const existing = await this.prisma.user.findFirst({ where: { email: data.email } });
     if (existing) throw new BadRequestException('Email already registered');
 
+    const normUsername = data.username
+      ? normalizeUsername(data.username)
+      : normalizeUsername(data.email.split('@')[0]);
+
+    if (normUsername) {
+      const existingUserByUsername = await this.prisma.user.findFirst({
+        where: { username: normUsername },
+      });
+      if (existingUserByUsername) {
+        throw new BadRequestException('Username is already taken');
+      }
+    }
+
     const passwordHash = data.password ? await hashPassword(data.password) : null;
 
     try {
-      const normUsername = normalizeUsername((data as any).username || data.email.split('@')[0]);
+      // normUsername already resolved and verified above
       const user = await this.prisma.user.create({
         data: {
           organizationId,
@@ -252,6 +262,16 @@ export class UsersService {
     if (data.role !== undefined) updateData.role = data.role;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.googleLinkAllowed !== undefined) updateData.googleLinkAllowed = data.googleLinkAllowed;
+    if (data.username !== undefined) {
+      const norm = normalizeUsername(data.username);
+      if (norm) {
+        const taken = await this.prisma.user.findFirst({
+          where: { username: norm, id: { not: id } },
+        });
+        if (taken) throw new BadRequestException('Username is already taken');
+        updateData.username = norm;
+      }
+    }
 
     if (Object.keys(updateData).length === 0) return this.findOne(organizationId, id);
 

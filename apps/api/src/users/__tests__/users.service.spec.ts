@@ -156,14 +156,41 @@ describe('UsersService privilege-escalation guards (P1)', () => {
   it('rejects ORG_ADMIN creating a SUPER_ADMIN account', async () => {
     await expect(
       svc.create('org1', { email: 'x@y.com', password: 'password123', firstName: 'X', lastName: 'Y', role: 'SUPER_ADMIN' }, 'ORG_ADMIN'),
-    ).rejects.toThrow('Only the Platform Owner can provision user accounts');
+    ).rejects.toThrow('Only a SUPER_ADMIN can assign the SUPER_ADMIN role');
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('rejects ORG_ADMIN creating an ORG_ADMIN account', async () => {
     await expect(
       svc.create('org1', { email: 'x@y.com', password: 'password123', firstName: 'X', lastName: 'Y', role: 'ORG_ADMIN' }, 'ORG_ADMIN'),
-    ).rejects.toThrow('Only the Platform Owner can provision user accounts');
+    ).rejects.toThrow('Only a SUPER_ADMIN can grant the ORG_ADMIN role');
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('allows ORG_ADMIN to create a TEACHER account with custom username', async () => {
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({ id: 'u3', role: 'TEACHER', username: 'teacher_bek' });
+    const result = await svc.create(
+      'org1',
+      { email: 'teacher@edu.local', username: 'teacher_bek', password: 'password123', firstName: 'Bek', lastName: 'Aliyev', role: 'TEACHER' },
+      'ORG_ADMIN',
+    );
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'TEACHER', username: 'teacher_bek' }) }),
+    );
+    expect(result).toBeDefined();
+  });
+
+  it('rejects creating a user if username is already taken', async () => {
+    prisma.user.findFirst.mockImplementation(({ where }) => {
+      if (where.email) return Promise.resolve(null);
+      if (where.username === 'taken_user') return Promise.resolve({ id: 'existing-id' });
+      return Promise.resolve(null);
+    });
+
+    await expect(
+      svc.create('org1', { email: 'new@edu.local', username: 'taken_user', password: 'password123', firstName: 'A', lastName: 'B', role: 'TEACHER' }, 'ORG_ADMIN'),
+    ).rejects.toThrow('Username is already taken');
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { USERNAME_REGEX, normalizeUsername } from '../../auth/username.utils';
 import {
   IsArray,
   IsBoolean,
@@ -716,6 +717,20 @@ export class UpdateScheduleDto {
 // ==================== Users ====================
 
 export class CreateUserDto {
+  @ApiPropertyOptional({ description: 'Globally unique case-insensitive username' })
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(30)
+  @Matches(USERNAME_REGEX, {
+    message:
+      'Username must start with a letter or digit and contain only lowercase letters, digits, underscores, dots, or hyphens',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeUsername(value) : value,
+  )
+  username?: string;
+
   @ApiProperty() @IsEmail()
   email: string;
 
@@ -750,6 +765,20 @@ export class CreateUserDto {
 }
 
 export class UpdateUserDto {
+  @ApiPropertyOptional({ description: 'Globally unique case-insensitive username' })
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(30)
+  @Matches(USERNAME_REGEX, {
+    message:
+      'Username must start with a letter or digit and contain only lowercase letters, digits, underscores, dots, or hyphens',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeUsername(value) : value,
+  )
+  username?: string;
+
   @ApiPropertyOptional() @Transform(stripHtmlTags) @IsOptional() @IsString() @MaxLength(100)
   firstName?: string;
 
