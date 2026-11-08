@@ -1299,17 +1299,19 @@ export default function AssessmentPage() {
       {/* ====================================================================
        * 5. CREATE QUIZ MODAL (Glass Overlay)
        * ================================================================== */}
-      <AnimatePresence>
-        {isQuizModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[200] grid place-items-center p-4 backdrop-blur-md bg-black/40"
-            onClick={handleCloseModal}
-            role="presentation"
-          >
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {isQuizModalOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-[200] grid place-items-center p-4 backdrop-blur-md bg-black/40"
+                  onClick={handleCloseModal}
+                  role="presentation"
+                >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1418,7 +1420,10 @@ export default function AssessmentPage() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+    )
+  : null}
     </div>
   );
 }

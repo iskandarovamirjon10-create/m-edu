@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -436,9 +437,11 @@ export function ArenaMistakeVault() {
       {/* =====================================================================
           INTERACTIVE DRILL MODAL (Focus Solver with Explanations)
       ===================================================================== */}
-      <AnimatePresence>
-        {activeDrillItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {activeDrillItem && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -565,7 +568,10 @@ export function ArenaMistakeVault() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+    )
+  : null}
     </div>
   );
 }

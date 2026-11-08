@@ -6,6 +6,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { assignmentsApi, groupsApi } from '@/lib/api';
 import { useSafeI18n, type TranslateFn } from '@/i18n/I18nProvider';
@@ -1107,11 +1108,14 @@ export default function AssignmentsPage() {
           </div>
         </div>
       </motion.div>
+    </motion.div>
 
       {/* CREATE MODAL */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {isModalOpen && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1259,8 +1263,10 @@ export default function AssignmentsPage() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-    </motion.div>
+      </AnimatePresence>,
+      document.body,
+    )
+  : null}
   </div>
   );
 }

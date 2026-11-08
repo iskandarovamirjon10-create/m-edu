@@ -26,6 +26,7 @@ import React, {
   useId,
   memo,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
@@ -1224,7 +1225,9 @@ const CommandPalette = memo(function CommandPalette({
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -1305,7 +1308,8 @@ const CommandPalette = memo(function CommandPalette({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 });
 
