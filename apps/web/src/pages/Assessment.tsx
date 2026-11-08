@@ -13,6 +13,7 @@ import {
   type SVGProps,
 } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { assessmentApi } from '@/lib/api';
 import { useSafeI18n } from '@/i18n/I18nProvider';

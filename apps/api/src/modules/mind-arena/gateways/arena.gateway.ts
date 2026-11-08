@@ -166,6 +166,16 @@ export class ArenaGateway
     const studentId = this.socketToStudent.get(client.id);
     if (studentId) {
       this.matchmaking.dequeuePlayer(studentId);
+
+      // If the player was in an active match, gracefully forfeit and resolve the duel
+      const activeRoom = this.battleEngine.findActiveRoomByStudentId(studentId);
+      if (activeRoom) {
+        this.logger.log(`Active player ${studentId} disconnected from room ${activeRoom.id}. Auto-forfeiting duel.`);
+        this.battleEngine.finishDuel(activeRoom.id, studentId).catch((err: any) => {
+          this.logger.error(`Failed to forfeit duel for disconnected player ${studentId}: ${err?.message}`);
+        });
+      }
+
       this.studentToSocket.delete(studentId);
       this.socketToStudent.delete(client.id);
     }

@@ -13,6 +13,7 @@ import {
   type SVGProps,
 } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useToasts, ConfirmDialog } from '@/components/ui';
 import { apiKeysApi } from '@/lib/api';
@@ -1079,17 +1080,19 @@ export function ApiKeysPage() {
       {/* ====================================================================
        * 5. CREATE KEY MODAL (Glass Surface)
        * ================================================================== */}
-      <AnimatePresence>
-        {showCreate && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[200] grid place-items-center p-4 backdrop-blur-md bg-black/40"
-            onClick={() => setShowCreate(false)}
-            role="presentation"
-          >
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {showCreate && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-[200] grid place-items-center p-4 backdrop-blur-md bg-black/40"
+                  onClick={() => setShowCreate(false)}
+                  role="presentation"
+                >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1236,22 +1239,27 @@ export function ApiKeysPage() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+    )
+  : null}
 
       {/* ====================================================================
        * 6. REVEALED SECRET KEY VAULT MODAL
        * ================================================================== */}
-      <AnimatePresence>
-        {generatedKey && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[210] grid place-items-center p-4 backdrop-blur-md bg-black/50"
-            onClick={() => setGeneratedKey(null)}
-            role="presentation"
-          >
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {generatedKey && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-[210] grid place-items-center p-4 backdrop-blur-md bg-black/50"
+                  onClick={() => setGeneratedKey(null)}
+                  role="presentation"
+                >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1313,7 +1321,10 @@ export function ApiKeysPage() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+    )
+  : null}
 
       {/* ====================================================================
        * 7. REVOCATION CONFIRM DIALOG

@@ -21,6 +21,7 @@ import React, {
   useRef,
 } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { subjectsApi } from '@/lib/api';
 import { useSafeI18n } from '@/i18n/I18nProvider';
@@ -1054,7 +1055,9 @@ export function SubjectFormModal({
 
   const isEdit = Boolean(editing);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -1223,7 +1226,8 @@ export function SubjectFormModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 

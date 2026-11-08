@@ -719,4 +719,16 @@ export class ArenaBattleEngineService {
   getActiveRoom(roomId: string) {
     return this.activeRooms.get(roomId);
   }
+
+  /**
+   * Finds the active room in which a student is currently engaged.
+   */
+  findActiveRoomByStudentId(studentId: string): ActiveDuelRoomState | undefined {
+    for (const room of this.activeRooms.values()) {
+      if (room.roundStatus !== 'FINISHED' && room.players.some((p) => p.studentId === studentId)) {
+        return room;
+      }
+    }
+    return undefined;
+  }
 }
