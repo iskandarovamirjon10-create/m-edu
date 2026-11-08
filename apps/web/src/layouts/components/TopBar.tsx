@@ -941,7 +941,7 @@ const TopBarBreadcrumb = memo(function TopBarBreadcrumb({
           <span className="text-tertiary opacity-60" aria-hidden="true">
             ›
           </span>
-          <span className="flex items-center gap-1.5 font-semibold text-primary max-w-[140px] truncate">
+          <span className="flex items-center gap-1.5 font-semibold text-primary max-w-[110px] xl:max-w-[140px] 2xl:max-w-[200px] truncate">
             {currentNav?.iconPath && (
               <span className="text-brand-600 dark:text-brand-400 shrink-0">
                 <StaticIcon paths={currentNav.iconPath} size={13} />
@@ -2366,7 +2366,7 @@ export const TopBar = memo(function TopBar({
 
           {showContext && (
             <>
-              <div className="hidden lg:block">
+              <div className="hidden 2xl:block">
                 <TelemetryChip />
               </div>
 
@@ -2386,7 +2386,7 @@ export const TopBar = memo(function TopBar({
           role="search"
           onSubmit={(e) => e.preventDefault()}
           className={cn(
-            'relative min-w-0 flex-1 basis-[190px] transition-[max-width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+            'relative min-w-[170px] flex-1 basis-[180px] transition-[max-width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
             isSearchFocused
               ? 'max-w-[460px] xl:max-w-[540px]'
               : 'max-w-[260px] lg:max-w-[280px] xl:max-w-[340px]',
@@ -2430,15 +2430,14 @@ export const TopBar = memo(function TopBar({
             onKeyDown={onSearchKeyDown}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            type="search"
-            placeholder={
+            id="global-topbar-search" name="global-topbar-search" type="search" placeholder={
               isCopilotRoute
                 ? 'AI Copilot’ga savol yozing yoki buyruq bering...'
                 : t('nav.searchPlaceholder', 'O‘quvchi, o‘qituvchi, guruh yoki to‘lovlarni qidirish...')
             }
             aria-label={t('nav.searchPlaceholder', 'Search')}
             className={cn(
-              'h-9 w-full rounded-xl pl-9 pr-24 lg:pr-28',
+              'h-9 w-full rounded-xl pl-9 pr-8 xl:pr-24',
               'border border-black/[0.07] bg-black/[0.035] dark:border-white/[0.09] dark:bg-white/[0.045]',
               'shadow-[inset_0_1px_2px_rgba(0,0,0,0.04),inset_0_-1px_0_rgba(120,200,255,0.14),0_1px_0_rgba(255,255,255,0.65)]',
               'dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.28),inset_0_-1px_0_rgba(120,200,255,0.1),0_1px_0_rgba(255,255,255,0.07)]',
@@ -2498,7 +2497,7 @@ export const TopBar = memo(function TopBar({
               aria-label={t('commandPalette.open', 'Open command palette')}
               title={`${t('commandPalette.open', 'Open command palette')} (${cmdLabel})`}
               className={cn(
-                'hidden sm:flex h-6 items-center rounded-lg border border-black/[0.07] bg-white/65 px-1.5 text-[10.5px] font-semibold text-tertiary min-h-[32px]',
+                'hidden xl:flex h-6 items-center rounded-lg border border-black/[0.07] bg-white/65 px-1.5 text-[10.5px] font-semibold text-tertiary min-h-[32px]',
                 'shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.04)]',
                 'dark:border-white/[0.1] dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
                 'transition-all duration-150 hover:border-brand-500/35 hover:text-brand-600 dark:hover:text-brand-400 active:scale-95',
@@ -2538,7 +2537,7 @@ export const TopBar = memo(function TopBar({
             <ActionButton
               onClick={() => navigate(isExecutiveRoute ? '/' : '/executive-dashboard')}
               active={isExecutiveRoute}
-              className="hidden lg:flex"
+              className="hidden 2xl:flex"
               ariaLabel="Executive Suite"
               title={isExecutiveRoute ? 'Oddiy rejimga qaytish' : 'Executive Suite (Boshqaruv tahlili)'}
             >
@@ -2549,6 +2548,7 @@ export const TopBar = memo(function TopBar({
           <ActionButton
             onClick={toggleCalculator}
             active={isCalculatorOpen}
+            className="hidden 2xl:flex"
             ariaLabel={t('nav.calculator', 'Calculator')}
             title={t('nav.calculator', 'Calculator')}
           >
@@ -2565,7 +2565,7 @@ export const TopBar = memo(function TopBar({
             <StaticIcon paths={I.camera} size={18} />
           </ActionButton>
 
-          <div className="hidden lg:block">
+          <div className="hidden 2xl:block">
             <FocusModeCapsule />
           </div>
 

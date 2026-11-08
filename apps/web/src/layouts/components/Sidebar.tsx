@@ -1617,6 +1617,8 @@ export const Sidebar = memo(function Sidebar({
                 </span>
                 <input
                   ref={filterInputRef}
+                  id="sidebar-nav-filter"
+                  name="sidebar-nav-filter"
                   type="text"
                   role="searchbox"
                   value={navFilter}
