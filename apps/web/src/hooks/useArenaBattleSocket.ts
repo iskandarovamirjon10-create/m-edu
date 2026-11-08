@@ -228,9 +228,11 @@ export function useArenaBattleSocket() {
     });
 
     // 6. Live Reaction / Emote Received
+    let reactionTimer: ReturnType<typeof setTimeout> | null = null;
     socket.on('reaction_received', (data: { studentId: string; name: string; emoji: string; timestamp: number }) => {
       setLatestReaction(data);
-      setTimeout(() => {
+      if (reactionTimer) clearTimeout(reactionTimer);
+      reactionTimer = setTimeout(() => {
         setLatestReaction((curr) => (curr?.timestamp === data.timestamp ? null : curr));
       }, 3200);
     });
@@ -267,6 +269,7 @@ export function useArenaBattleSocket() {
     });
 
     return () => {
+      if (reactionTimer) clearTimeout(reactionTimer);
       if (timerRef.current) clearInterval(timerRef.current);
       if (searchTimerRef.current) clearInterval(searchTimerRef.current);
       socket.disconnect();

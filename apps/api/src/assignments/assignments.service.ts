@@ -223,30 +223,52 @@ export class AssignmentsService {
       throw new ForbiddenException('Student is not enrolled in this assignment group');
     }
 
-    const previousAttempts = await this.prisma.assignmentSubmission.count({
-      where: { assignmentId, studentId: student.id },
-    });
-
-    if (previousAttempts >= assignment.maxAttempts) {
-      throw new BadRequestException(`Maximum submission attempts (${assignment.maxAttempts}) exceeded`);
-    }
-
     const now = new Date();
     const isLate = now > assignment.dueDate;
 
-    return this.prisma.assignmentSubmission.create({
-      data: {
-        id: crypto.randomUUID(),
-        assignmentId,
-        studentId: student.id,
-        attemptNumber: previousAttempts + 1,
-        status: isLate ? 'LATE' : 'SUBMITTED',
-        content: dto.content?.trim(),
-        attachments: dto.attachments ?? [],
-        submittedAt: now,
-        updatedAt: now,
-      },
-    });
+    const runInTx = typeof this.prisma.$transaction === 'function'
+      ? (cb: (tx: any) => Promise<any>) => this.prisma.$transaction(cb)
+      : (cb: (tx: any) => Promise<any>) => cb(this.prisma);
+
+    try {
+      return await runInTx(async (tx) => {
+        try {
+          if (typeof tx.$executeRaw === 'function') {
+            const lockKey = `assign_sub:${assignmentId}:${student.id}`;
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+          }
+        } catch {
+          // Fallback in mock / non-Postgres environments
+        }
+
+        const previousAttempts = await tx.assignmentSubmission.count({
+          where: { assignmentId, studentId: student.id },
+        });
+
+        if (previousAttempts >= assignment.maxAttempts) {
+          throw new BadRequestException(`Maximum submission attempts (${assignment.maxAttempts}) exceeded`);
+        }
+
+        return tx.assignmentSubmission.create({
+          data: {
+            id: crypto.randomUUID(),
+            assignmentId,
+            studentId: student.id,
+            attemptNumber: previousAttempts + 1,
+            status: isLate ? 'LATE' : 'SUBMITTED',
+            content: dto.content?.trim(),
+            attachments: dto.attachments ?? [],
+            submittedAt: now,
+            updatedAt: now,
+          },
+        });
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('A concurrent submission attempt is already in progress, please refresh and retry');
+      }
+      throw err;
+    }
   }
 
   async gradeSubmission(

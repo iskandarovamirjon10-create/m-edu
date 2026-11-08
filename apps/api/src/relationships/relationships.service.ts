@@ -171,7 +171,7 @@ export class RelationshipsService {
   ) {
     // groups via StudentGroup
     const enrollments = await this.prisma.studentGroup.findMany({
-      where: { studentId: parent.id, isActive: true },
+      where: { studentId: parent.id, organizationId: orgId, isActive: true },
       include: { group: true },
     });
     for (const e of enrollments) {
@@ -271,7 +271,7 @@ export class RelationshipsService {
     }
 
     const enrollments = await this.prisma.studentGroup.findMany({
-      where: { groupId: parent.id, isActive: true },
+      where: { groupId: parent.id, organizationId: orgId, isActive: true },
       include: {
         student: { include: { user: { select: { firstName: true, lastName: true } } } },
       },

@@ -6,6 +6,7 @@
  * ============================================================================
  */
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -95,12 +96,14 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
     onClose();
   };
 
-  if (!open) return null;
+  const isModalOpen = open;
+  if (typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        {/* Backdrop */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -293,6 +296,8 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }

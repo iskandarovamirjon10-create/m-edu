@@ -528,6 +528,7 @@ function AccessAuditTab() {
 function SummaryTab() {
   const { t } = useSafeI18n();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { playSuccess, playError } = usePremiumSound();
 
   const statsQuery = useQuery({
@@ -544,6 +545,8 @@ function SummaryTab() {
     mutationFn: async () => (await dataGovernanceApi.runRetentionCheck()) as RetentionCheckResult,
     onSuccess: (data) => {
       playSuccess();
+      queryClient.invalidateQueries({ queryKey: ['dg-policies'] });
+      queryClient.invalidateQueries({ queryKey: ['dg-export-stats'] });
       toast.success(t('dg.retentionChecked', { count: data.policiesChecked }));
     },
     onError: (err: Error) => {

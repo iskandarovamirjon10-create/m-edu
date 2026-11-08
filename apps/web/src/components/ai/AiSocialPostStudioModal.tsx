@@ -1064,7 +1064,7 @@ interface HistoryEntry {
 }
 
 function useContentHistory(initial: HistoryEntry | null) {
-  const [past, setPast] = useState<HistoryEntry[]>([]);
+  const [past, setPast] = useState<HistoryEntry[]>(() => (initial ? [initial] : []));
   const [future, setFuture] = useState<HistoryEntry[]>([]);
 
   const push = useCallback((next: HistoryEntry) => {

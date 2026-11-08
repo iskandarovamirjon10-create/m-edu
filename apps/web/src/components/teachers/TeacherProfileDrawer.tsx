@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassButton } from '@/components/ui';
 import { formatCurrency, fullName } from '@/lib/format';
@@ -81,10 +82,12 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
     estimatedMonthly = 3_500_000 + Math.round(metrics.weeklyHours * 4.2 * 45_000);
   }
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isVisible && teacher && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+        <div className="fixed inset-0 z-[140] overflow-hidden flex justify-end">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -360,6 +363,7 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
         </motion.div>
       </div>
     )}
-  </AnimatePresence>
+  </AnimatePresence>,
+  document.body,
   );
 });

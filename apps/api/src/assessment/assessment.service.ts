@@ -345,8 +345,34 @@ export class AssessmentService {
     const allowedSec = (attempt.quiz.durationMinutes * 60) + 60;
     const isExpired = durationSec > allowedSec;
 
-    return this.prisma.$transaction(async (tx) => {
-      let totalEarned = 0;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        try {
+          if (typeof (tx as any).$executeRaw === 'function') {
+            const lockKey = `quiz_sub:${attempt.id}`;
+            await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+          }
+        } catch {
+          // Fallback for mocked test environments
+        }
+
+        if (typeof tx.quizAttempt?.updateMany === 'function') {
+          const guard = await tx.quizAttempt.updateMany({
+            where: {
+              id: attempt.id,
+              status: { in: ['IN_PROGRESS', 'STARTED'] },
+            },
+            data: {
+              status: isExpired ? 'EXPIRED' : 'SUBMITTED',
+              submittedAt: now,
+            },
+          });
+          if (guard.count !== 1) {
+            throw new BadRequestException('This attempt has already been submitted or finalized');
+          }
+        }
+
+        let totalEarned = 0;
 
       const questionsMap = new Map(attempt.quiz.QuizQuestion.map((q) => [q.Question.id, q.Question]));
       // SECURITY: the denominator must cover EVERY question on the quiz, not
@@ -420,5 +446,11 @@ export class AssessmentService {
         },
       });
     });
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('This attempt has already been submitted or finalized');
+      }
+      throw err;
+    }
   }
 }

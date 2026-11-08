@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -48,21 +49,22 @@ export const CourseSyllabusDrawer = memo(function CourseSyllabusDrawer({
     staleTime: 30000,
   });
 
-  if (!isOpen || !course) return null;
-
-  const activeCourse = (fullCourse || course) as Course & { groups?: any[] };
-  const groups = activeCourse.groups || [];
-  const levelStyle = (activeCourse.level && LEVEL_COLORS[activeCourse.level]) || LEVEL_COLORS.BEGINNER;
+  const activeCourse = course ? ((fullCourse || course) as Course & { groups?: any[] }) : null;
+  const groups = activeCourse?.groups || [];
+  const levelStyle = (activeCourse?.level && LEVEL_COLORS[activeCourse.level]) || LEVEL_COLORS.BEGINNER;
 
   const totalEnrolled = groups.reduce(
     (sum: number, g: any) => sum + (g._count?.enrollments ?? 0),
     0
   );
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-end">
-        {/* Backdrop */}
+      {isOpen && activeCourse && (
+        <div className="fixed inset-0 z-[140] flex justify-end">
+          {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -300,6 +302,8 @@ export const CourseSyllabusDrawer = memo(function CourseSyllabusDrawer({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 });

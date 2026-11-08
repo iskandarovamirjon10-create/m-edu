@@ -72,8 +72,15 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
         });
       };
 
-      recognition.onerror = () => {
+      recognition.onerror = (event: any) => {
         setIsRecording(false);
+        const errMsg =
+          event?.error === 'not-allowed'
+            ? 'Mikrofondan foydalanishga ruxsat berilmagan'
+            : event?.error === 'no-speech'
+            ? 'Ovoz eshitilmadi'
+            : "Ovozni tanishda xatolik yuz berdi";
+        push('error', errMsg);
       };
 
       recognitionRef.current = recognition;

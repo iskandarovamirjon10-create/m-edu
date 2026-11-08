@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RealQrCode } from '../ui/RealQrCode';
 import { fireExecutiveConfetti } from '@/lib/executiveConfetti';
@@ -120,10 +121,12 @@ export function AppleWalletPassModal({ open, onClose, data }: AppleWalletPassMod
     }, 900);
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -270,6 +273,7 @@ export function AppleWalletPassModal({ open, onClose, data }: AppleWalletPassMod
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

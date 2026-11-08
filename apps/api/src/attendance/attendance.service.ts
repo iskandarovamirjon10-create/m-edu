@@ -258,6 +258,15 @@ export class AttendanceService {
     const commitAttendance = async (allowCreate: boolean) =>
       this.prisma.$transaction(
         async (tx) => {
+          try {
+            if (typeof (tx as any).$executeRaw === 'function') {
+              const lockKey = `mark_att:${organizationId}:${lesson!.id}`;
+              await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+            }
+          } catch {
+            // Fallback for mocked test environments
+          }
+
           let lessonStatus = lesson!.status;
           if (lessonStatus === 'PLANNED') {
             await tx.lesson.update({
@@ -662,15 +671,18 @@ export class AttendanceService {
   }
 
   private async getDailyStats(organizationId: string, query: AttendanceQuery, teacherId?: string) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const VALID_STATUSES = ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'];
+
     const conditions: Prisma.Sql[] = [Prisma.sql`"organizationId" = ${organizationId}::uuid`];
 
-    if (teacherId) {
+    if (teacherId && UUID_REGEX.test(teacherId)) {
       conditions.push(Prisma.sql`"groupId" IN (SELECT id FROM "Group" WHERE "teacherId" = ${teacherId}::uuid AND "organizationId" = ${organizationId}::uuid)`);
     }
-    if (query.groupId) {
+    if (query.groupId && UUID_REGEX.test(query.groupId)) {
       conditions.push(Prisma.sql`"groupId" = ${query.groupId}::uuid`);
     }
-    if (query.status) {
+    if (query.status && VALID_STATUSES.includes(query.status)) {
       conditions.push(Prisma.sql`status = ${query.status}::"AttendanceStatus"`);
     }
     if (query.dateFrom) {

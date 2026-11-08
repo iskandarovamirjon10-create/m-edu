@@ -150,24 +150,29 @@ function scrollToHash(
   hash: string,
   target: ScrollTarget,
   { smooth, headerOffset }: { smooth: boolean; headerOffset: number },
-) {
+): () => void {
   const id = decodeURIComponent(hash.slice(1));
-  if (!id) return;
+  if (!id) return () => {};
 
   let frames = 0;
   let cancelled = false;
+  let rafId = 0;
   let abortCleanup: (() => void) | null = null;
 
   const abort = () => {
     cancelled = true;
+    if (rafId) cancelAnimationFrame(rafId);
     abortCleanup?.();
+    abortCleanup = null;
   };
 
   const tryScroll = () => {
     if (cancelled) return;
     const el = document.getElementById(id);
     if (!el) {
-      if (frames++ < HASH_RETRY_FRAMES) requestAnimationFrame(tryScroll);
+      if (frames++ < HASH_RETRY_FRAMES) {
+        rafId = requestAnimationFrame(tryScroll);
+      }
       return;
     }
 
@@ -192,7 +197,8 @@ function scrollToHash(
     target.setY(Math.max(0, targetY), smooth ? 'smooth' : INSTANT);
   };
 
-  tryScroll();
+  rafId = requestAnimationFrame(tryScroll);
+  return abort;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -228,6 +234,7 @@ export function ScrollToTop({
   keyRef.current = key;
 
   const targetRef = useRef<ScrollTarget | null>(null);
+  const hashAbortRef = useRef<(() => void) | null>(null);
 
   /* ── 0. Hydrate persisted positions + take over browser restoration ── */
   useEffect(() => {
@@ -310,7 +317,7 @@ export function ScrollToTop({
 
       // Deep link to a section.
       if (hash) {
-        scrollToHash(hash, target, {
+        hashAbortRef.current = scrollToHash(hash, target, {
           smooth: !reduced && !pathChanged,
           headerOffset,
         });
@@ -321,6 +328,9 @@ export function ScrollToTop({
       target.setY(0, INSTANT);
     };
 
+    hashAbortRef.current?.();
+    hashAbortRef.current = null;
+
     // Wrap in View Transition if enabled + supported + not reduced.
     if (viewTransitions && supportsViewTransitions() && !reduced) {
       (document as Document & {
@@ -329,6 +339,11 @@ export function ScrollToTop({
     } else {
       perform();
     }
+
+    return () => {
+      hashAbortRef.current?.();
+      hashAbortRef.current = null;
+    };
   }, [pathname, hash, key, navType, getTarget, headerOffset, viewTransitions]);
 
   /* ── 4. Focus management on initial mount & route change (a11y, non-hijacking) ── */

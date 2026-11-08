@@ -14,6 +14,7 @@
  */
 
 import { memo, useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUiSelector, closeQuickLook, openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -193,7 +194,9 @@ export const QuickLookModal = memo(function QuickLookModal() {
     typeof data?.badge === 'object' && data?.badge?.tone ? data.badge.tone : 'blue';
   const tone = STATUS_TONES[(rawTone as ToneKey) in STATUS_TONES ? (rawTone as ToneKey) : 'blue'];
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && data && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6 md:p-10">
@@ -623,7 +626,8 @@ export const QuickLookModal = memo(function QuickLookModal() {
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 });
 

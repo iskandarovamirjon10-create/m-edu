@@ -500,31 +500,38 @@ export class ExamsService {
     else if (percentage >= 50) grade = 'C';
     else grade = 'F';
 
-    return this.prisma.examResult.create({
-      data: {
-        examId,
-        studentId: dto.studentId,
-        organizationId,
-        marksObtained: marksObtained,
-        grade,
-        isPassed,
-        submittedAt: new Date(),
-        evaluatedAt: new Date(),
-      },
-      include: {
-        student: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
+    try {
+      return await this.prisma.examResult.create({
+        data: {
+          examId,
+          studentId: dto.studentId,
+          organizationId,
+          marksObtained: marksObtained,
+          grade,
+          isPassed,
+          submittedAt: new Date(),
+          evaluatedAt: new Date(),
+        },
+        include: {
+          student: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code === 'P2002') {
+        throw new BadRequestException('Result for this student already exists');
+      }
+      throw err;
+    }
   }
 
   // ===================== Statistics =====================

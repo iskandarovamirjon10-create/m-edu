@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -51,29 +52,30 @@ export const GroupDossierDrawer = memo(function GroupDossierDrawer({
     staleTime: 30000,
   });
 
-  if (!isOpen || !group) return null;
-
-  const activeGroup: Group = (fullGroup as Group) || group;
-  const capacity = activeGroup.capacity ?? 20;
+  const activeGroup: Group | null = group ? ((fullGroup as Group) || group) : null;
+  const capacity = activeGroup?.capacity ?? 20;
   const enrolledCount =
-    activeGroup.enrollments?.filter((e: any) => e.isActive !== false).length ??
-    activeGroup._count?.enrollments ??
+    activeGroup?.enrollments?.filter((e: any) => e.isActive !== false).length ??
+    activeGroup?._count?.enrollments ??
     0;
   const occupancyPercent =
     capacity > 0 ? Math.min(100, Math.round((enrolledCount / capacity) * 100)) : 0;
   const availableSeats = Math.max(0, capacity - enrolledCount);
 
-  const teacherName = activeGroup.teacher?.user
+  const teacherName = activeGroup?.teacher?.user
     ? fullName(activeGroup.teacher.user.firstName, activeGroup.teacher.user.lastName)
     : null;
 
-  const enrollments = (activeGroup.enrollments || []).filter((e: any) => e.isActive !== false);
-  const schedules = activeGroup.schedules || [];
+  const enrollments = (activeGroup?.enrollments || []).filter((e: any) => e.isActive !== false);
+  const schedules = activeGroup?.schedules || [];
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-end">
-        {/* Backdrop */}
+      {isOpen && activeGroup && (
+        <div className="fixed inset-0 z-[140] flex justify-end">
+          {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -386,6 +388,8 @@ export const GroupDossierDrawer = memo(function GroupDossierDrawer({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 });

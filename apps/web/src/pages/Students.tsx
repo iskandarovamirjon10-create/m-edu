@@ -1507,7 +1507,7 @@ const CommandPalette = memo(function CommandPalette({
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const listId = useId('palette-list');
+  const listId = useId();
   const getOptionId = (idx: number) => `${listId}-opt-${idx}`;
 
   useEffect(() => {
@@ -2335,7 +2335,6 @@ export function StudentsPage() {
     toggleSelect,
     selectAll,
     clearSelection,
-    isAllSelected,
   } = useListKeyboardNavigation({
     items: studentList,
     onQuickLook: handleOpenStudentSidecar,

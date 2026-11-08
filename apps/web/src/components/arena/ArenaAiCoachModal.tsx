@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   Brain,
   Sparkles,
@@ -24,10 +25,12 @@ export function ArenaAiCoachModal({
   onClose,
   duelSummary,
 }: ArenaAiCoachModalProps) {
-  if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -169,5 +172,8 @@ export function ArenaAiCoachModal({
         </div>
       </motion.div>
     </div>
+    )}
+  </AnimatePresence>,
+  document.body,
   );
 }

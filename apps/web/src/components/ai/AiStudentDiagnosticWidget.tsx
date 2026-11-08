@@ -19,6 +19,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { aiApi, type AiStudentDiagnostic } from '@/lib/api';
+import { getErrorMessage } from '@/lib/errorMessages';
 import { cn } from '@/lib/design';
 
 export interface AiStudentMessageModalOptions {
@@ -39,17 +40,19 @@ export function AiStudentDiagnosticWidget({
 }: AiStudentDiagnosticWidgetProps) {
   const [data, setData] = useState<AiStudentDiagnostic | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
   const loadDiagnostic = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await aiApi.diagnoseStudent(studentId);
       setData(res);
-    } catch {
+    } catch (err: unknown) {
       setData(null);
-
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -96,7 +99,7 @@ export function AiStudentDiagnosticWidget({
         </h3>
         <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
           Diagnostika olinmadi — AI xizmati yoki tarmoq javob bermadi. Soxta ko'rsatkich
-          ko'rsatilmaydi.
+          ko'rsatilmaydi.{error ? ` (${error})` : ''}
         </p>
         <button
           type="button"

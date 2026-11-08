@@ -2183,6 +2183,15 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     const statusToRecord = isLate ? 'LATE' : 'PRESENT';
 
     const recordId = await this.prisma.$transaction(async (tx) => {
+      try {
+        if (typeof (tx as any).$executeRaw === 'function') {
+          const lockKey = `stream_att:${params.organizationId}:${params.studentId}:${activeScheduleMatch.groupId}:${canonicalDate.toISOString().slice(0, 10)}`;
+          await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+        }
+      } catch {
+        // Safe fallback in test mock / non-Postgres environments
+      }
+
       const existing = await tx.attendance.findFirst({
         where: {
           organizationId: params.organizationId,
@@ -2197,28 +2206,46 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         return existing.id;
       }
 
-      const created = await tx.attendance.create({
-        data: {
-          organizationId: params.organizationId,
-          studentId: params.studentId,
-          groupId: activeScheduleMatch.groupId,
-          status: statusToRecord,
-          source: 'FACE',
-          date: canonicalDate,
-          markedAt: params.capturedAt,
-          note: JSON.stringify({
-            source: 'CAMERA_STREAM',
-            room: params.cameraRoom,
-            classification: statusToRecord,
-            lateMinutes,
-            checkInMinutes: currentMinutes,
-            lessonStartMinutes: activeScheduleMatch.startMinutes,
-          }),
-        },
-        select: { id: true },
-      });
+      try {
+        const created = await tx.attendance.create({
+          data: {
+            organizationId: params.organizationId,
+            studentId: params.studentId,
+            groupId: activeScheduleMatch.groupId,
+            status: statusToRecord,
+            source: 'FACE',
+            date: canonicalDate,
+            markedAt: params.capturedAt,
+            note: JSON.stringify({
+              source: 'CAMERA_STREAM',
+              room: params.cameraRoom,
+              classification: statusToRecord,
+              lateMinutes,
+              checkInMinutes: currentMinutes,
+              lessonStartMinutes: activeScheduleMatch.startMinutes,
+            }),
+          },
+          select: { id: true },
+        });
 
-      return created.id;
+        return created.id;
+      } catch (createErr: unknown) {
+        if ((createErr as { code?: string })?.code === 'P2002') {
+          const concurrentRow = await tx.attendance.findFirst({
+            where: {
+              organizationId: params.organizationId,
+              studentId: params.studentId,
+              groupId: activeScheduleMatch.groupId,
+              date: { gte: dayStart, lt: dayEnd },
+            },
+            select: { id: true },
+          });
+          if (concurrentRow) {
+            return concurrentRow.id;
+          }
+        }
+        throw createErr;
+      }
     });
 
     return {

@@ -15,6 +15,7 @@ import {
   memo,
   useCallback,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { cn, usePrefersReducedMotion, SPRING, EASE_APPLE } from '@/lib/design';
@@ -304,12 +305,14 @@ export const ShortcutsModal = memo(function ShortcutsModal({
     </div>
   );
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
           key="shortcuts-modal"
-          className="fixed inset-0 z-[80] flex items-center justify-center p-4 sm:p-6"
+          className="fixed inset-0 z-[180] flex items-center justify-center p-4 sm:p-6"
         >
           {/* Backdrop */}
           <motion.div
@@ -405,7 +408,8 @@ export const ShortcutsModal = memo(function ShortcutsModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 });
 

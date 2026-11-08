@@ -28,14 +28,7 @@ describe('AssessmentService (Server-Authoritative Test Engine)', () => {
       $transaction: vi.fn(async (cb) => cb(prisma)),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AssessmentService,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-
-    service = module.get<AssessmentService>(AssessmentService);
+    service = new AssessmentService(prisma as unknown as PrismaService);
   });
 
   it('strips correct answers (isCorrect) when student starts a quiz attempt', async () => {
