@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { randomBytes } from 'crypto';
 import { InvoiceStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -951,8 +952,8 @@ export class InvoicesService {
 
   async createProratedInvoice(organizationId: string, actorId: string, dto: ProrateInvoiceDto) {
     const preview = await this.proratePreview(organizationId, dto);
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const invoiceNumber = `INV-PRORATE-${Date.now().toString().slice(-4)}${randomSuffix}`;
+    const suffix = crypto.randomInt(1000, 10000);
+    const invoiceNumber = `INV-PRORATE-${Date.now().toString().slice(-4)}${suffix}`;
 
     const invoiceDto: CreateInvoiceDto = {
       studentId: dto.studentId,

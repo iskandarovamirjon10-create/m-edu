@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuestionDto, CreateQuizDto, SubmitQuizAttemptDto } from './assessment.dto';
 import { Prisma } from '@prisma/client';
@@ -290,10 +291,9 @@ export class AssessmentService {
 
     const shouldRandomize = actualQuiz.randomizeQuestions ?? (actualQuiz as any).shuffle ?? false;
     if (shouldRandomize) {
-      // Unbiased Fisher-Yates shuffle (sort(() => Math.random() - 0.5) is
-      // biased and non-reproducible).
+      // Cryptographically secure unbiased Fisher-Yates shuffle
       for (let i = questions.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = crypto.randomInt(0, i + 1);
         [questions[i], questions[j]] = [questions[j], questions[i]];
       }
     }

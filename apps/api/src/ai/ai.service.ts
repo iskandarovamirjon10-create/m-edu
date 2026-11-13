@@ -12,6 +12,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
@@ -4465,7 +4466,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
 
     for (const call of params.calls) {
       const toolCall: AiToolCall = {
-        id: call.id || `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        id: call.id || `call_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`,
         name: call.name,
         arguments: (call.args as Record<string, unknown>) ?? {},
       };
