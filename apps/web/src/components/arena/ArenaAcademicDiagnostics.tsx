@@ -43,12 +43,23 @@ interface DailyQuest {
 
 const QUEST_STORAGE_PREFIX = 'm-edu.arena-daily-quests-';
 
+interface ArenaProfileSummary {
+  profile?: {
+    totalDuels?: number;
+    wins?: number;
+    rating?: number;
+    student?: {
+      user?: { firstName?: string; lastName?: string };
+    };
+  };
+}
+
 export function ArenaAcademicDiagnostics() {
   const { playPayment, playCelebration, playTick } = usePremiumSound();
   const { haptic } = useTelegram();
 
   // Load real student profile from database
-  const { data: myData, isLoading } = useQuery<any>({
+  const { data: myData, isLoading } = useQuery<ArenaProfileSummary>({
     queryKey: ['arena-my-profile'],
     queryFn: () => request('/arena/profiles/me'),
     staleTime: 30_000,

@@ -18,6 +18,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { ExecutiveSpotlight } from '@/components/spotlight/ExecutiveSpotlight';
 import { GlobalAiCopilot } from '@/components/ai';
 import { GlobalCalculator } from '@/components/calculator';
+import { toggleCalculator } from '@/stores/ui.store';
 import { QuickLookModal } from '@/components/quicklook';
 import { SplitViewSidecar } from '@/components/sidecar';
 import { DynamicWallpaper } from '@/components/wallpaper';
@@ -260,6 +261,17 @@ function AppLayoutInner() {
       if (e.key === '/' && !inInput && !anyDialogOpen && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         searchRef.current?.focus();
+        return;
+      }
+      // Alt+C or 'c' (when no modifier and not in input) → toggle Global Calculator
+      if (
+        !inInput &&
+        !anyDialogOpen &&
+        ((e.altKey && e.key.toLowerCase() === 'c') ||
+          (e.key.toLowerCase() === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey))
+      ) {
+        e.preventDefault();
+        toggleCalculator();
         return;
       }
 

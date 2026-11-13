@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toDateToInclusive, startOfDay, getOrganizationDate } from '../common/date-range';
 import { canonicalMembershipWhere } from '../common/student-membership';
 import { parsePagination } from '../lib/pagination';
+import { computeAttendanceRate } from '../common/attendance-rate';
 import { DayOfWeek, LessonStatus, Prisma } from '@prisma/client';
 import { MarkAttendanceDto, UpdateAttendanceDto } from '../common/dto';
 import { AttendanceQuery } from '../common/dto/query';
@@ -544,6 +545,21 @@ export class AttendanceService {
       };
     }
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
+
+    if (query.source) {
+      const src = query.source.toUpperCase();
+      if (src === 'BIOMETRIC') {
+        where.source = { in: ['FACE_ID', 'FACE', 'FACE_KIOSK', 'TURNSTILE'] };
+      } else if (src === 'SYSTEM') {
+        where.source = { in: ['SYSTEM', 'IMPORT'] };
+      } else {
+        where.source = src;
+      }
+    }
+
+    if (query.search?.trim()) {
+      where.OR = this.buildAttendanceSearchOr(query.search);
+    }
     // Pipeline-decision filter: the Attendance row does not carry the
     // pipeline decision directly — it lives on CameraAttendanceEvent (camera
     // path) / RecognitionAttempt.attendanceDecision (face path). Resolve the
@@ -582,13 +598,29 @@ export class AttendanceService {
     // Single-day filter (frontend sends `date=YYYY-MM-DD`). Attendance rows
     // store a full timestamp, so match the whole local day range instead of
     // doing an exact equality that would silently match nothing.
-    if (query.date) {
+    // Only apply the single-day shorthand when no explicit range was given;
+    // otherwise a `date` param would silently overwrite dateFrom/dateTo.
+    if (query.date && !query.dateFrom && !query.dateTo) {
       const day = new Date(query.date);
       if (!Number.isNaN(day.getTime())) {
         const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
         const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
         where.date = { gte: start, lt: end };
       }
+    }
+
+    let orderBy: Prisma.AttendanceOrderByWithRelationInput[] = [{ date: 'desc' }, { id: 'desc' }];
+    if (query.sort === 'date-asc') {
+      orderBy = [{ date: 'asc' }, { id: 'asc' }];
+    } else if (query.sort === 'date-desc') {
+      orderBy = [{ date: 'desc' }, { id: 'desc' }];
+    } else if (query.sort === 'name-asc') {
+      orderBy = [
+        { student: { user: { firstName: 'asc' } } },
+        { student: { user: { lastName: 'asc' } } },
+      ];
+    } else if (query.sort === 'status') {
+      orderBy = [{ status: 'asc' }, { date: 'desc' }];
     }
 
     const [items, total] = await Promise.all([
@@ -598,7 +630,7 @@ export class AttendanceService {
           student: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
           group: { select: { id: true, name: true } },
         },
-        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip,
         take: limit,
       }),
@@ -612,6 +644,21 @@ export class AttendanceService {
     const where: Prisma.AttendanceWhereInput = { organizationId };
     if (query.groupId) where.groupId = query.groupId;
     if (query.status) where.status = query.status as Prisma.AttendanceWhereInput['status'];
+
+    if (query.source) {
+      const src = query.source.toUpperCase();
+      if (src === 'BIOMETRIC') {
+        where.source = { in: ['FACE_ID', 'FACE', 'FACE_KIOSK', 'TURNSTILE'] };
+      } else if (src === 'SYSTEM') {
+        where.source = { in: ['SYSTEM', 'IMPORT'] };
+      } else {
+        where.source = src;
+      }
+    }
+
+    if (query.search?.trim()) {
+      where.OR = this.buildAttendanceSearchOr(query.search);
+    }
     let teacherFilterId: string | undefined;
     if (currentUser?.role === 'TEACHER' || currentUser?.role === 'ASSISTANT') {
       const teacher = await this.prisma.teacher.findFirst({
@@ -658,16 +705,52 @@ export class AttendanceService {
       _count: s._count,
     }));
 
+    // Use the canonical rate (PRESENT + LATE / non-excused) so this endpoint
+    // can never disagree with dashboard / parent-portal / academic-risk.
+    const rate = computeAttendanceRate(mappedStatusCounts, true) ?? 0;
+
     return {
       overall: {
         total,
         present: presentCount,
-        rate: total > 0 ? Math.round((presentCount / total) * 100) : 0,
+        rate,
       },
       byStatus: mappedStatusCounts,
       byGroup: groupStats,
       daily: dailyStats,
     };
+  }
+
+  /**
+   * Tokenized search so a full name ("Aziz Vohidov") matches first + last
+   * name together, and so paginated search can run server-side without
+   * silently returning an empty page.
+   */
+  private buildAttendanceSearchOr(search: string): Prisma.AttendanceWhereInput[] {
+    const tokens = search.trim().split(/\s+/).filter(Boolean).slice(0, 5);
+    return tokens.flatMap((token) => [
+      { note: { contains: token, mode: 'insensitive' as const } },
+      { group: { name: { contains: token, mode: 'insensitive' as const } } },
+      { student: { user: { firstName: { contains: token, mode: 'insensitive' as const } } } },
+      { student: { user: { lastName: { contains: token, mode: 'insensitive' as const } } } },
+    ]);
+  }
+
+  /**
+   * Number of distinct days the daily aggregation may return. The limit must
+   * apply to DAYS, not to grouped (date, status) rows — `LIMIT 30` on rows
+   * truncated a 30-day chart to ~8 days and made the 365-day chart impossible.
+   */
+  private resolveDailyWindowDays(query: AttendanceQuery): number {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const DEFAULT_DAYS = 30;
+    const MAX_DAYS = 400;
+    const anchor = query.dateFrom ?? query.dateTo ?? query.date;
+    if (!anchor) return DEFAULT_DAYS;
+    const from = new Date(anchor);
+    if (Number.isNaN(from.getTime())) return DEFAULT_DAYS;
+    const days = Math.ceil((Date.now() - from.getTime()) / DAY_MS) + 1;
+    return Math.min(MAX_DAYS, Math.max(1, days));
   }
 
   private async getDailyStats(organizationId: string, query: AttendanceQuery, teacherId?: string) {
@@ -702,13 +785,18 @@ export class AttendanceService {
     }
 
     const whereClause = Prisma.join(conditions, ' AND ');
+    const windowDays = this.resolveDailyWindowDays(query);
     return this.prisma.$queryRaw`
-      SELECT DATE(date) as date, status, COUNT(*)::int as count
-      FROM "Attendance"
-      WHERE ${whereClause}
-      GROUP BY DATE(date), status
-      ORDER BY date DESC
-      LIMIT 30`;
+      SELECT date, status, count
+      FROM (
+        SELECT DATE(date) AS date, status, COUNT(*)::int AS count,
+               DENSE_RANK() OVER (ORDER BY DATE(date) DESC) AS day_rank
+        FROM "Attendance"
+        WHERE ${whereClause}
+        GROUP BY DATE(date), status
+      ) AS daily
+      WHERE day_rank <= ${windowDays}
+      ORDER BY date DESC`;
   }
 }
 

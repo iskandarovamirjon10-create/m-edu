@@ -127,7 +127,7 @@ export interface CreateRewardInput {
   isActive?: boolean;
 }
 
-export interface UpdateRewardInput extends Partial<CreateRewardInput> {}
+export type UpdateRewardInput = Partial<CreateRewardInput>;
 
 export const REWARD_CATALOG: RewardItem[] = [
   {
@@ -297,11 +297,19 @@ export class GamificationService {
     }
   }
 
-  /** The student's own balance card data (XP, coins, level, org rank). */
+  /** The student's own balance card data (XP, coins, level, org rank, streak, league). */
   async getMyStats(studentId: string, organizationId: string) {
     const stats = await this.prisma.studentGamification.findUnique({
       where: { studentId },
-      select: { xp: true, coins: true, level: true, updatedAt: true, organizationId: true },
+      select: {
+        xp: true,
+        coins: true,
+        level: true,
+        streakDays: true,
+        lastActiveDate: true,
+        updatedAt: true,
+        organizationId: true,
+      },
     });
 
     if (!stats || (stats.organizationId && stats.organizationId !== organizationId)) {
@@ -310,12 +318,18 @@ export class GamificationService {
         coins: 0,
         level: 1,
         xpToNextLevel: 100,
+        levelSpan: 100,
         rank: null,
         rankTotal: 0,
+        streak: 0,
+        lastCheckIn: null,
+        purchasesCount: 0,
+        league: 'BRONZE' as LeagueTier,
+        zone: 'SAFE' as LeagueZone,
       };
     }
 
-    const [rankRow, rankTotal] = await Promise.all([
+    const [rankRow, rankTotal, purchasesCount] = await Promise.all([
       this.prisma.studentGamification.count({
         where: {
           organizationId,
@@ -325,7 +339,14 @@ export class GamificationService {
       this.prisma.studentGamification.count({
         where: { organizationId },
       }),
+      this.prisma.rewardClaim.count({
+        where: { studentId },
+      }),
     ]);
+
+    const rank = rankRow + 1;
+    const league = leagueForXp(stats.xp);
+    const zone = computeZone(rank, rankTotal);
 
     return {
       xp: stats.xp,
@@ -333,8 +354,113 @@ export class GamificationService {
       level: stats.level,
       // Progress within the current 100-XP band.
       xpToNextLevel: 100 - (stats.xp % 100),
-      rank: rankRow + 1,
+      levelSpan: 100,
+      rank,
       rankTotal,
+      streak: stats.streakDays ?? 0,
+      lastCheckIn: stats.lastActiveDate ? stats.lastActiveDate.toISOString() : null,
+      purchasesCount,
+      league,
+      zone,
+    };
+  }
+
+  /**
+   * Daily student check-in: verifies today's streak, calculates XP & coins rewards,
+   * updates the streak counter, and awards streak milestones.
+   */
+  async checkIn(studentId: string, organizationId: string) {
+    const now = new Date();
+
+    // 1. Fetch or initialize student gamification row
+    let record = await this.prisma.studentGamification.findUnique({
+      where: { studentId },
+    });
+
+    if (!record) {
+      record = await this.prisma.studentGamification.create({
+        data: {
+          studentId,
+          organizationId,
+          level: 1,
+          xp: 0,
+          totalXp: 0,
+          coins: 0,
+          streakDays: 0,
+        },
+      });
+    }
+
+    // 2. Prevent duplicate check-in on the same calendar day (UTC)
+    if (record.lastActiveDate) {
+      const last = new Date(record.lastActiveDate);
+      const isSameDay =
+        last.getUTCFullYear() === now.getUTCFullYear() &&
+        last.getUTCMonth() === now.getUTCMonth() &&
+        last.getUTCDate() === now.getUTCDate();
+
+      if (isSameDay) {
+        throw new BadRequestException('Bugungi kun uchun allaqachon belgilangansiz! Ertaga yana kutamiz 🔥');
+      }
+    }
+
+    // 3. Check streak continuity (yesterday or within ~36 hours window)
+    let newStreak = 1;
+    if (record.lastActiveDate) {
+      const last = new Date(record.lastActiveDate);
+      const diffMs = now.getTime() - last.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+
+      const yesterday = new Date(now);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const isYesterday =
+        last.getUTCFullYear() === yesterday.getUTCFullYear() &&
+        last.getUTCMonth() === yesterday.getUTCMonth() &&
+        last.getUTCDate() === yesterday.getUTCDate();
+
+      if (isYesterday || diffHours <= 36) {
+        newStreak = (record.streakDays || 0) + 1;
+      }
+    }
+
+    // 4. Reward calculations: Base XP & Coins + 7-day milestone bonus
+    const baseRewardXp = 15;
+    const baseRewardCoins = 5;
+    const isWeeklyMilestone = newStreak % 7 === 0;
+    const bonusXp = isWeeklyMilestone ? 50 : 0;
+    const bonusCoins = isWeeklyMilestone ? 25 : 0;
+
+    const earnedXp = baseRewardXp + bonusXp;
+    const earnedCoins = baseRewardCoins + bonusCoins;
+
+    const updatedXp = record.xp + earnedXp;
+    const updatedTotalXp = (record.totalXp || 0) + earnedXp;
+    const updatedCoins = record.coins + earnedCoins;
+    const updatedLevel = Math.floor(updatedXp / 100) + 1;
+
+    // 5. Update database record
+    await this.prisma.studentGamification.update({
+      where: { studentId },
+      data: {
+        xp: updatedXp,
+        totalXp: updatedTotalXp,
+        coins: updatedCoins,
+        level: updatedLevel,
+        streakDays: newStreak,
+        lastActiveDate: now,
+      },
+    });
+
+    return {
+      success: true,
+      streak: newStreak,
+      xpAwarded: earnedXp,
+      coinsAwarded: earnedCoins,
+      level: updatedLevel,
+      levelUp: updatedLevel > record.level,
+      message: isWeeklyMilestone
+        ? `Super seriya! ${newStreak} kun ketma-ket kirdingiz! Katta bonus: +${earnedXp} XP va +${earnedCoins} tanga! 🚀`
+        : `Bugungi kun belgilandi! +${earnedXp} XP va +${earnedCoins} tanga 🔥`,
     };
   }
 

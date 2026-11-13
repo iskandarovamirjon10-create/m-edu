@@ -24,6 +24,44 @@ interface ScheduleOptimizerModalProps {
   branchId?: string;
 }
 
+interface ScheduleConflict {
+  conflictId?: string;
+  id?: string;
+  type?: string;
+  groupName?: string;
+  dayOfWeek?: string;
+  timeRange?: string;
+  description?: string;
+  teacherName?: string;
+  roomName?: string;
+  scheduleId?: string;
+}
+
+interface ScheduleConflictAudit {
+  conflicts?: ScheduleConflict[];
+  scannedSchedulesCount?: number;
+}
+
+interface ScheduleSuggestionCandidate {
+  room?: string;
+  dayOfWeek?: string;
+  startTime?: string;
+  endTime?: string;
+  score?: number;
+  reason?: string;
+}
+
+interface ScheduleSuggestions {
+  targetGroup?: { name?: string };
+  currentSchedule?: {
+    dayOfWeek?: string;
+    startTime?: string;
+    endTime?: string;
+    room?: string;
+  };
+  suggestions?: ScheduleSuggestionCandidate[];
+}
+
 export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
   isOpen,
   onClose,
@@ -32,7 +70,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
   const { t } = useSafeI18n();
   const [selectedDay, setSelectedDay] = useState<string>('ALL');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
-  const [activeSuggestions, setActiveSuggestions] = useState<any | null>(null);
+  const [activeSuggestions, setActiveSuggestions] = useState<ScheduleSuggestions | null>(null);
 
   const queryClient = useQueryClient();
   const { playSuccess, playPop, playError } = usePremiumSound();
@@ -47,21 +85,23 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
 
   const dayParam = selectedDay === 'ALL' ? undefined : selectedDay;
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery<ScheduleConflictAudit>({
     queryKey: ['schedule-conflicts', branchId, dayParam],
-    queryFn: () => scheduleOptimizerApi.auditConflicts({ branchId, dayOfWeek: dayParam }),
+    queryFn: () =>
+      scheduleOptimizerApi.auditConflicts({ branchId, dayOfWeek: dayParam }) as Promise<ScheduleConflictAudit>,
     enabled: isOpen,
     staleTime: 15_000,
   });
 
   const suggestMutation = useMutation({
-    mutationFn: (scheduleId: string) => scheduleOptimizerApi.suggestResolution({ scheduleId }),
-    onSuccess: (res: any) => {
+    mutationFn: (scheduleId: string) =>
+      scheduleOptimizerApi.suggestResolution({ scheduleId }) as Promise<ScheduleSuggestions>,
+    onSuccess: (res: ScheduleSuggestions) => {
       playSuccess();
       setActiveSuggestions(res);
       toast.success(t('scheduleOptimizer.solveSuccess', "AI algoritmi to'qnashuvsiz optimal slotlarni hisoblab chiqdi!"));
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || "Slotlarni hisoblashda xatolik yuz berdi");
     },
@@ -83,7 +123,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['schedule-conflicts'] });
       queryClient.invalidateQueries({ queryKey: ['schedules'] });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || "Ziddiyatni hal qilishda xatolik yuz berdi");
     },
@@ -95,15 +135,15 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
     suggestMutation.mutate(scheduleId);
   };
 
-  const handleApplySuggestion = (candidate: any) => {
+  const handleApplySuggestion = (candidate: ScheduleSuggestionCandidate) => {
     if (!selectedScheduleId) return;
     playPop();
     applyMutation.mutate({
       scheduleId: selectedScheduleId,
-      targetRoom: candidate.room,
-      targetDayOfWeek: candidate.dayOfWeek,
-      targetStartTime: candidate.startTime,
-      targetEndTime: candidate.endTime,
+      targetRoom: candidate.room ?? '',
+      targetDayOfWeek: candidate.dayOfWeek ?? '',
+      targetStartTime: candidate.startTime ?? '',
+      targetEndTime: candidate.endTime ?? '',
     });
   };
 
@@ -176,7 +216,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
           <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-md p-3.5">
             <span className="text-xs text-muted-foreground font-medium">{t('scheduleOptimizer.teacherCollisions', "O'qituvchi To'qnashuvi")}</span>
             <div className="text-lg font-bold text-amber-500 mt-1">
-              {conflicts.filter((c: any) => c.type === 'TEACHER_COLLISION').length} ta
+              {conflicts.filter((c) => c.type === 'TEACHER_COLLISION').length} ta
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">Bir vaqtda 2 dars</div>
           </div>
@@ -184,7 +224,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
           <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-md p-3.5">
             <span className="text-xs text-muted-foreground font-medium">{t('scheduleOptimizer.roomCollisions', 'Xona Bandligi')}</span>
             <div className="text-lg font-bold text-rose-500 mt-1">
-              {conflicts.filter((c: any) => c.type === 'ROOM_COLLISION').length} ta
+              {conflicts.filter((c) => c.type === 'ROOM_COLLISION').length} ta
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">Ayni xonada 2 guruh</div>
           </div>
@@ -310,7 +350,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
                 </button>
               </div>
 
-              {activeSuggestions.suggestions?.length === 0 ? (
+              {(activeSuggestions.suggestions ?? []).length === 0 ? (
                 <div className="text-xs text-amber-400 py-3">
                   Afsuski, filiallaringizdagi xona va vaqtlar tig'izligi sababli to'g'ridan-to'g'ri bo'sh slot topilmadi. Qo'shimcha xona ochishni tavsiya qilamiz.
                 </div>
@@ -319,7 +359,7 @@ export const ScheduleOptimizerModal: React.FC<ScheduleOptimizerModalProps> = ({
                   <div className="text-xs font-semibold text-muted-foreground">
                     To'qnashuvsiz Topilgan Variantlar (Eng mosidan boshlab):
                   </div>
-                  {activeSuggestions.suggestions.map((cand: any, idx: number) => (
+                  {(activeSuggestions.suggestions ?? []).map((cand: ScheduleSuggestionCandidate, idx: number) => (
                     <div
                       key={idx}
                       className="rounded-xl border border-border/50 bg-background/50 p-3 flex items-center justify-between gap-3"

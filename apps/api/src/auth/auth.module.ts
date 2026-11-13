@@ -40,6 +40,9 @@ import { authTtlSeconds } from './auth.ttl';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard, SyncGateway],
-  exports: [AuthService, JwtModule, SyncGateway],
+  // JwtStrategy is exported so WebSocket gateways can reuse the same
+  // session/revocation checks as the HTTP guard instead of trusting a
+  // signature-only JWT payload.
+  exports: [AuthService, JwtModule, JwtStrategy, SyncGateway],
 })
 export class AuthModule {}

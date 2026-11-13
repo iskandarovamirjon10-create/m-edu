@@ -924,7 +924,7 @@ export function GroupDetailPage() {
                 {/* 1. Davomat */}
                 <Link
                   to={`/attendance?groupId=${groupData.id}`}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-sky-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-sky-500"
                   title={`${t('nav.attendance', 'Davomat')} (D)`}
                   aria-label={t('nav.attendance', 'Davomat')}
                 >
@@ -936,7 +936,7 @@ export function GroupDetailPage() {
                 {/* 2. Baholar */}
                 <Link
                   to={`/grades?groupId=${groupData.id}`}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
                   title={`${t('nav.grades', 'Baholar')} (G)`}
                   aria-label={t('nav.grades', 'Baholar')}
                 >
@@ -948,7 +948,7 @@ export function GroupDetailPage() {
                 {/* 3. Vazifalar */}
                 <Link
                   to={`/homework?groupId=${groupData.id}`}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
                   title={`${t('nav.homework', 'Vazifalar')} (H)`}
                   aria-label={t('nav.homework', 'Vazifalar')}
                 >
@@ -964,7 +964,7 @@ export function GroupDetailPage() {
                     playPop();
                     setSeatingModalOpen(true);
                   }}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500"
                   title="Partalar Xaritasi (P)"
                   aria-label="Partalar Xaritasi"
                 >
@@ -977,7 +977,7 @@ export function GroupDetailPage() {
                 <button
                   type="button"
                   onClick={handleOpenGroupSidecar}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
                   title="Split View Sidecar [S]"
                   aria-label="Split View Sidecar [S]"
                 >
@@ -999,7 +999,7 @@ export function GroupDetailPage() {
                       }),
                     );
                   }}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-500"
                   title={`${t('aiAnalysis', 'AI Tahlil')} (I)`}
                   aria-label={t('aiAnalysis', 'AI Tahlil')}
                 >

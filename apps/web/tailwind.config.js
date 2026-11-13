@@ -23,6 +23,7 @@ export default {
     extend: {
       screens: {
         xs: '480px',
+        '3xl': '1800px',
       },
       colors: {
         // ── Canvas & Surfaces (100% Synced with V4 tokens) ───────────────
@@ -239,10 +240,22 @@ export default {
         'bell-shake': 'bell-shake 0.7s ease-in-out',
       },
 
+      // 2px grid completion: Tailwind ships 0.5/1.5/2.5/3.5 only, but the
+      // codebase uses every 0.5 step through 12.5. Without these keys those
+      // utilities are dropped at build time (inconsistent padding/heights).
       spacing: {
         '4.5': '1.125rem',
+        '5.5': '1.375rem',
+        '6.5': '1.625rem',
+        '7.5': '1.875rem',
+        '8.5': '2.125rem',
         '9.5': '2.375rem',
+        '10.5': '2.625rem',
+        '11.5': '2.875rem',
+        '12.5': '3.125rem',
         '13': '3.25rem',
+        '13.5': '3.375rem',
+        '14.5': '3.625rem',
         '15': '3.75rem',
         '18': '4.5rem',
         '22': '5.5rem',

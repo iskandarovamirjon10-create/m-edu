@@ -44,11 +44,40 @@ const SUFFIX_RULES: string[] = [
 ];
 
 /**
- * Normalize apostrophes and diacritics in Uzbek text.
+ * Cyrillic to Latin transliteration mapping for Uzbek language input.
+ */
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+  'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+  'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+  'ф': 'f', 'х': 'x', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': "'",
+  'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ў': "o'", 'қ': 'q',
+  'ғ': "g'", 'ҳ': 'h',
+  'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+  'Ж': 'J', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+  'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+  'Ф': 'F', 'Х': 'X', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sh', 'Ъ': "'",
+  'Ы': 'I', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya', 'Ў': "O'", 'Қ': 'Q',
+  'Ғ': "G'", 'Ҳ': 'H',
+};
+
+export function transliterateCyrillicToLatin(input: string): string {
+  if (!input) return '';
+  let result = '';
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    result += CYRILLIC_TO_LATIN[char] ?? char;
+  }
+  return result;
+}
+
+/**
+ * Normalize apostrophes and diacritics in Uzbek text, supporting Cyrillic input transliteration.
  */
 export function normalizeUzbekText(text: string): string {
   if (!text) return '';
-  return text
+  const latinized = transliterateCyrillicToLatin(text);
+  return latinized
     .replace(/[‘`’]/g, "'")
     .toLowerCase()
     .trim();
@@ -116,7 +145,7 @@ export function extractUzbekEntityCandidates(message: string): EntityCandidates 
     return { singleTokens: [], namePairs: [] };
   }
 
-  // Standardize apostrophes
+  // Standardize apostrophes without forcing lowercase to preserve case-sensitive names
   const normalized = message.replace(/[‘`’]/g, "'");
 
   // Split into raw words by whitespace and common punctuation

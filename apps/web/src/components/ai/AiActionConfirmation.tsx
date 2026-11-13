@@ -1035,7 +1035,7 @@ export function AiActionConfirmation({
             disabled={busy}
             data-testid="ai-reject"
             aria-keyshortcuts="Escape"
-            className="rounded-xl border border-black/10 transition-all active:scale-[0.97] hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+            className="rounded-xl border border-black/10 min-h-[44px] tap-extend transition-all active:scale-[0.97] hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
           >
             {translated(t, 'common.cancel', 'Bekor qilish')}
           </GlassButton>
@@ -1062,7 +1062,7 @@ export function AiActionConfirmation({
             aria-keyshortcuts="Meta+Enter Control+Enter"
             style={confirmStyle}
             className={cn(
-              'rounded-xl font-semibold text-white',
+              'rounded-xl font-semibold text-white min-h-[44px] tap-extend',
               'transition-[transform,filter] duration-150',
               'hover:brightness-110 active:scale-[0.97]',
               'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100',

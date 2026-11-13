@@ -64,7 +64,10 @@ export const AttendanceHeatmap = memo(function AttendanceHeatmap({
         present = Math.round((rate / 100) * total);
       }
 
-      const dateStr = d.toISOString().split('T')[0];
+      // Local calendar date — `toISOString()` shifts a day in UTC+ timezones.
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+        d.getDate(),
+      ).padStart(2, '0')}`;
 
       list.push({
         date: dateStr,
@@ -80,13 +83,16 @@ export const AttendanceHeatmap = memo(function AttendanceHeatmap({
 
   // Group days into 7 rows (days of week) and columns (weeks)
   const weeks = useMemo(() => {
-    const colCount = Math.ceil(days.length / 7);
+    // Align the first day with its real weekday row; otherwise the Monday→
+    // Sunday labels are shifted whenever the window does not start on Monday.
+    const startDow = days[0]?.dayOfWeek ?? 0;
+    const colCount = Math.ceil((days.length + startDow) / 7);
     const matrix: (HeatmapDay | null)[][] = Array.from({ length: 7 }, () =>
       Array(colCount).fill(null),
     );
 
     days.forEach((day, index) => {
-      const weekIndex = Math.floor(index / 7);
+      const weekIndex = Math.floor((index + startDow) / 7);
       const dayIndex = day.dayOfWeek;
       if (matrix[dayIndex] && weekIndex < colCount) {
         matrix[dayIndex][weekIndex] = day;

@@ -812,7 +812,7 @@ export function ReportsPage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('reports.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
@@ -1139,7 +1139,7 @@ export function ReportsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('reports.searchRows')}
-                  className="w-full pl-11 min-h-[40px] text-xs"
+                  className="w-full pl-11 min-h-10 text-xs"
                 />
               </div>
 

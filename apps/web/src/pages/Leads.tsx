@@ -5,16 +5,15 @@
  * M-EDU LeadsPage — iOS 27 / visionOS "Liquid Glass CRM & Pipeline Studio"
  * ============================================================================
  *
- * Module Features & Upgrades:
+ * Senior Architectural Upgrades:
  *  • 100% Backend API, Query Keys, URL SearchParams & Trial Funnel compatibility
- *  • Quad View Engine: Animated List, 5-Stage Kanban, Pipeline Studio & Auto-Nurturing
- *  • Unblocked Studio & Nurturing tabs even when current list/search filter is empty
- *  • Multi-segment Live CRM Pipeline Telemetry Bar (iOS Storage style)
- *  • Interactive KPI Cards (click any KPI card to filter pipeline stage)
- *  • 1-Click Copy-to-Clipboard for Phone & Email with haptic sound + toast feedback
- *  • Pure SVG vector geometry (zero raw emojis, zero `\u00A0` non-breaking spaces)
- *  • Light/Dark/OLED adaptive `StageSegmented` & Trial Attendance radio cards
- *  • Concurrency-locked Parallel Bulk Operations (Promise.allSettled)
+ *  • Zero-latency Optimistic UI on Stage Changes & Kanban Drag-and-Drop
+ *  • AI Lead Intelligence Engine (Exponential Decay Recency + Completeness Score)
+ *  • Baseline Telemetry Retention (KPIs & Telemetry Bar don't collapse on stage filter)
+ *  • Local Timezone-accurate `datetime-local` generator (fixes UTC+5 5-hour shift)
+ *  • Continuous Frame-Tracked `CountUp` Physics (zero mid-flight jump on rapid filter)
+ *  • 1-Click Omnichannel Actions (Direct Call, Telegram Deep-Link, Haptic Copy)
+ *  • Per-Column Kanban Quick-Add with Pre-selected Stage
  * ============================================================================
  */
 
@@ -28,7 +27,7 @@ import React, {
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, LayoutGroup, type Variants } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup, type Variants } from 'framer-motion';
 import { leadsApi } from '@/lib/api';
 import { openQuickLook, openSidecar } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -64,22 +63,21 @@ import { SmartOmnichannelFollowup } from '@/components/leads/SmartOmnichannelFol
  * ========================================================================== */
 
 const SPRING = {
-  snappy: { type: 'spring' as const, stiffness: 520, damping: 32, mass: 0.65 },
+  snappy: { type: 'spring' as const, stiffness: 540, damping: 34, mass: 0.62 },
   smooth: { type: 'spring' as const, stiffness: 360, damping: 31, mass: 0.82 },
   soft: { type: 'spring' as const, stiffness: 220, damping: 28, mass: 1.0 },
   liquid: { type: 'spring' as const, stiffness: 420, damping: 35, mass: 0.78 },
-  gel: { type: 'spring' as const, stiffness: 740, damping: 25, mass: 0.34 },
+  gel: { type: 'spring' as const, stiffness: 740, damping: 26, mass: 0.34 },
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.045, delayChildren: 0.02 },
+    transition: { staggerChildren: 0.04, delayChildren: 0.015 },
   },
 };
 
-// WebKit-safe card variants (no filter:blur to prevent backdrop-filter drop)
 const cardVariants: Variants = {
   hidden: { opacity: 0, y: 14, scale: 0.992 },
   visible: {
@@ -102,17 +100,17 @@ const rowVariants: Variants = {
 
 const LIQUID_SURFACE = cn(
   'relative isolate overflow-hidden',
-  'border border-white/75 bg-white/[0.80] backdrop-blur-3xl backdrop-saturate-[205%]',
-  'shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.95),inset_0_-1px_0_0_rgba(0,122,255,0.1),0_16px_44px_-12px_rgba(15,23,42,0.08)]',
-  'dark:border-white/[0.12] dark:bg-surface-900/[0.82]',
-  'dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.2),inset_0_-1px_0_0_rgba(10,132,255,0.16),0_20px_52px_-12px_rgba(0,0,0,0.65)]',
+  'border border-white/80 bg-white/[0.82] backdrop-blur-3xl backdrop-saturate-[210%]',
+  'shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.96),inset_0_-1px_0_0_rgba(0,122,255,0.08),0_18px_48px_-14px_rgba(15,23,42,0.08)]',
+  'dark:border-white/[0.12] dark:bg-surface-900/[0.84]',
+  'dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.18),inset_0_-1px_0_0_rgba(10,132,255,0.16),0_22px_56px_-14px_rgba(0,0,0,0.68)]',
 );
 
 const TopSpecular = memo(function TopSpecular({ inset = 'inset-x-8' }: { inset?: string }) {
   return (
     <div aria-hidden="true" className={cn('pointer-events-none absolute top-0 z-10', inset)}>
       <div className="h-px bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/30" />
-      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#007AFF]/30 to-transparent dark:via-[#38BDF8]/25" />
+      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#007AFF]/35 to-transparent dark:via-[#38BDF8]/25" />
     </div>
   );
 });
@@ -135,6 +133,18 @@ const I: Record<string, string[]> = {
     'M20.5 4.5h-3',
     'M5 17.5v2.5',
     'M6.25 18.75h-2.5',
+  ],
+  flame: [
+    'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z',
+  ],
+  send: [
+    'M22 2L11 13',
+    'M22 2l-7 20-4-9-9-4 20-7z',
+  ],
+  sort: [
+    'M3 6h18',
+    'M7 12h10',
+    'M10 18h4',
   ],
   plus: ['M12 5v14', 'M5 12h14'],
   check: ['M20 6.5 9 17.5l-5-5'],
@@ -303,7 +313,7 @@ function Icon({
 }
 
 /* ============================================================================
- * APPLE LIQUID GLASS COLOR TOKENS & STAGE DESIGN SYSTEM
+ * APPLE LIQUID GLASS COLOR TOKENS & AI LEAD INTELLIGENCE SYSTEM
  * ========================================================================== */
 
 type Tone = 'blue' | 'indigo' | 'amber' | 'emerald' | 'rose' | 'purple' | 'cyan' | 'gray';
@@ -471,6 +481,56 @@ function getInitials(name?: string | null): string {
   );
 }
 
+/**
+ * Mathematical AI Lead Scoring & Temperature Model
+ * Uses exponential time-decay e^(-lambda * days) + stage weight + profile completeness
+ */
+function computeLeadIntelligence(lead: Lead): {
+  score: number;
+  temp: 'HOT' | 'WARM' | 'COLD' | 'WON' | 'LOST';
+  label: string;
+} {
+  if (lead.stage === 'WON') return { score: 100, temp: 'WON', label: 'Enrolled' };
+  if (lead.stage === 'LOST') return { score: 5, temp: 'LOST', label: 'Closed' };
+
+  const stageBase: Record<LeadStage, number> = {
+    NEW: 42,
+    CONTACTED: 62,
+    TRIAL_LESSON: 84,
+    WON: 100,
+    LOST: 0,
+  };
+
+  let raw = stageBase[lead.stage] ?? 45;
+  if (lead.phone) raw += 8;
+  if (lead.email) raw += 4;
+  if (lead.source) raw += 4;
+  if (lead.notes && lead.notes.trim().length > 10) raw += 5;
+
+  // Exponential recency decay: half-life sensitivity over days since creation
+  const createdMs = lead.createdAt ? new Date(lead.createdAt).getTime() : Date.now();
+  const ageDays = Math.max(0, (Date.now() - createdMs) / 86_400_000);
+  const decayFactor = Math.exp(-0.025 * Math.min(ageDays, 30));
+
+  const score = Math.min(98, Math.max(15, Math.round(raw * (0.72 + 0.28 * decayFactor))));
+
+  if (score >= 76) return { score, temp: 'HOT', label: `Hot · ${score}%` };
+  if (score >= 52) return { score, temp: 'WARM', label: `Warm · ${score}%` };
+  return { score, temp: 'COLD', label: `Cold · ${score}%` };
+}
+
+/** Local timezone-accurate datetime-local string (fixes UTC offset shift) */
+function toLocalDateTimeInput(offsetMs = 86_400_000): string {
+  const target = new Date(Date.now() + offsetMs);
+  const tzOffsetMs = target.getTimezoneOffset() * 60_000;
+  return new Date(target.getTime() - tzOffsetMs).toISOString().slice(0, 16);
+}
+
+function sanitizePhoneForLink(phone?: string | null): string {
+  if (!phone) return '';
+  return phone.replace(/[^\d+]/g, '');
+}
+
 /* ============================================================================
  * TYPES & INITIAL STATES
  * ========================================================================== */
@@ -513,6 +573,8 @@ interface TrialAnalyticsData {
   pendingAttendance: number;
 }
 
+type SortByOption = 'newest' | 'score' | 'name';
+
 const INITIAL_FORM: LeadFormState = {
   firstName: '',
   lastName: '',
@@ -525,7 +587,7 @@ const INITIAL_FORM: LeadFormState = {
 
 function createInitialTrialForm(): TrialSchedulePayload {
   return {
-    trialDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 16),
+    trialDate: toLocalDateTimeInput(86_400_000),
     subject: 'General English / Matematika',
     teacherName: '',
     notes: 'Bepul sinov darsi belgilandi',
@@ -591,10 +653,10 @@ function LeadSkeletonRow() {
   );
 }
 
-/** Smoothly interpolates from previous value to new value without resetting to 0 */
+/** Frame-accurate CountUp that retargets smoothly from exact mid-flight value */
 const CountUp = memo(function CountUp({
   value,
-  duration = 0.85,
+  duration = 0.75,
   suffix = '',
 }: {
   value: number;
@@ -603,18 +665,19 @@ const CountUp = memo(function CountUp({
 }) {
   const reduced = usePrefersReducedMotion();
   const [n, setN] = useState(value);
-  const prevValueRef = useRef(0);
+  const currentDisplayRef = useRef(value);
 
   useEffect(() => {
     if (reduced) {
       setN(value);
-      prevValueRef.current = value;
+      currentDisplayRef.current = value;
       return;
     }
-    const from = prevValueRef.current;
+    const from = currentDisplayRef.current;
     const to = value;
-    if (from === to) {
+    if (Math.abs(from - to) < 0.01) {
       setN(to);
+      currentDisplayRef.current = to;
       return;
     }
 
@@ -625,18 +688,16 @@ const CountUp = memo(function CountUp({
       const p = Math.min(1, (ts - startTs) / (duration * 1000));
       const eased = 1 - Math.pow(1 - p, 4);
       const current = from + (to - from) * eased;
+      currentDisplayRef.current = current;
       setN(current);
       if (p < 1) {
         raf = requestAnimationFrame(step);
       } else {
-        prevValueRef.current = to;
+        currentDisplayRef.current = to;
       }
     };
     raf = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(raf);
-      prevValueRef.current = to;
-    };
+    return () => cancelAnimationFrame(raf);
   }, [value, duration, reduced]);
 
   return (
@@ -694,7 +755,7 @@ const KpiTile = memo(function KpiTile({
     <motion.div
       variants={rowVariants}
       whileHover={{ y: -2, scale: 1.01 }}
-      whileTap={onClick ? { scaleX: 1.03, scaleY: 0.96 } : undefined}
+      whileTap={onClick ? { scaleX: 1.025, scaleY: 0.965 } : undefined}
       transition={SPRING.smooth}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
@@ -755,42 +816,33 @@ const KpiTile = memo(function KpiTile({
 
 /** iOS Storage-style Live CRM Pipeline Telemetry Bar */
 const PipelineTelemetryBar = memo(function PipelineTelemetryBar({
-  leads,
+  counts,
   activeStage,
   onSelectStage,
   t,
 }: {
-  leads: Lead[];
+  counts: Record<LeadStage, number>;
   activeStage: string;
   onSelectStage: (st: string) => void;
   t: (k: string) => string;
 }) {
-  const counts = useMemo(() => {
-    const map: Record<LeadStage, number> = {
-      NEW: 0,
-      CONTACTED: 0,
-      TRIAL_LESSON: 0,
-      WON: 0,
-      LOST: 0,
-    };
-    leads.forEach((l) => {
-      if (map[l.stage] !== undefined) map[l.stage]++;
-    });
-    return map;
-  }, [leads]);
+  const total = useMemo(
+    () => LEAD_STAGES.reduce((acc, st) => acc + (counts[st] || 0), 0),
+    [counts],
+  );
 
-  const total = leads.length;
   if (total === 0) return null;
 
   return (
     <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/55 p-3.5 dark:border-white/[0.07] dark:bg-white/[0.025]">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+        <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
           CRM Pipeline Telemetry · {total}
         </span>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {LEAD_STAGES.map((st) => {
-            const count = counts[st];
+            const count = counts[st] || 0;
             const isSelected = activeStage === st;
             const cfg = STAGE_CONFIG[st];
             return (
@@ -817,14 +869,18 @@ const PipelineTelemetryBar = memo(function PipelineTelemetryBar({
       <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-slate-200/70 p-0.5 dark:bg-white/[0.07]">
         {LEAD_STAGES.filter((st) => counts[st] > 0).map((st) => {
           const pct = Math.max(3, (counts[st] / total) * 100);
+          const isSelected = activeStage === st;
           return (
             <motion.div
               key={st}
               initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
+              animate={{
+                width: `${pct}%`,
+                opacity: activeStage && !isSelected ? 0.42 : 1,
+              }}
               transition={SPRING.liquid}
-              onClick={() => onSelectStage(activeStage === st ? '' : st)}
-              className="h-full cursor-pointer transition-opacity first:rounded-l-full last:rounded-r-full hover:opacity-85"
+              onClick={() => onSelectStage(isSelected ? '' : st)}
+              className="h-full cursor-pointer transition-opacity first:rounded-l-full last:rounded-r-full hover:opacity-90"
               style={{
                 background: STAGE_CONFIG[st].hex,
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
@@ -902,6 +958,31 @@ function StageSegmented({
   );
 }
 
+/** AI Temperature Pill Badge */
+const LeadIntelligenceBadge = memo(function LeadIntelligenceBadge({ lead }: { lead: Lead }) {
+  const intel = useMemo(() => computeLeadIntelligence(lead), [lead]);
+  if (intel.temp === 'WON' || intel.temp === 'LOST') return null;
+
+  const badgeStyles = {
+    HOT: 'border-amber-500/30 bg-gradient-to-r from-amber-500/15 to-rose-500/15 text-amber-700 dark:text-amber-300',
+    WARM: 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    COLD: 'border-slate-400/25 bg-slate-500/10 text-slate-600 dark:text-slate-400',
+  }[intel.temp];
+
+  return (
+    <span
+      title="AI Lead Conversion Readiness Score"
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold tracking-tight tabular-nums',
+        badgeStyles,
+      )}
+    >
+      {intel.temp === 'HOT' && <Icon paths={I.flame} size={10} strokeWidth={2.3} />}
+      <span>{intel.label}</span>
+    </span>
+  );
+});
+
 /* ============================================================================
  * MAIN PAGE COMPONENT
  * ========================================================================== */
@@ -918,12 +999,13 @@ export function LeadsPage() {
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
 
-  /* ── Filter & View State ──────────────────────────────────────────── */
+  /* ── Filter, Sort & View State ────────────────────────────────────── */
   const [searchParams] = useSearchParams();
   const urlSearchParam = searchParams.get('search') || searchParams.get('q') || '';
   const [page, setPage] = useState(1);
   const [stage, setStage] = useState('');
   const [search, setSearch] = useState(() => urlSearchParam);
+  const [sortBy, setSortBy] = useState<SortByOption>('newest');
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'studio' | 'nurturing'>(
     'list',
   );
@@ -932,7 +1014,6 @@ export function LeadsPage() {
   const debouncedSearch = useDebounce(search, 300);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Sync search state if URL search params change externally (e.g. Spotlight navigation)
   useEffect(() => {
     if (urlSearchParam) {
       setSearch(urlSearchParam);
@@ -967,7 +1048,7 @@ export function LeadsPage() {
     setAttendanceTarget(lead);
   }, []);
 
-  /* ── Global `/` Shortcut to Focus Search (Guarded when dialogs open) ── */
+  /* ── Global `/` Shortcut to Focus Search ──────────────────────────── */
   const hasAnyModalOpen = Boolean(
     modalOpen ||
       convertTarget ||
@@ -995,6 +1076,13 @@ export function LeadsPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [hasAnyModalOpen]);
 
+  /* ── Centralized Query Invalidation Helper ────────────────────────── */
+  const invalidateAllLeadQueries = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ['leads'] });
+    void qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
+    void qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+  }, [qc]);
+
   /* ── Trial Analytics Query ────────────────────────────────────────── */
   const trialAnalytics = useQuery({
     queryKey: ['leads-trial-analytics'],
@@ -1006,10 +1094,9 @@ export function LeadsPage() {
       leadsApi.scheduleTrial(id, data),
     onSuccess: () => {
       soundRef.current?.playPop?.();
-      push('success', t('leads.trialScheduleSuccess'));
+      push('success', t('leads.trialScheduleSuccess') || 'Sinov darsi belgilandi');
       setTrialTarget(null);
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      invalidateAllLeadQueries();
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1019,10 +1106,9 @@ export function LeadsPage() {
       leadsApi.markTrialAttendance(id, data),
     onSuccess: () => {
       soundRef.current?.playPop?.();
-      push('success', t('leads.trialAttendanceSuccess'));
+      push('success', t('leads.trialAttendanceSuccess') || 'Davomat natijasi saqlandi');
       setAttendanceTarget(null);
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      invalidateAllLeadQueries();
     },
     onError: (e: Error) => push('error', getErrorMessage(e)),
   });
@@ -1052,24 +1138,71 @@ export function LeadsPage() {
   });
 
   const data = leads.data as Paginated<Lead> | undefined;
-  const leadList = useMemo(() => data?.items || [], [data]);
+  const rawLeadList = useMemo(() => data?.items || [], [data]);
+
+  /* ── Smart Client-Side Sorting (Newest / AI Score / Alphabetical) ── */
+  const leadList = useMemo(() => {
+    if (sortBy === 'newest') return rawLeadList;
+    const copy = [...rawLeadList];
+    if (sortBy === 'score') {
+      return copy.sort(
+        (a, b) => computeLeadIntelligence(b).score - computeLeadIntelligence(a).score,
+      );
+    }
+    if (sortBy === 'name') {
+      return copy.sort((a, b) => formatLeadName(a).localeCompare(formatLeadName(b)));
+    }
+    return copy;
+  }, [rawLeadList, sortBy]);
+
   const totalLeads = data?.total || 0;
 
-  /* ── Derived KPIs ─────────────────────────────────────────────────── */
-  const wonCount = useMemo(
-    () => leadList.filter((l) => l.stage === 'WON').length,
-    [leadList],
-  );
-  const newCount = useMemo(
-    () => leadList.filter((l) => l.stage === 'NEW').length,
-    [leadList],
-  );
-  const activeFunnelCount = useMemo(
-    () => leadList.filter((l) => l.stage !== 'WON' && l.stage !== 'LOST').length,
-    [leadList],
-  );
+  /* ── Baseline Telemetry Memory (Prevents KPI collapse when stage filter active) ── */
+  const baselineRef = useRef<{
+    total: number;
+    counts: Record<LeadStage, number>;
+  }>({
+    total: 0,
+    counts: { NEW: 0, CONTACTED: 0, TRIAL_LESSON: 0, WON: 0, LOST: 0 },
+  });
 
-  /* ── Mutations ────────────────────────────────────────────────────── */
+  const currentStageCounts = useMemo(() => {
+    const map: Record<LeadStage, number> = {
+      NEW: 0,
+      CONTACTED: 0,
+      TRIAL_LESSON: 0,
+      WON: 0,
+      LOST: 0,
+    };
+    rawLeadList.forEach((l) => {
+      if (map[l.stage] !== undefined) map[l.stage]++;
+    });
+    return map;
+  }, [rawLeadList]);
+
+  useEffect(() => {
+    if (!stage && rawLeadList.length > 0) {
+      baselineRef.current = {
+        total: totalLeads,
+        counts: currentStageCounts,
+      };
+    }
+  }, [stage, rawLeadList, totalLeads, currentStageCounts]);
+
+  const telemetryCounts = stage && baselineRef.current.total > 0
+    ? baselineRef.current.counts
+    : currentStageCounts;
+
+  const displayTotalLeads = stage && baselineRef.current.total > 0
+    ? baselineRef.current.total
+    : totalLeads;
+
+  const wonCount = telemetryCounts.WON;
+  const newCount = telemetryCounts.NEW;
+  const activeFunnelCount =
+    telemetryCounts.NEW + telemetryCounts.CONTACTED + telemetryCounts.TRIAL_LESSON;
+
+  /* ── Mutations (with Optimistic Stage Update) ─────────────────────── */
   const create = useMutation({
     mutationFn: () => {
       const payload = {
@@ -1095,8 +1228,7 @@ export function LeadsPage() {
       setEditingId(null);
       setForm(INITIAL_FORM);
       setFormErrors({});
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      invalidateAllLeadQueries();
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -1107,8 +1239,7 @@ export function LeadsPage() {
     mutationFn: (id: string) => leadsApi.remove(id),
     onSuccess: () => {
       push('success', t('leads.deleted') || 'Lead deleted');
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      invalidateAllLeadQueries();
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -1118,13 +1249,28 @@ export function LeadsPage() {
   const updateStage = useMutation({
     mutationFn: ({ id, stage: nextStage }: { id: string; stage: LeadStage }) =>
       leadsApi.updateStage(id, nextStage),
+    onMutate: async ({ id, stage: nextStage }) => {
+      await qc.cancelQueries({ queryKey: ['leads', params] });
+      const previous = qc.getQueryData<Paginated<Lead>>(['leads', params]);
+      if (previous?.items) {
+        qc.setQueryData<Paginated<Lead>>(['leads', params], {
+          ...previous,
+          items: previous.items.map((item) =>
+            item.id === id ? { ...item, stage: nextStage } : item,
+          ),
+        });
+      }
+      return { previous };
+    },
     onSuccess: () => {
       soundRef.current?.playPop?.();
       push('success', t('leads.stageUpdated') || 'Stage updated');
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      invalidateAllLeadQueries();
     },
-    onError: (e: Error) => {
+    onError: (e: Error, _vars, context) => {
+      if (context?.previous) {
+        qc.setQueryData(['leads', params], context.previous);
+      }
       push('error', getErrorMessage(e));
     },
   });
@@ -1134,11 +1280,10 @@ export function LeadsPage() {
     onSuccess: () => {
       soundRef.current?.playPop?.();
       push('success', t('leads.converted') || 'Lead converted to student');
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
-      qc.invalidateQueries({ queryKey: queryKeys.students.all() });
-      qc.invalidateQueries({ queryKey: queryKeys.students.selectors() });
-      qc.invalidateQueries({ queryKey: queryKeys.students.faces() });
+      invalidateAllLeadQueries();
+      void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.selectors() });
+      void qc.invalidateQueries({ queryKey: queryKeys.students.faces() });
     },
     onError: (e: Error) => {
       push('error', getErrorMessage(e));
@@ -1150,10 +1295,13 @@ export function LeadsPage() {
     const errors: Partial<Record<keyof LeadFormState, string>> = {};
 
     if (!form.firstName.trim()) {
-      errors.firstName = t('leads.form.firstNameRequired') || 'First name is required';
+      errors.firstName = t('leads.form.firstNameRequired') || 'Ism kiritilishi shart';
     }
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      errors.email = t('leads.form.emailInvalid') || 'Invalid email format';
+      errors.email = t('leads.form.emailInvalid') || 'Email formati noto‘g‘ri';
+    }
+    if (form.phone && form.phone.trim().replace(/\D/g, '').length < 7) {
+      errors.phone = 'Telefon raqam kamida 7 ta raqamdan iborat bo‘lishi kerak';
     }
 
     setFormErrors(errors);
@@ -1178,6 +1326,7 @@ export function LeadsPage() {
     soundRef.current?.playPop?.();
     setStage('');
     setSearch('');
+    setSortBy('newest');
     setPage(1);
   }, []);
 
@@ -1226,11 +1375,20 @@ export function LeadsPage() {
     setModalOpen(true);
   }, []);
 
+  const handleOpenModalWithStage = useCallback((presetStage: LeadStage = 'NEW') => {
+    soundRef.current?.playPop?.();
+    setEditingId(null);
+    setForm({ ...INITIAL_FORM, stage: presetStage });
+    setFormErrors({});
+    setModalOpen(true);
+  }, []);
+
   const handleOpenLeadSidecar = useCallback(
     (lead: Lead) => {
       soundRef.current?.playTick?.();
       const fullNameStr = formatLeadName(lead);
       const stageName = t(stageKey(lead.stage));
+      const intel = computeLeadIntelligence(lead);
 
       openSidecar({
         id: lead.id,
@@ -1256,12 +1414,12 @@ export function LeadsPage() {
           {
             label: 'Bosqich',
             value: stageName,
-            subtext: `Yaratilgan: ${formatDate(lead.createdAt)}`,
+            subtext: `AI Score: ${intel.score}%`,
           },
           {
             label: 'Manba',
             value: lead.source || 'To‘g‘ridan-to‘g‘ri',
-            subtext: 'Kanal',
+            subtext: `Yaratilgan: ${formatDate(lead.createdAt)}`,
           },
           {
             label: 'Aloqa',
@@ -1273,11 +1431,12 @@ export function LeadsPage() {
           { label: 'Telefon', value: lead.phone || '—', copyable: true },
           { label: 'Email', value: lead.email || '—', copyable: true },
           { label: 'Manba', value: lead.source || '—' },
+          { label: 'AI Reyting', value: `${intel.score}% (${intel.temp})` },
           { label: 'Qaydlar', value: lead.notes || 'Izoh yo‘q' },
           { label: 'Sana', value: formatDate(lead.createdAt) },
           { label: 'Lid ID', value: lead.id, copyable: true },
         ],
-        tags: lead.source ? [lead.source, stageName] : [stageName],
+        tags: lead.source ? [lead.source, stageName, intel.label] : [stageName, intel.label],
         primaryAction: {
           label: 'Tahrirlash',
           onExecute: () => handleEdit(lead),
@@ -1298,6 +1457,7 @@ export function LeadsPage() {
     (lead: Lead) => {
       const fullNameStr = formatLeadName(lead);
       const stageName = t(stageKey(lead.stage));
+      const intel = computeLeadIntelligence(lead);
 
       openQuickLook({
         id: lead.id,
@@ -1322,12 +1482,12 @@ export function LeadsPage() {
           {
             label: 'Bosqich',
             value: stageName,
-            subtext: `Yaratilgan: ${formatDate(lead.createdAt)}`,
+            subtext: `AI Score: ${intel.score}%`,
           },
           {
             label: 'Manba',
             value: lead.source || 'To‘g‘ridan-to‘g‘ri',
-            subtext: 'Kanal',
+            subtext: `Yaratilgan: ${formatDate(lead.createdAt)}`,
           },
           {
             label: 'Aloqa',
@@ -1416,32 +1576,37 @@ export function LeadsPage() {
     setIsBatchBusy(true);
     soundRef.current?.playPop?.();
     try {
-      const results = await Promise.allSettled(
-        ids.map((id) => leadsApi.update(id, { stage: 'WON' })),
-      );
-      const count = results.filter((r) => r.status === 'fulfilled').length;
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      let count = 0;
+      let failed = 0;
+      const CHUNK_SIZE = 5;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.allSettled(
+          chunk.map((id) => leadsApi.update(id, { stage: 'WON' })),
+        );
+        count += results.filter((r) => r.status === 'fulfilled').length;
+        failed += results.filter((r) => r.status === 'rejected').length;
+      }
+      invalidateAllLeadQueries();
       clearSelection();
       if (count > 0) push('success', t('leads.batchWonSuccess', { count }));
       if (failed > 0) push('error', `${failed} ta lidni yangilashda xatolik yuz berdi`);
     } finally {
       setIsBatchBusy(false);
     }
-  }, [isBatchBusy, selectedIds, qc, clearSelection, push, t]);
+  }, [isBatchBusy, selectedIds, invalidateAllLeadQueries, clearSelection, push, t]);
 
   const handleExportCSV = useCallback(
     (rows: Lead[]) => {
       if (rows.length === 0) return;
-      const headers = ['ID', 'Name', 'Phone', 'Email', 'Stage', 'Source', 'Notes'];
+      const headers = ['ID', 'Name', 'Phone', 'Email', 'Stage', 'AI Score', 'Source', 'Notes'];
       const dataRows = rows.map((l) => [
         l.id,
         formatLeadName(l),
         l.phone || '',
         l.email || '',
         l.stage || '',
+        `${computeLeadIntelligence(l).score}%`,
         l.source || '',
         l.notes || '',
       ]);
@@ -1450,7 +1615,13 @@ export function LeadsPage() {
         [
           headers.join(','),
           ...dataRows.map((r) =>
-            r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','),
+            r
+              .map((c) => {
+                let s = String(c ?? '');
+                if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+                return `"${s.replace(/"/g, '""')}"`;
+              })
+              .join(','),
           ),
         ].join('\r\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1481,19 +1652,23 @@ export function LeadsPage() {
     setIsBatchBusy(true);
     soundRef.current?.playPop?.();
     try {
-      const results = await Promise.allSettled(ids.map((id) => leadsApi.remove(id)));
-      const count = results.filter((r) => r.status === 'fulfilled').length;
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['leads-trial-analytics'] });
+      let count = 0;
+      let failed = 0;
+      const CHUNK_SIZE = 5;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.allSettled(chunk.map((id) => leadsApi.remove(id)));
+        count += results.filter((r) => r.status === 'fulfilled').length;
+        failed += results.filter((r) => r.status === 'rejected').length;
+      }
+      invalidateAllLeadQueries();
       clearSelection();
       if (count > 0) push('success', t('leads.batchDeleteSuccess', { count }));
       if (failed > 0) push('error', `${failed} ta lidni o‘chirishda xatolik yuz berdi`);
     } finally {
       setIsBatchBusy(false);
     }
-  }, [isBatchBusy, selectedIds, qc, clearSelection, push, t]);
+  }, [isBatchBusy, selectedIds, invalidateAllLeadQueries, clearSelection, push, t]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
@@ -1512,14 +1687,10 @@ export function LeadsPage() {
   }, []);
 
   const handleOpenModal = useCallback(() => {
-    soundRef.current?.playPop?.();
-    setEditingId(null);
-    setForm(INITIAL_FORM);
-    setFormErrors({});
-    setModalOpen(true);
-  }, []);
+    handleOpenModalWithStage('NEW');
+  }, [handleOpenModalWithStage]);
 
-  const hasActiveFilters = Boolean(stage || search);
+  const hasActiveFilters = Boolean(stage || search || sortBy !== 'newest');
 
   /* ============================================================================
    * RENDER
@@ -1576,7 +1747,7 @@ export function LeadsPage() {
               <div className="mb-1.5 flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-blue-400">
                   <Icon paths={I.sparkles} size={10} strokeWidth={2.5} />
-                  CRM Pipeline
+                  CRM Pipeline Studio
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-emerald-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
@@ -1584,12 +1755,12 @@ export function LeadsPage() {
                 </span>
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tighter text-slate-900 sm:text-3xl dark:text-slate-100">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl dark:text-slate-100">
                 {t('leads.title') || 'Leads & CRM'}
               </h1>
               <p className="mt-0.5 text-[13px] font-medium text-slate-500 dark:text-slate-400">
                 {t('leads.pageSubtitle') ||
-                  'Student recruitment pipeline and lead qualification'}
+                  'Student recruitment pipeline and AI lead qualification'}
               </p>
             </div>
           </div>
@@ -1656,7 +1827,7 @@ export function LeadsPage() {
         <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200/70 pt-5 sm:grid-cols-4 sm:gap-3.5 dark:border-white/[0.06]">
           <KpiTile
             label={t('leads.totalLeads') || 'Jami lidlar'}
-            value={totalLeads}
+            value={displayTotalLeads}
             icon={I.users}
             tone="blue"
             active={stage === ''}
@@ -1702,7 +1873,7 @@ export function LeadsPage() {
 
         {/* Multi-segment CRM Pipeline Telemetry Bar */}
         <PipelineTelemetryBar
-          leads={leadList}
+          counts={telemetryCounts}
           activeStage={stage}
           onSelectStage={(next) => {
             setStage(next);
@@ -1770,22 +1941,22 @@ export function LeadsPage() {
         )}
       </motion.section>
 
-      {/* ── 2. Filter, Search & View Switcher Toolbar ───────────────────── */}
+      {/* ── 2. Filter, Search, Sort & View Switcher Toolbar ─────────────── */}
       <motion.section
         variants={cardVariants}
         className={cn(LIQUID_SURFACE, 'space-y-3 rounded-2xl p-4')}
       >
         <TopSpecular inset="inset-x-8" />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid grid-cols-1 gap-3 sm:flex-1 sm:grid-cols-2">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:flex-1">
             {/* Search Input with Squircle Icon */}
-            <div className="relative">
+            <div className="relative sm:col-span-1">
               <FieldIcon icon={I.search} tone="blue" />
               <GlassInput
                 ref={searchInputRef}
                 placeholder={
                   t('leads.searchPlaceholder') ||
-                  'Ism, telefon yoki email bo‘yicha qidiruv... (/)'
+                  'Ism, telefon yoki email... (/)'
                 }
                 value={search}
                 onChange={handleSearchChange}
@@ -1809,7 +1980,7 @@ export function LeadsPage() {
               )}
             </div>
 
-            {/* Stage Filter Select with Squircle Icon */}
+            {/* Stage Filter Select */}
             <div className="relative">
               <FieldIcon icon={I.filter} tone="indigo" />
               <GlassSelect
@@ -1826,17 +1997,32 @@ export function LeadsPage() {
                 ))}
               </GlassSelect>
             </div>
+
+            {/* Smart Sort Select */}
+            <div className="relative">
+              <FieldIcon icon={I.sort} tone="purple" />
+              <GlassSelect
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortByOption)}
+                aria-label="Saralash turi"
+                className="pl-11"
+              >
+                <option value="newest">Saralash: Eng yangilari</option>
+                <option value="score">Saralash: AI Reyting (Hot → Cold)</option>
+                <option value="name">Saralash: Alifbo (A → Z)</option>
+              </GlassSelect>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 sm:shrink-0 sm:justify-end sm:pl-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 lg:shrink-0 lg:justify-end lg:pl-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
               {totalLeads === 1
                 ? t('leads.foundCountOne')
                 : t('leads.foundCount', { count: totalLeads })}
             </span>
 
-            {/* Segmented View Switcher: List vs Kanban vs Studio vs Nurturing (Pure SVG Icons) */}
-            <div className="flex items-center gap-2">
+            {/* Segmented View Switcher: List vs Kanban vs Studio vs Nurturing */}
+            <div className="flex flex-wrap items-center gap-2">
               <GlassButton
                 type="button"
                 variant="secondary"
@@ -1977,10 +2163,9 @@ export function LeadsPage() {
         </div>
       </motion.section>
 
-      {/* ── 3. Leads View Engine (Studio & Nurturing Never Blocked by Empty List) ── */}
+      {/* ── 3. Leads View Engine ────────────────────────────────────────── */}
       <section className="space-y-3">
         {viewMode === 'nurturing' ? (
-          /* ── OMNICHANNEL CADENCE NURTURING STUDIO ── */
           <motion.div
             key="lead-nurturing-studio"
             initial={{ opacity: 0, y: 12 }}
@@ -1992,7 +2177,6 @@ export function LeadsPage() {
             <SmartOmnichannelFollowup />
           </motion.div>
         ) : viewMode === 'studio' ? (
-          /* ── 5-STAGE CRM ADMISSION KANBAN STUDIO ── */
           <motion.div
             key="lead-kanban-studio"
             initial={{ opacity: 0, y: 12 }}
@@ -2003,14 +2187,13 @@ export function LeadsPage() {
           >
             <LeadPipelineKanbanStudio
               onLeadEnrolled={() => {
-                void qc.invalidateQueries({ queryKey: queryKeys.leads.all() });
-                void qc.invalidateQueries({ queryKey: ['leads'] });
+                invalidateAllLeadQueries();
               }}
             />
           </motion.div>
         ) : leads.isLoading && !data ? (
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((idx) => (
+             {[1, 2, 3, 4, 5].map((idx) => (
               <LeadSkeletonRow key={idx} />
             ))}
           </div>
@@ -2046,309 +2229,334 @@ export function LeadsPage() {
             initial="hidden"
             animate="visible"
           >
-            {leadList.map((lead, idx) => {
-              const fullNameStr = formatLeadName(lead);
-              const initials = getInitials(fullNameStr);
-              const stageStyle = STAGE_CONFIG[lead.stage] || STAGE_CONFIG.NEW;
-              const isUpdatingStage =
-                updateStage.isPending && updateStage.variables?.id === lead.id;
-              const isConverting = convert.isPending && convert.variables === lead.id;
-              const isRowSelected = isSelected(lead.id);
-              const isRowFocused = focusedIndex === idx;
+            <AnimatePresence mode="popLayout">
+              {leadList.map((lead, idx) => {
+                const fullNameStr = formatLeadName(lead);
+                const initials = getInitials(fullNameStr);
+                const stageStyle = STAGE_CONFIG[lead.stage] || STAGE_CONFIG.NEW;
+                const isUpdatingStage =
+                  updateStage.isPending && updateStage.variables?.id === lead.id;
+                const isConverting = convert.isPending && convert.variables === lead.id;
+                const isRowSelected = isSelected(lead.id);
+                const isRowFocused = focusedIndex === idx;
+                const cleanPhone = sanitizePhoneForLink(lead.phone);
 
-              return (
-                <motion.article
-                  key={lead.id}
-                  id={`lead-row-${lead.id}`}
-                  variants={rowVariants}
-                  tabIndex={0}
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === ' ') {
-                      e.preventDefault();
-                      handleQuickLook(lead);
-                    }
-                  }}
-                  className={cn(
-                    'group relative flex flex-col gap-4 rounded-2xl border p-4 shadow-card transition-all duration-200 focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between',
-                    isRowFocused
-                      ? 'border-[#007AFF]/40 bg-[#007AFF]/[0.06] ring-2 ring-[#007AFF]'
-                      : isRowSelected
-                        ? 'border-[#007AFF]/30 bg-[#007AFF]/[0.04]'
-                        : 'border-black/[0.06] bg-white/85 backdrop-blur-xl hover:bg-white dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-800/85',
-                  )}
-                >
-                  {/* Left: Checkbox + Glossy Avatar + Contact Metadata */}
-                  <div className="flex min-w-0 items-center gap-3.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelection(lead.id);
-                      }}
-                      className="-m-2 inline-flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-                      aria-label={
-                        isRowSelected
-                          ? t('leads.deselectRowAria', { name: fullNameStr })
-                          : t('leads.selectRowAria', { name: fullNameStr })
+                return (
+                  <motion.article
+                    layout
+                    key={lead.id}
+                    id={`lead-row-${lead.id}`}
+                    variants={rowVariants}
+                    tabIndex={0}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      if (e.key === ' ') {
+                        e.preventDefault();
+                        handleQuickLook(lead);
                       }
-                    >
-                      <span
-                        className={cn(
-                          'flex h-5 w-5 items-center justify-center rounded-md border transition-all',
-                          isRowSelected
-                            ? 'scale-105 border-blue-500 bg-blue-500 text-white'
-                            : 'border-zinc-300 bg-white/50 hover:border-blue-400 dark:border-zinc-700 dark:bg-zinc-800/50',
-                        )}
-                      >
-                        {isRowSelected && (
-                          <Icon paths={I.check} size={11} strokeWidth={3.5} />
-                        )}
-                      </span>
-                    </button>
-
-                    {/* Glossy Squircle Avatar */}
-                    <div
-                      onClick={() => handleOpenLeadSidecar(lead)}
-                      className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-2xl text-sm font-bold text-white shadow-sm ring-2 ring-white/60 transition-transform duration-200 group-hover:scale-105 dark:ring-zinc-800"
-                      style={{
-                        background: getAvatarGradientStyle(fullNameStr),
-                        boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -4px rgba(0,0,0,0.28)',
-                      }}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 rounded-2xl"
-                        style={{
-                          background:
-                            'linear-gradient(180deg, rgba(255,255,255,0.38), transparent 55%)',
+                    }}
+                    className={cn(
+                      'group relative flex flex-col gap-4 rounded-2xl border p-4 shadow-card transition-all duration-200 focus-visible:outline-none sm:flex-row sm:items-center sm:justify-between',
+                      isRowFocused
+                        ? 'border-[#007AFF]/40 bg-[#007AFF]/[0.06] ring-2 ring-[#007AFF]'
+                        : isRowSelected
+                          ? 'border-[#007AFF]/30 bg-[#007AFF]/[0.04]'
+                          : 'border-black/[0.06] bg-white/85 backdrop-blur-xl hover:bg-white dark:border-white/[0.08] dark:bg-surface-900/80 dark:hover:bg-surface-800/85',
+                    )}
+                  >
+                    {/* Left: Checkbox + Glossy Avatar + Contact Metadata */}
+                    <div className="flex min-w-0 items-center gap-3.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(lead.id);
                         }}
-                      />
-                      <span className="relative">{initials}</span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3
-                          onClick={() => handleOpenLeadSidecar(lead)}
-                          className="cursor-pointer truncate font-bold text-zinc-900 transition-colors hover:text-blue-600 dark:text-zinc-50 dark:hover:text-blue-400"
-                        >
-                          {fullNameStr}
-                        </h3>
-                        {lead.source && (
-                          <span className="inline-flex items-center gap-1 rounded-md border border-black/[0.06] bg-zinc-100/80 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-600 dark:border-white/[0.08] dark:bg-zinc-800 dark:text-zinc-300">
-                            <Icon
-                              paths={I.compass}
-                              size={10}
-                              strokeWidth={2.2}
-                              className="opacity-70"
-                            />
-                            {lead.source}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        {lead.phone && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyText(lead.phone || '', 'Telefon');
-                            }}
-                            title="Nusxalash uchun bosing"
-                            className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 transition-colors hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
-                          >
-                            <Icon
-                              paths={I.phone}
-                              size={12}
-                              strokeWidth={2}
-                              className="opacity-75"
-                            />
-                            <span className="font-medium tabular-nums">{lead.phone}</span>
-                          </button>
-                        )}
-                        {lead.email && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopyText(lead.email || '', 'Email');
-                            }}
-                            title="Nusxalash uchun bosing"
-                            className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 transition-colors hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
-                          >
-                            <Icon
-                              paths={I.mail}
-                              size={12}
-                              strokeWidth={2}
-                              className="opacity-75"
-                            />
-                            <span>{lead.email}</span>
-                          </button>
-                        )}
-                        <span className="inline-flex items-center gap-1 tabular-nums">
-                          <Icon
-                            paths={I.calendar}
-                            size={11}
-                            strokeWidth={2}
-                            className="opacity-65"
-                          />
-                          {formatDate(lead.createdAt)}
-                        </span>
-                        {lead.notes && (
-                          <span
-                            className="max-w-[14rem] truncate italic text-zinc-400 dark:text-zinc-500"
-                            title={lead.notes}
-                          >
-                            "{lead.notes}"
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: Stage Switcher Pill & Action Buttons */}
-                  <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-black/[0.05] pt-2 sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.06]">
-                    {/* Stage Select Pill */}
-                    <div className="relative">
-                      <select
-                        value={lead.stage}
-                        disabled={isUpdatingStage}
-                        onChange={(e) =>
-                          handleUpdateStage(lead.id, e.target.value as LeadStage)
+                        className="-m-2 inline-flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                        aria-label={
+                          isRowSelected
+                            ? t('leads.deselectRowAria', { name: fullNameStr })
+                            : t('leads.selectRowAria', { name: fullNameStr })
                         }
-                        className={cn(
-                          'cursor-pointer appearance-none rounded-xl py-1.5 pl-3 pr-7 text-xs font-bold ring-1 transition-all focus:outline-none focus:ring-2',
-                          stageStyle.bg,
-                          stageStyle.text,
-                          stageStyle.ring,
-                        )}
-                        aria-label={t('leads.updateStageAria', { name: fullNameStr })}
                       >
-                        {LEAD_STAGES.map((st) => (
-                          <option
-                            key={st}
-                            value={st}
-                            className="bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 items-center justify-center rounded-md border transition-all',
+                            isRowSelected
+                              ? 'scale-105 border-blue-500 bg-blue-500 text-white'
+                              : 'border-zinc-300 bg-white/50 hover:border-blue-400 dark:border-zinc-700 dark:bg-zinc-800/50',
+                          )}
+                        >
+                          {isRowSelected && (
+                            <Icon paths={I.check} size={11} strokeWidth={3.5} />
+                          )}
+                        </span>
+                      </button>
+
+                      {/* Glossy Squircle Avatar */}
+                      <div
+                        onClick={() => handleOpenLeadSidecar(lead)}
+                        className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm ring-2 ring-white/60 transition-transform duration-200 group-hover:scale-105 dark:ring-zinc-800"
+                        style={{
+                          background: getAvatarGradientStyle(fullNameStr),
+                          boxShadow:
+                            'inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px -4px rgba(0,0,0,0.28)',
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 rounded-2xl"
+                          style={{
+                            background:
+                              'linear-gradient(180deg, rgba(255,255,255,0.38), transparent 55%)',
+                          }}
+                        />
+                        <span className="relative">{initials}</span>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3
+                            onClick={() => handleOpenLeadSidecar(lead)}
+                            className="cursor-pointer truncate font-bold text-zinc-900 transition-colors hover:text-blue-600 dark:text-zinc-50 dark:hover:text-blue-400"
                           >
-                            {t(stageKey(st))}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-70">
-                        <Icon paths={I.chevronDown} size={12} strokeWidth={2.5} />
-                      </span>
+                            {fullNameStr}
+                          </h3>
+
+                          <LeadIntelligenceBadge lead={lead} />
+
+                          {lead.source && (
+                            <span className="inline-flex items-center gap-1 rounded-md border border-black/[0.06] bg-zinc-100/80 px-2 py-0.5 text-[10.5px] font-semibold text-zinc-600 dark:border-white/[0.08] dark:bg-zinc-800 dark:text-zinc-300">
+                              <Icon
+                                paths={I.compass}
+                                size={10}
+                                strokeWidth={2.2}
+                                className="opacity-70"
+                              />
+                              {lead.source}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          {lead.phone && (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyText(lead.phone || '', 'Telefon');
+                                }}
+                                title="Nusxalash uchun bosing"
+                                className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 transition-colors hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+                              >
+                                <Icon
+                                  paths={I.phone}
+                                  size={12}
+                                  strokeWidth={2}
+                                  className="opacity-75"
+                                />
+                                <span className="font-medium tabular-nums">{lead.phone}</span>
+                              </button>
+
+                              {cleanPhone && (
+                                <a
+                                  href={`https://t.me/${cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Telegram orqali yozish"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-sky-500/10 text-sky-600 transition-colors hover:bg-sky-500/20 dark:text-sky-400"
+                                >
+                                  <Icon paths={I.send} size={10} strokeWidth={2.3} />
+                                </a>
+                              )}
+                            </div>
+                          )}
+
+                          {lead.email && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopyText(lead.email || '', 'Email');
+                              }}
+                              title="Nusxalash uchun bosing"
+                              className="-mx-1 inline-flex items-center gap-1 rounded-md px-1 transition-colors hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                              <Icon
+                                paths={I.mail}
+                                size={12}
+                                strokeWidth={2}
+                                className="opacity-75"
+                              />
+                              <span>{lead.email}</span>
+                            </button>
+                          )}
+
+                          <span className="inline-flex items-center gap-1 tabular-nums">
+                            <Icon
+                              paths={I.calendar}
+                              size={11}
+                              strokeWidth={2}
+                              className="opacity-65"
+                            />
+                            {formatDate(lead.createdAt)}
+                          </span>
+
+                          {lead.notes && (
+                            <span
+                              className="max-w-[14rem] truncate italic text-zinc-400 dark:text-zinc-500"
+                              title={lead.notes}
+                            >
+                              "{lead.notes}"
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <GlassButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleQuickLook(lead)}
-                        className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-400"
-                        title="Quick-Look (Space)"
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <Icon paths={I.eye} size={14} strokeWidth={2.1} />
-                          <span className="hidden md:inline">{t('leads.quickLook')}</span>
+                    {/* Right: Stage Switcher Pill & Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-black/[0.05] pt-2 sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.06]">
+                      {/* Stage Select Pill */}
+                      <div className="relative">
+                        <select
+                          value={lead.stage}
+                          disabled={isUpdatingStage}
+                          onChange={(e) =>
+                            handleUpdateStage(lead.id, e.target.value as LeadStage)
+                          }
+                          className={cn(
+                            'cursor-pointer appearance-none rounded-xl py-1.5 pl-3 pr-7 text-xs font-bold ring-1 transition-all focus:outline-none focus:ring-2',
+                            stageStyle.bg,
+                            stageStyle.text,
+                            stageStyle.ring,
+                          )}
+                          aria-label={t('leads.updateStageAria', { name: fullNameStr })}
+                        >
+                          {LEAD_STAGES.map((st) => (
+                            <option
+                              key={st}
+                              value={st}
+                              className="bg-white text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                            >
+                              {t(stageKey(st))}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-70">
+                          <Icon paths={I.chevronDown} size={12} strokeWidth={2.5} />
                         </span>
-                      </GlassButton>
+                      </div>
 
-                      <GlassButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(lead)}
-                        className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-blue-500"
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <Icon paths={I.edit} size={13.5} strokeWidth={2.1} />
-                          <span>{t('common.edit')}</span>
-                        </span>
-                      </GlassButton>
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <GlassButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleQuickLook(lead)}
+                          className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs font-semibold text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-400"
+                          title="Quick-Look (Space)"
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon paths={I.eye} size={14} strokeWidth={2.1} />
+                            <span className="hidden md:inline">{t('leads.quickLook')}</span>
+                          </span>
+                        </GlassButton>
 
-                      {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
-                        <>
-                          <GlassButton
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openTrialModal(lead)}
-                            className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-400"
-                          >
-                            <span className="inline-flex items-center gap-1.5">
-                              <Icon paths={I.calendar} size={13.5} strokeWidth={2.1} />
-                              <span>{t('leads.trialLesson')}</span>
-                            </span>
-                          </GlassButton>
+                        <GlassButton
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(lead)}
+                          className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            <Icon paths={I.edit} size={13.5} strokeWidth={2.1} />
+                            <span>{t('common.edit')}</span>
+                          </span>
+                        </GlassButton>
 
-                          {lead.stage === 'TRIAL_LESSON' && (
+                        {lead.stage !== 'WON' && lead.stage !== 'LOST' && (
+                          <>
                             <GlassButton
                               type="button"
                               variant="secondary"
                               size="sm"
-                              onClick={() => openAttendanceModal(lead)}
-                              className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-indigo-600 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-400"
+                              onClick={() => openTrialModal(lead)}
+                              className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-amber-600 focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-400"
                             >
                               <span className="inline-flex items-center gap-1.5">
-                                <Icon
-                                  paths={I.checkCircle}
-                                  size={13.5}
-                                  strokeWidth={2.2}
-                                />
-                                <span>{t('leads.attendance')}</span>
+                                <Icon paths={I.calendar} size={13.5} strokeWidth={2.1} />
+                                <span>{t('leads.trialLesson')}</span>
                               </span>
                             </GlassButton>
-                          )}
 
-                          <GlassButton
-                            type="button"
-                            variant="primary"
-                            size="sm"
-                            onClick={() => handleConvert(lead.id)}
-                            disabled={isConverting}
-                            className="min-h-[44px] rounded-xl px-3 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-blue-500"
-                          >
-                            <span className="inline-flex items-center gap-1.5">
-                              <Icon paths={I.userPlus} size={13.5} strokeWidth={2.2} />
-                              <span>
-                                {isConverting ? t('leads.converting') : t('leads.convert')}
+                            {lead.stage === 'TRIAL_LESSON' && (
+                              <GlassButton
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openAttendanceModal(lead)}
+                                className="min-h-[44px] rounded-xl px-2.5 py-1.5 text-xs text-indigo-600 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-400"
+                              >
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Icon
+                                    paths={I.checkCircle}
+                                    size={13.5}
+                                    strokeWidth={2.2}
+                                  />
+                                  <span>{t('leads.attendance')}</span>
+                                </span>
+                              </GlassButton>
+                            )}
+
+                            <GlassButton
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleConvert(lead.id)}
+                              disabled={isConverting}
+                              className="min-h-[44px] rounded-xl px-3 py-1.5 text-xs focus-visible:ring-2 focus-visible:ring-blue-500"
+                            >
+                              <span className="inline-flex items-center gap-1.5">
+                                <Icon paths={I.userPlus} size={13.5} strokeWidth={2.2} />
+                                <span>
+                                  {isConverting ? t('leads.converting') : t('leads.convert')}
+                                </span>
                               </span>
-                            </span>
-                          </GlassButton>
-                        </>
-                      )}
+                            </GlassButton>
+                          </>
+                        )}
 
-                      {/* Sidecar Split-View Trigger */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenLeadSidecar(lead)}
-                        aria-label={t('leads.sidecarAria')}
-                        title={t('leads.sidecarTitle')}
-                        className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/70 text-slate-600 transition-colors hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white"
-                      >
-                        <Icon paths={I.sidebarRight} size={14} strokeWidth={2.1} />
-                      </button>
+                        {/* Sidecar Split-View Trigger */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLeadSidecar(lead)}
+                          aria-label={t('leads.sidecarAria')}
+                          title={t('leads.sidecarTitle')}
+                          className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/70 text-slate-600 transition-colors hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white"
+                        >
+                          <Icon paths={I.sidebarRight} size={14} strokeWidth={2.1} />
+                        </button>
 
-                      <GlassButton
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleDelete(lead.id)}
-                        disabled={remove.isPending && remove.variables === lead.id}
-                        className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-0 text-xs opacity-80 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
-                        aria-label={t('leads.deleted')}
-                      >
-                        <Icon paths={I.trash} size={14} strokeWidth={2.1} />
-                      </GlassButton>
+                        <GlassButton
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDelete(lead.id)}
+                          disabled={remove.isPending && remove.variables === lead.id}
+                          className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-0 text-xs opacity-80 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
+                          aria-label={t('leads.deleted')}
+                        >
+                          <Icon paths={I.trash} size={14} strokeWidth={2.1} />
+                        </GlassButton>
+                      </div>
                     </div>
-                  </div>
-                </motion.article>
-              );
-            })}
+                  </motion.article>
+                );
+              })}
+            </AnimatePresence>
           </motion.div>
         ) : (
           /* ── APPLE KANBAN PIPELINE BOARD VIEW ───────────────────── */
@@ -2387,13 +2595,13 @@ export function LeadsPage() {
                     }
                   }}
                   className={cn(
-                    'flex min-h-[340px] min-w-[280px] flex-shrink-0 snap-center flex-col rounded-2xl border p-3 backdrop-blur-xl transition-all duration-200 md:min-w-0 md:flex-shrink',
+                    'flex min-h-[360px] min-w-[280px] flex-shrink-0 snap-center flex-col rounded-2xl border p-3 backdrop-blur-xl transition-all duration-200 md:min-w-0 md:flex-shrink',
                     dragOverStage === colStage
                       ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/30'
                       : 'border-black/[0.06] bg-white/65 dark:border-white/[0.08] dark:bg-surface-900/65',
                   )}
                 >
-                  {/* Column Header */}
+                  {/* Column Header with Quick-Add (+) Button */}
                   <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-black/[0.05] pb-3 dark:border-white/[0.06]">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className={cn('h-2.5 w-2.5 rounded-full', cfg.dot)} />
@@ -2401,23 +2609,39 @@ export function LeadsPage() {
                         {t(stageKey(colStage))}
                       </h3>
                     </div>
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                        cfg.bg,
-                        cfg.text,
-                      )}
-                    >
-                      {colLeads.length}
-                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                          cfg.bg,
+                          cfg.text,
+                        )}
+                      >
+                        {colLeads.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenModalWithStage(colStage)}
+                        title={`${t(stageKey(colStage))} bosqichiga yangi lid qo‘shish`}
+                        className="flex h-6 w-6 items-center justify-center rounded-lg border border-black/[0.06] bg-white/80 text-slate-600 transition-colors hover:bg-blue-500 hover:text-white dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-slate-300"
+                      >
+                        <Icon paths={I.plus} size={12} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Column Cards */}
                   <div className="flex-1 space-y-2.5">
                     {colLeads.length === 0 ? (
-                      <div className="flex h-36 items-center justify-center rounded-xl border border-dashed border-slate-200 text-[11px] font-medium text-slate-400 dark:border-white/[0.06]">
-                        Bo‘sh
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenModalWithStage(colStage)}
+                        className="flex h-36 w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-200 text-[11px] font-medium text-slate-400 transition-colors hover:border-blue-400/50 hover:text-blue-500 dark:border-white/[0.06]"
+                      >
+                        <Icon paths={I.plus} size={15} strokeWidth={2.2} />
+                        <span>Lid qo‘shish</span>
+                      </button>
                     ) : (
                       colLeads.map((lead) => {
                         const fullNameStr = formatLeadName(lead);
@@ -2470,6 +2694,7 @@ export function LeadsPage() {
                                     {fullNameStr}
                                   </p>
                                 </div>
+                                <LeadIntelligenceBadge lead={lead} />
                               </div>
 
                               {lead.phone && (
@@ -2608,7 +2833,7 @@ export function LeadsPage() {
         />
       )}
 
-      {/* ── 4. Add/Edit Lead Modal (Upgraded with Squircle Icons & Presets) ─ */}
+      {/* ── 4. Add/Edit Lead Modal ───────────────────────────────────────── */}
       <GlassModal
         open={modalOpen}
         onClose={handleCloseModal}
@@ -2659,17 +2884,25 @@ export function LeadsPage() {
               </div>
             </GlassField>
 
-            <GlassField label={t('common.phone') || 'Telefon'}>
+            <GlassField label={t('common.phone') || 'Telefon'} error={formErrors.phone}>
               <div className="relative">
                 <FieldIcon icon={I.phone} tone="emerald" />
                 <GlassInput
                   type="tel"
                   value={form.phone}
-                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                  placeholder="+998 90 123 4567"
+                  onChange={(e) => {
+                    setForm((p) => ({ ...p, phone: e.target.value }));
+                    setFormErrors((p) => ({ ...p, phone: undefined }));
+                  }}
+                  placeholder="+998 90 123 45 67"
                   className="pl-11"
                 />
               </div>
+              {formErrors.phone && (
+                <span className="mt-1 block text-xs text-rose-500">
+                  {formErrors.phone}
+                </span>
+              )}
             </GlassField>
 
             <GlassField label={t('common.email') || 'Email'} error={formErrors.email}>
@@ -2730,7 +2963,7 @@ export function LeadsPage() {
           {/* Segmented Stage Selector */}
           <div>
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-              {t('leads.col.stage') || 'Boshlang‘ich bosqich'}
+              {t('leads.col.stage') || 'Bosqich'}
             </p>
             <StageSegmented
               value={form.stage}
@@ -2927,7 +3160,7 @@ export function LeadsPage() {
         )}
       </GlassModal>
 
-      {/* ── 7. Mark Trial Attendance & Outcome Modal (Apple Radio Cards) ── */}
+      {/* ── 7. Mark Trial Attendance & Outcome Modal ─────────────────────── */}
       <GlassModal
         open={attendanceTarget !== null}
         onClose={() => setAttendanceTarget(null)}

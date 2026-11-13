@@ -137,7 +137,7 @@ describe('Access Control & Whitelist (AuthService)', () => {
   });
 
   describe('Registration access enforcement', () => {
-    it('flags unwhitelisted users as PENDING when requireApproval is active', async () => {
+    it('strictly prohibits registration when requireApproval is active under Centralized IAM', async () => {
       prisma.user.count.mockResolvedValue(5);
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.accessWhitelist.findUnique.mockResolvedValue(null);
@@ -147,17 +147,15 @@ describe('Access Control & Whitelist (AuthService)', () => {
         requireApproval: true,
       });
 
-      const res = await svc.register({
-        email: 'applicant@example.com',
-        password: 'Password123!',
-        firstName: 'Ali',
-        lastName: 'Valiyev',
-        organizationName: 'EduCenter',
-      });
-
-      expect(res.pendingApproval).toBe(true);
-      expect(res.message).toMatch(/pending administrator approval/i);
-      expect(res.accessToken).toBeFalsy();
+      await expect(
+        svc.register({
+          email: 'applicant@example.com',
+          password: 'Password123!',
+          firstName: 'Ali',
+          lastName: 'Valiyev',
+          organizationName: 'EduCenter',
+        }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('blocks registration when inviteOnly is true and requireApproval is false', async () => {

@@ -112,7 +112,7 @@ describe('Centralized IAM Deep Security Regression Suite', () => {
       usersService = new UsersService(mockPrisma as any, mockLogger as any, mockSecurity as any);
     });
 
-    it('Test 8: ORG_ADMIN cannot create user accounts (403 Forbidden)', async () => {
+    it('Test 8: ORG_ADMIN cannot create ORG_ADMIN accounts (403 Forbidden)', async () => {
       await expect(
         usersService.create(
           'org-1',
@@ -122,7 +122,7 @@ describe('Centralized IAM Deep Security Regression Suite', () => {
             email: 'john@example.com',
             username: 'johndoe',
             password: 'Password123!',
-            role: Role.TEACHER,
+            role: Role.ORG_ADMIN,
           },
           Role.ORG_ADMIN,
         ),

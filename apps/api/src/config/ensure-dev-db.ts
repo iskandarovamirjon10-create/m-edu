@@ -2,6 +2,19 @@ import { LoggerService } from '@nestjs/common';
 import { Client } from 'pg';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execFileSync } from 'child_process';
+
+function findInstalledPgCtl(): string | null {
+  const candidateDirs = [
+    'C:\\Program Files\\PostgreSQL\\16\\bin\\pg_ctl.exe',
+    'C:\\Program Files\\PostgreSQL\\15\\bin\\pg_ctl.exe',
+    'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_ctl.exe',
+  ];
+  for (const p of candidateDirs) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 /**
  * Ensures the PostgreSQL database is running during local development.
@@ -89,36 +102,65 @@ export async function ensureDevDatabase(logger: LoggerService): Promise<void> {
       }
     }
 
-    // Dynamic import embedded-postgres so production never bundles it
-    const embeddedPostgresModule = await import('embedded-postgres');
-    const EmbeddedPostgres = embeddedPostgresModule.default || embeddedPostgresModule;
+    const installedPgCtl = process.platform === 'win32' ? findInstalledPgCtl() : null;
+    const isClusterInit = fs.existsSync(dbDir) && fs.existsSync(path.join(dbDir, 'PG_VERSION'));
 
-    const pg = new EmbeddedPostgres({
-      databaseDir: dbDir,
-      user: 'postgres',
-      password: 'postgres',
-      port: dbPort,
-      persistent: true,
-      initdbFlags: ['--encoding=UTF8'],
-    });
+    if (installedPgCtl && isClusterInit) {
+      logger.log(`[dev-db] Starting PostgreSQL via installed pg_ctl: ${installedPgCtl}...`);
+      const logPath = path.resolve(dbDir, '../.pgtmp-dev.log');
+      try {
+        execFileSync(installedPgCtl, ['start', '-D', dbDir, '-l', logPath]);
+        logger.log(`[dev-db] PostgreSQL started via pg_ctl on port ${dbPort}.`);
+      } catch (e: any) {
+        logger.warn(`[dev-db] pg_ctl start note: ${e?.message}`);
+      }
+    } else {
+      // Dynamic import embedded-postgres so production never bundles it
+      const embeddedPostgresModule = await import('embedded-postgres');
+      const EmbeddedPostgres = embeddedPostgresModule.default || embeddedPostgresModule;
 
-    if (!fs.existsSync(dbDir) || fs.readdirSync(dbDir).length === 0) {
-      logger.log(`[dev-db] Initializing embedded postgres in ${dbDir}...`);
-      await pg.initialise();
+      const pg = new EmbeddedPostgres({
+        databaseDir: dbDir,
+        user: 'postgres',
+        password: 'postgres',
+        port: dbPort,
+        persistent: true,
+        initdbFlags: ['--encoding=UTF8'],
+      });
+
+      if (!fs.existsSync(dbDir) || fs.readdirSync(dbDir).length === 0) {
+        logger.log(`[dev-db] Initializing embedded postgres in ${dbDir}...`);
+        await pg.initialise();
+      }
+
+      await pg.start();
+      logger.log(`[dev-db] Embedded postgres successfully started on port ${dbPort}.`);
     }
 
-    await pg.start();
-    logger.log(`[dev-db] Embedded postgres successfully started on port ${dbPort}.`);
+    // Wait up to 10 seconds for newly started postgres to accept connections
+    let client: Client | null = null;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        const testClient = new Client({
+          host: dbHost,
+          port: dbPort,
+          user: 'postgres',
+          password: 'postgres',
+          database: 'postgres',
+          connectionTimeoutMillis: 2000,
+        });
+        await testClient.connect();
+        client = testClient;
+        break;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
 
-    // 3. Connect and ensure development databases exist
-    const client = new Client({
-      host: dbHost,
-      port: dbPort,
-      user: 'postgres',
-      password: 'postgres',
-      database: 'postgres',
-    });
-    await client.connect();
+    if (!client) {
+      throw new Error(`PostgreSQL failed to accept connections on port ${dbPort} after start.`);
+    }
+
     await ensureRequiredDatabases(client, logger);
     await client.end().catch(() => {});
   } catch (err: unknown) {
@@ -128,7 +170,7 @@ export async function ensureDevDatabase(logger: LoggerService): Promise<void> {
 }
 
 async function ensureRequiredDatabases(client: Client, logger: LoggerService): Promise<void> {
-  const targetDbs = ['medu_cert_db1', 'medu_dev'];
+  const targetDbs = ['medu', 'medu_cert_db1', 'medu_dev'];
   for (const dbName of targetDbs) {
     try {
       const res = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);

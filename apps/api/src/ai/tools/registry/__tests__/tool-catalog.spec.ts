@@ -57,10 +57,12 @@ describe('AI tool catalog', () => {
         'notifications.broadcast',
         'schedule.create',
         'schedule.list',
+        'students.academic_risk_radar',
         'students.create',
         'students.search',
         'teachers.create',
         'teachers.list',
+        'teachers.performance_review',
         'teachers.workload',
       ].sort(),
     );
@@ -113,10 +115,10 @@ describe('AI tool catalog', () => {
     }
   });
 
-  it('registers all 29 tools in full catalog with no name collisions', () => {
+  it('registers all 32 tools in full catalog with no name collisions', () => {
     const names = fullTools.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
-    expect(fullTools.length).toBe(29);
+    expect(fullTools.length).toBe(32);
   });
 
   it('ensures all full catalog mutating tools require confirmation and permissions', () => {

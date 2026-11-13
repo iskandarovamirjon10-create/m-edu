@@ -466,6 +466,7 @@ export class AiController {
   async getInsights(
     @CurrentUser('organizationId') organizationId: string,
     @CurrentUser('sub') userId: string,
+    @CurrentUser('role') role?: string,
     @Query('scope') scope?: string,
     @Headers('x-page-context') rawPageContext?: string,
   ) {
@@ -482,6 +483,7 @@ export class AiController {
       userId,
       safeScope,
       safePageContext,
+      role,
     );
   }
 

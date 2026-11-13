@@ -433,13 +433,13 @@ export function ExamsPage() {
   // Queries
   const examsQuery = useQuery({
     queryKey: queryKeys.exams.all(),
-    queryFn: () => examsApi.list({ limit: 100 }),
+    queryFn: () => examsApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
   const groupsQuery = useQuery({
     queryKey: queryKeys.groups.selectors(),
-    queryFn: () => groupsApi.list({ limit: 100 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
   });
 
   const data = examsQuery.data as Paginated<Exam> | undefined;
@@ -748,7 +748,7 @@ export function ExamsPage() {
                     playTick();
                     examsQuery.refetch();
                   }}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
                   title="Refresh Assessments (R)"
                   aria-label={t('common.refresh') || 'Refresh'}
                 >
@@ -763,7 +763,7 @@ export function ExamsPage() {
               <GlassButton
                 onClick={() => openModal()}
                 variant="primary"
-                className="inline-flex min-h-[44px] items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-[0.98] transition-all"
+                className="inline-flex min-h-[44px] items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-[0.98] transition-all"
                 aria-label={t('exams.add') || 'Create Exam'}
               >
                 <Icon paths={I.plus} size={16} strokeWidth={2.5} />
@@ -1188,7 +1188,7 @@ export function ExamsPage() {
                             e.stopPropagation();
                             handleOpenExamSidecar(exam);
                           }}
-                          className="min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1.5"
+                          className="min-h-10 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1.5"
                           title="Inspect in macOS Sidecar"
                           aria-label="Open Sidecar inspection"
                         >
@@ -1205,7 +1205,7 @@ export function ExamsPage() {
                             variant="secondary"
                             size="sm"
                             disabled={publishMutation.isPending && publishMutation.variables === exam.id}
-                            className="min-h-[40px] rounded-xl text-xs px-3 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10"
+                            className="min-h-10 rounded-xl text-xs px-3 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10"
                             aria-label={t('exams.publish') || 'Publish'}
                           >
                             <Icon paths={I.upload} size={13} />
@@ -1217,7 +1217,7 @@ export function ExamsPage() {
                           onClick={() => openModal(exam)}
                           variant="ghost"
                           size="sm"
-                          className="min-h-[40px] rounded-xl text-xs px-3"
+                          className="min-h-10 rounded-xl text-xs px-3"
                           aria-label={t('common.edit') || 'Edit'}
                         >
                           <Icon paths={I.edit} size={13} />
@@ -1232,7 +1232,7 @@ export function ExamsPage() {
                           variant="danger"
                           size="sm"
                           disabled={removeMutation.isPending && removeMutation.variables === exam.id}
-                          className="min-h-[40px] rounded-xl text-xs px-3"
+                          className="min-h-10 rounded-xl text-xs px-3"
                           aria-label={t('common.delete') || 'Delete'}
                         >
                           <Icon paths={I.trash} size={13} />

@@ -314,7 +314,7 @@ export function StatCard({
       <div className="flex items-center gap-3.5">
         <div
           className={cn(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm bg-gradient-to-br',
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm bg-gradient-to-br',
             gradient,
           )}
         >
@@ -368,7 +368,7 @@ export function BranchesPage() {
   const { data: users = [] } = useQuery({
     queryKey: ['users-list-for-manager'],
     queryFn: () =>
-      usersApi.list({ limit: 200 }) as Promise<{
+      usersApi.list({ limit: 500 }) as Promise<{
         items: { id: string; firstName: string; lastName: string; email: string }[];
       }>,
     enabled: managerModal !== null,

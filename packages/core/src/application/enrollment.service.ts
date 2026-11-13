@@ -262,12 +262,13 @@ export class EnrollmentService {
       face: primaryFace,
     });
 
-    // 7.5 Duplicate Face Detection
+    // 7.5 Duplicate Face Detection (Optimized with early-exit)
     // Compares the new embedding against all existing active templates in the organization.
     // If an extremely high similarity match is found with a DIFFERENT student, log a warning.
     let maxSimilarity = -1;
     let duplicateStudentId: string | null = null;
-    for await (const batch of this.enrollmentRepo.streamActiveTemplates(tenant.organizationId, 500)) {
+    const dupThreshold = this.config.duplicateFaceThreshold ?? 0.8;
+    templateStreamLoop: for await (const batch of this.enrollmentRepo.streamActiveTemplates(tenant.organizationId, 500)) {
       for (const existingTemplate of batch) {
         if (existingTemplate.studentId === enrollment.studentId) {
           continue; // Expected to match their own previous enrollments
@@ -282,6 +283,9 @@ export class EnrollmentService {
           if (sim > maxSimilarity) {
             maxSimilarity = sim;
             duplicateStudentId = existingTemplate.studentId;
+          }
+          if (maxSimilarity >= dupThreshold) {
+            break templateStreamLoop;
           }
         } catch (e) {
           // Ignore version/dimension mismatch during cross-comparison

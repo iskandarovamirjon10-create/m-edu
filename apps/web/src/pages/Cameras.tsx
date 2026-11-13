@@ -1018,7 +1018,7 @@ export function CamerasPage() {
   /* ── Cameras Query ────────────────────────────────────────────────── */
   const cameras = useQuery({
     queryKey: queryKeys.cameras.all(),
-    queryFn: () => camerasApi.list({ limit: 100 }),
+    queryFn: () => camerasApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -1684,7 +1684,7 @@ export function CamerasPage() {
 
                     {/* Gradient Camera Tile */}
                     <div
-                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+                      className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
                       style={{
                         background: gradient,
                         boxShadow:

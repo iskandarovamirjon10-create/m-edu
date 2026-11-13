@@ -1376,7 +1376,7 @@ export function FaceEnrollmentPage() {
                   </span>
                 </div>
 
-                <h1 className="mt-2.5 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-[30px] sm:leading-tight dark:text-slate-50">
+                <h1 className="mt-2.5 text-balance text-[26px] font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl dark:text-slate-50">
                   {t('faceEnrollment.title')}
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13.5px] font-medium leading-relaxed text-slate-500 dark:text-slate-400">
@@ -1386,22 +1386,22 @@ export function FaceEnrollmentPage() {
             </div>
 
             {/* Live Neural Telemetry & Terminal Switcher */}
-            <div className="flex flex-wrap items-center gap-3 self-stretch sm:self-auto">
+            <div className="action-bar self-stretch sm:justify-end">
               <nav
                 aria-label="Terminal Mode"
-                className="inline-flex items-center rounded-2xl border border-black/10 bg-black/5 p-1 dark:border-white/10 dark:bg-white/5"
+                className="inline-flex items-center rounded-xl border border-black/10 bg-black/5 p-0.5 dark:border-white/10 dark:bg-white/5"
               >
                 <SafeLink
                   to="/face"
                   className={cn(
-                    'inline-flex h-9 items-center gap-2 rounded-xl px-3.5 text-xs font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100',
+                    'inline-flex h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100',
                     FOCUS,
                   )}
                 >
                   <Icon paths={I.camera} size={14} />
                   <span>Face ID Terminal</span>
                 </SafeLink>
-                <div className="inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3.5 text-xs font-bold text-slate-900 shadow-sm dark:bg-white/15 dark:text-white">
+                <div className="inline-flex h-10 items-center gap-2 rounded-lg bg-white px-3.5 text-xs font-bold text-slate-900 shadow-sm dark:bg-white/15 dark:text-white">
                   <Icon
                     paths={I.sparkles}
                     size={14}
@@ -1535,7 +1535,7 @@ export function FaceEnrollmentPage() {
             <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] pb-4 dark:border-white/[0.08]">
               <div className="flex items-center gap-3.5">
                 <div
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl text-[#10B981] dark:text-[#34D399]"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-[#10B981] dark:text-[#34D399]"
                   style={{
                     background: 'rgba(16,185,129,0.12)',
                     border: '1px solid rgba(16,185,129,0.28)',
@@ -1713,7 +1713,7 @@ export function FaceEnrollmentPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[13px] font-extrabold text-white shadow-md"
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[13px] font-extrabold text-white shadow-md"
                           style={{
                             background: getAvatarGradient(selectedName),
                             boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.45)',
@@ -1916,24 +1916,14 @@ export function FaceEnrollmentPage() {
                     )}
 
                     {captureMode === 'CAMERA' ? (
-                      <>
-                        <div className="pointer-events-none absolute inset-x-0 top-0 bottom-14 z-10 flex items-center justify-center">
-                          <div
-                            className={cn(
-                              'aspect-[4/5] h-[58%] max-h-56 rounded-[50%] border-2 border-dashed transition-all duration-300',
-                              capture.isPending
-                                ? 'animate-pulse border-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.55)]'
-                                : 'border-white/40 shadow-[0_0_15px_rgba(255,255,255,0.15)]',
-                            )}
-                          />
-                        </div>
-
+                      <div className="relative w-full flex flex-col items-center">
                         <WebcamCapture
                           onCapture={handleCapture}
                           busy={capture.isPending}
                           label={t('faceEnrollment.captureFace')}
+                          modeVariant="enrollment"
                         />
-                      </>
+                      </div>
                     ) : (
                       /* Studio Portrait Photo Upload Mode */
                       <div className="flex flex-col items-center justify-center rounded-[1.9rem] bg-slate-950/85 p-6 text-center text-white">
@@ -2180,7 +2170,7 @@ export function FaceEnrollmentPage() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <div
-                    className="flex h-10 w-10 items-center justify-center rounded-2xl text-[#2563EB] dark:text-[#60A5FA]"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl text-[#2563EB] dark:text-[#60A5FA]"
                     style={{
                       background: 'rgba(37,99,235,0.12)',
                       border: '1px solid rgba(37,99,235,0.26)',
@@ -2207,7 +2197,7 @@ export function FaceEnrollmentPage() {
                     aria-label="Yangilash"
                     title="Yangilash"
                     className={cn(
-                      'flex h-10 w-10 items-center justify-center rounded-2xl border border-black/[0.08] bg-white/70 text-slate-600 transition-colors hover:bg-white hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300',
+                      'flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-slate-600 transition-colors hover:bg-white hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300',
                       FOCUS,
                     )}
                   >
@@ -2229,7 +2219,7 @@ export function FaceEnrollmentPage() {
                     aria-label="Saralash"
                     title="Saralash tartibi"
                     className={cn(
-                      'inline-flex min-h-[40px] items-center gap-1.5 rounded-2xl border border-black/[0.08] bg-white/70 px-3 text-xs font-bold text-slate-700 transition-colors hover:bg-white dark:border-white/10 dark:bg-slate-900 dark:text-slate-200',
+                      'inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-black/[0.08] bg-white/70 px-3 text-xs font-bold text-slate-700 transition-colors hover:bg-white dark:border-white/10 dark:bg-slate-900 dark:text-slate-200',
                       FOCUS,
                     )}
                   >
@@ -2252,7 +2242,7 @@ export function FaceEnrollmentPage() {
                     aria-label="CSV Eksport"
                     title="CSV Eksport"
                     className={cn(
-                      'inline-flex min-h-[40px] items-center gap-1.5 rounded-2xl border border-black/[0.08] bg-white/75 px-3.5 py-2 text-xs font-bold text-slate-900 shadow-xs backdrop-blur-xl transition-all hover:bg-white hover:text-[#2563EB] disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-50 dark:hover:bg-white/[0.08]',
+                      'inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-black/[0.08] bg-white/75 px-3.5 py-2 text-xs font-bold text-slate-900 shadow-xs backdrop-blur-xl transition-all hover:bg-white hover:text-[#2563EB] disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-50 dark:hover:bg-white/[0.08]',
                       FOCUS,
                     )}
                   >
@@ -2412,7 +2402,7 @@ export function FaceEnrollmentPage() {
                         <div className="flex min-w-0 items-center gap-3.5">
                           <div className="relative shrink-0">
                             <div
-                              className="flex h-11 w-11 items-center justify-center rounded-2xl text-[12.5px] font-extrabold text-white shadow-sm"
+                              className="flex h-11 w-11 items-center justify-center rounded-xl text-[12.5px] font-extrabold text-white shadow-sm"
                               style={{
                                 background: getAvatarGradient(studentName),
                                 boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.45)',
@@ -2511,7 +2501,7 @@ export function FaceEnrollmentPage() {
                             aria-label={`${studentName} — Split View Sidecar`}
                             title="Split View Sidecar"
                             className={cn(
-                              'flex h-10 w-10 min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-black/[0.06] bg-white/75 text-slate-500 shadow-xs transition-all hover:border-[#10B981]/40 hover:bg-[#10B981]/10 hover:text-[#10B981] dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/10',
+                              'flex h-10 w-10 min-h-10 min-w-[40px] items-center justify-center rounded-xl border border-black/[0.06] bg-white/75 text-slate-500 shadow-xs transition-all hover:border-[#10B981]/40 hover:bg-[#10B981]/10 hover:text-[#10B981] dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/10',
                               FOCUS,
                             )}
                           >
@@ -2523,7 +2513,7 @@ export function FaceEnrollmentPage() {
                               type="button"
                               variant="danger"
                               size="sm"
-                              className="min-h-[40px]"
+                              className="min-h-10"
                               aria-label={t('faceEnrollment.revoke')}
                               onClick={() => handleRevoke(enrollment.id)}
                               disabled={isRevokingThis}

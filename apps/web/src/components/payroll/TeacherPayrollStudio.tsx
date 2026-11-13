@@ -10,6 +10,23 @@ import { GlassSurface, GlassButton, GlassBadge, useToast } from '@/components/ui
 import { cn, Icon } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { teachersApi, payrollApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
+
+/** `GET /teachers` qaytaradigan xom yozuv (ixtiyoriy maydonlar bilan). */
+interface RawTeacherRecord {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  user?: { firstName?: string; lastName?: string; role?: string };
+  specialization?: string;
+  subject?: string;
+  _count?: { groups?: number; students?: number };
+  groups?: unknown[];
+  baseSalaryUzs?: number;
+  hoursLogged?: number;
+  hourlyRateUzs?: number;
+  commissionPct?: number;
+}
 
 export interface TeacherCompensationPlan {
   readonly id: string;
@@ -48,10 +65,7 @@ export function TeacherPayrollStudio({ className }: TeacherPayrollStudioProps): 
           payrollApi.listRuns({ limit: 1 }).catch(() => null),
         ]);
 
-        const items =
-          (teachersRes as any)?.data ||
-          (teachersRes as any)?.items ||
-          (Array.isArray(teachersRes) ? (teachersRes as any) : []);
+        const items = toList<RawTeacherRecord>(teachersRes);
         if (isMounted && Array.isArray(items) && items.length > 0) {
           const mapped: TeacherCompensationPlan[] = items.map((t, idx) => {
             const first = t.user?.firstName || t.firstName || 'Ustoz';

@@ -51,6 +51,7 @@ function createMockPrisma() {
     rewardClaim: {
       create: vi.fn().mockResolvedValue({}),
       findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
     },
     tx,
   };
@@ -205,14 +206,14 @@ describe('GamificationService', () => {
 
       const stats = await service.getMyStats('student-1', 'org-1');
 
-      expect(stats).toEqual({
+      expect(stats).toEqual(expect.objectContaining({
         xp: 0,
         coins: 0,
         level: 1,
         xpToNextLevel: 100,
         rank: null,
         rankTotal: 0,
-      });
+      }));
     });
 
     it('calculates current balance, next level XP, and rank correctly', async () => {
@@ -229,14 +230,14 @@ describe('GamificationService', () => {
 
       const stats = await service.getMyStats('student-1', 'org-1');
 
-      expect(stats).toEqual({
+      expect(stats).toEqual(expect.objectContaining({
         xp: 260,
         coins: 120,
         level: 3,
         xpToNextLevel: 40, // 100 - (260 % 100) = 40
         rank: 3, // rankRow (2) + 1
         rankTotal: 50,
-      });
+      }));
     });
   });
 

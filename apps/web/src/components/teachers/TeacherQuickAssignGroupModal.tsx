@@ -7,6 +7,7 @@ import {
   useToasts,
 } from '@/components/ui';
 import { teachersApi, groupsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -53,13 +54,10 @@ export const TeacherQuickAssignGroupModal = memo(function TeacherQuickAssignGrou
     enabled: isOpen,
   });
 
-  const groupsList = useMemo<GroupOption[]>(() => {
-    const raw = groupsQuery.data as any;
-    if (Array.isArray(raw)) return raw;
-    if (Array.isArray(raw?.items)) return raw.items;
-    if (Array.isArray(raw?.data)) return raw.data;
-    return [];
-  }, [groupsQuery.data]);
+  const groupsList = useMemo<GroupOption[]>(
+    () => toList<GroupOption>(groupsQuery.data),
+    [groupsQuery.data],
+  );
   const teacherName = teacher ? fullName(teacher.user?.firstName, teacher.user?.lastName) : '';
 
   const assignMutation = useMutation({

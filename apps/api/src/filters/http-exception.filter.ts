@@ -30,7 +30,7 @@ function sanitizeErrorMessage(msg: string): string {
   if (!msg || typeof msg !== 'string') return msg;
   return msg
     .replace(new RegExp('(postgres(?:ql)?:\\/\\/[^:]+:)[^@]+(@)', 'gi'), '$1***$2')
-    .replace(/(bearer\s+)[a-zA-Z0-9._\-]+/gi, '$1***')
+    .replace(/(bearer\s+)[a-zA-Z0-9._-]+/gi, '$1***')
     .replace(/("password"|"secret"|"token"|"apiKey"|"jwt")\s*:\s*"[^"]+"/gi, '$1: "***"');
 }
 

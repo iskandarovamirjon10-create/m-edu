@@ -150,6 +150,15 @@ export class PaymentQuery extends SearchQuery {
 
   @ApiPropertyOptional() @IsOptional() @IsString()
   shiftId?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  sort?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  from?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  to?: string;
 }
 
 export class ExpenseQuery extends SearchQuery {
@@ -230,6 +239,12 @@ export class AttendanceQuery extends PaginationQuery {
 
   @ApiPropertyOptional() @IsOptional() @IsString()
   override status?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  source?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  sort?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString()
   date?: string;

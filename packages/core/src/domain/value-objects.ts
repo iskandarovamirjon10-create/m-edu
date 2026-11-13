@@ -99,9 +99,10 @@ export class FaceEmbedding {
     }
 
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denominator === 0) return 0;
+    if (denominator === 0 || !Number.isFinite(denominator)) return 0;
 
     const result = dotProduct / denominator;
+    if (!Number.isFinite(result) || Number.isNaN(result)) return 0;
     return Math.min(1, Math.max(-1, result));
   }
 }

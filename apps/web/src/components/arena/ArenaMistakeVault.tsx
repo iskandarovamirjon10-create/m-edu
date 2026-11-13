@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import request from '@/lib/api';
+import type { ArenaQuestionItem } from './ArenaQuestionsStudio';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useTelegram } from '@/hooks/useTelegram';
 import '@/styles/arena-liquid.css';
@@ -52,7 +53,10 @@ export function ArenaMistakeVault() {
   const { haptic } = useTelegram();
 
   // Load real approved questions from DB to serve as curriculum practice bank
-  const { data: practiceBankResp, isLoading: bankLoading } = useQuery<{ items: any[]; total: number }>({
+  const { data: practiceBankResp, isLoading: bankLoading } = useQuery<{
+    items: ArenaQuestionItem[];
+    total: number;
+  }>({
     queryKey: ['arena-mistakes-practice-bank'],
     queryFn: () => request('/arena/questions?status=APPROVED&limit=40'),
     staleTime: 60_000,
@@ -93,7 +97,7 @@ export function ArenaMistakeVault() {
   const dbPracticeItems = useMemo<VaultMistakeItem[]>(() => {
     if (!practiceBankResp?.items) return [];
     return practiceBankResp.items.map((q) => {
-      const correctOpt = q.options?.find((o: any) => o.isCorrect);
+      const correctOpt = q.options.find((o) => o.isCorrect);
       return {
         id: `db-q-${q.id}`,
         questionId: q.id,
@@ -101,7 +105,7 @@ export function ArenaMistakeVault() {
         subjectName: SUBJECT_NAMES[q.subjectCategory] || q.subjectCategory,
         difficulty: q.difficulty,
         questionText: q.questionText,
-        options: (q.options || []).map((o: any) => ({
+        options: q.options.map((o) => ({
           optionKey: o.optionKey,
           optionText: o.optionText,
           isCorrect: o.isCorrect,
@@ -465,7 +469,7 @@ export function ArenaMistakeVault() {
 
                 <button
                   onClick={closeDrill}
-                  className="w-8 h-8 rounded-full arena-inset flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold"
+                  aria-label="Yopish" className="w-9 h-9 min-h-[44px] min-w-[44px] rounded-full arena-inset flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold"
                 >
                   ✕
                 </button>

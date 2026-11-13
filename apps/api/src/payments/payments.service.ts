@@ -652,6 +652,19 @@ export class PaymentsService {
     if (query.status) {
       where.status = query.status as Prisma.PaymentWhereInput['status'];
     }
+    if (query.from || query.to) {
+      where.createdAt = {};
+      if (query.from) {
+        where.createdAt.gte = new Date(query.from);
+      }
+      if (query.to) {
+        const toDate = new Date(query.to);
+        if (query.to.length === 10) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+        where.createdAt.lte = toDate;
+      }
+    }
     if (query.search) {
       where.OR = [
         { reference: { contains: query.search, mode: 'insensitive' } },
@@ -676,6 +689,17 @@ export class PaymentsService {
       ];
     }
 
+    let orderBy: Prisma.PaymentOrderByWithRelationInput = { createdAt: 'desc' };
+    if (query.sort === 'date-asc') {
+      orderBy = { createdAt: 'asc' };
+    } else if (query.sort === 'amount-desc') {
+      orderBy = { amount: 'desc' };
+    } else if (query.sort === 'amount-asc') {
+      orderBy = { amount: 'asc' };
+    } else if (query.sort === 'student-asc') {
+      orderBy = { student: { user: { lastName: 'asc' } } };
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.payment.findMany({
         where,
@@ -690,7 +714,7 @@ export class PaymentsService {
             select: { id: true, status: true, openedAt: true, closedAt: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
@@ -698,6 +722,100 @@ export class PaymentsService {
     ]);
 
     return { items, total, page, limit, totalPages: Math.ceil(total / (limit || 1)) };
+  }
+
+  /**
+   * Retrieves aggregate whole-database summary metrics scoped to organization and query filters.
+   */
+  public async getSummary(organizationId: string, query: PaymentQuery) {
+    if (!organizationId?.trim()) {
+      throw new BadRequestException('Organization ID is required');
+    }
+    const where: Prisma.PaymentWhereInput = { organizationId };
+
+    if (query.studentId) where.studentId = query.studentId;
+    if (query.receivedById) where.receivedById = query.receivedById;
+    if (query.shiftId) where.shiftId = query.shiftId;
+    if (query.method) where.method = query.method;
+    if (query.status) {
+      where.status = query.status as Prisma.PaymentWhereInput['status'];
+    }
+    if (query.from || query.to) {
+      where.createdAt = {};
+      if (query.from) where.createdAt.gte = new Date(query.from);
+      if (query.to) {
+        const toDate = new Date(query.to);
+        if (query.to.length === 10) toDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = toDate;
+      }
+    }
+    if (query.search) {
+      where.OR = [
+        { reference: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+        {
+          student: {
+            user: {
+              OR: [
+                { firstName: { contains: query.search, mode: 'insensitive' } },
+                { lastName: { contains: query.search, mode: 'insensitive' } },
+                { email: { contains: query.search, mode: 'insensitive' } },
+                { phone: { contains: query.search, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+        {
+          student: {
+            parentPhone: { contains: query.search, mode: 'insensitive' },
+          },
+        },
+      ];
+    }
+
+    const [totalCount, paidGroup, pendingGroup, overdueGroup, cancelledGroup] = await Promise.all([
+      this.prisma.payment.count({ where }),
+      this.prisma.payment.aggregate({
+        where: { ...where, status: PaymentStatus.PAID },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { ...where, status: PaymentStatus.PENDING },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { ...where, status: PaymentStatus.OVERDUE },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { ...where, status: PaymentStatus.CANCELLED },
+        _sum: { amount: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    const totalCollected = Number(paidGroup._sum?.amount ?? 0);
+    const totalPending = Number(pendingGroup._sum?.amount ?? 0);
+    const totalFailed = Number(overdueGroup._sum?.amount ?? 0);
+    const totalCancelled = Number(cancelledGroup._sum?.amount ?? 0);
+    const totalAmount = totalCollected + totalPending;
+    const collectionRate = totalAmount > 0 ? Math.round((totalCollected / totalAmount) * 100) : 100;
+
+    return {
+      totalCount,
+      paidCount: paidGroup._count?.id ?? 0,
+      pendingCount: pendingGroup._count?.id ?? 0,
+      failedCount: overdueGroup._count?.id ?? 0,
+      cancelledCount: cancelledGroup._count?.id ?? 0,
+      totalCollected,
+      totalPending,
+      totalFailed,
+      totalCancelled,
+      collectionRate,
+    };
   }
 
   /**

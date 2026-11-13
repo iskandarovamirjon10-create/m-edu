@@ -28,6 +28,12 @@ interface RealGroupItem {
   course?: { name: string };
 }
 
+interface ArenaLeaderboardRow {
+  studentId: string;
+  name: string;
+  winRate: number;
+}
+
 interface RealSubmission {
   id: string;
   studentId: string;
@@ -50,11 +56,13 @@ export function ArenaTeacherChallengeModal({
   const [activeTab, setActiveTab] = useState<'CREATE' | 'SUBMISSIONS'>('CREATE');
   const [subject, setSubject] = useState<string>('MATHEMATICS');
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
-  const [generatedPin, setGeneratedPin] = useState<string>('TASK-7842');
+  const [generatedPin, setGeneratedPin] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
 
   // Load real groups from organization
-  const { data: groupsData, isLoading: groupsLoading } = useQuery<any>({
+  const { data: groupsData, isLoading: groupsLoading } = useQuery<
+    RealGroupItem[] | { items: RealGroupItem[] }
+  >({
     queryKey: ['arena-teacher-real-groups'],
     queryFn: () => request('/groups'),
     enabled: isOpen,
@@ -69,7 +77,7 @@ export function ArenaTeacherChallengeModal({
   }, [groupsData]);
 
   // Load submissions from leaderboard or challenge results
-  const { data: leaderboardData } = useQuery<any[]>({
+  const { data: leaderboardData } = useQuery<ArenaLeaderboardRow[]>({
     queryKey: ['arena-teacher-submissions-real'],
     queryFn: () => request('/arena/profiles/leaderboard?limit=10'),
     enabled: isOpen,
@@ -142,7 +150,7 @@ export function ArenaTeacherChallengeModal({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full arena-inset flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold"
+            aria-label="Yopish" className="w-9 h-9 min-h-[44px] min-w-[44px] rounded-full arena-inset flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold"
           >
             <X className="w-4 h-4" />
           </button>

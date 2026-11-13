@@ -356,7 +356,8 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
 
     const handleOutsideClick = (event: MouseEvent | PointerEvent) => {
       if (Date.now() - openTimeRef.current < 350) return;
-      const target = event.target as Node;
+      if (!(event.target instanceof Node)) return;
+      const target = event.target;
       if (
         rootRef.current &&
         !rootRef.current.contains(target) &&
@@ -379,7 +380,9 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
   }, [close, open]);
 
   const data = notifications.data as NotificationResponse | undefined;
-  const allItems = data?.items ?? [];
+  // Barqaror referens: `?? []` har renderda yangi massiv qaytarib, useMemo'ni
+  // behuda qayta hisoblashga sabab bo‘lardi.
+  const allItems = useMemo(() => data?.items ?? [], [data?.items]);
   const unreadCount = data?.unread ?? 0;
   const previousUnreadRef = useRef<number | null>(null);
 
@@ -528,7 +531,7 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
                     type="button"
                     disabled={markAllRead.isPending}
                     onClick={() => markAllRead.mutate()}
-                    className="group flex min-h-[36px] items-center gap-1.5 px-2 py-1 rounded-lg text-[12px] font-semibold text-[#007AFF] dark:text-[#0A84FF] transition-all hover:bg-[#007AFF]/10 dark:hover:bg-[#0A84FF]/15 disabled:opacity-50"
+                    className="group flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold text-[#007AFF] dark:text-[#0A84FF] transition-all hover:bg-[#007AFF]/10 dark:hover:bg-[#0A84FF]/15 disabled:opacity-50"
                   >
                     {markAllRead.isPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -550,7 +553,7 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
                       setFilter('all');
                     }}
                     className={[
-                      'relative flex-1 min-h-[34px] rounded-lg py-1 text-[12px] font-semibold transition-all duration-150 outline-none',
+                      'relative flex-1 min-h-[38px] rounded-xl py-1.5 text-[12px] font-semibold transition-all duration-150 outline-none',
                       filter === 'all'
                         ? 'bg-white dark:bg-[#2C2C2E] text-slate-900 dark:text-white shadow-sm'
                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white',
@@ -567,7 +570,7 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
                       setFilter('unread');
                     }}
                     className={[
-                      'relative flex-1 min-h-[34px] rounded-lg py-1 text-[12px] font-semibold transition-all duration-150 outline-none',
+                      'relative flex-1 min-h-[38px] rounded-xl py-1.5 text-[12px] font-semibold transition-all duration-150 outline-none',
                       filter === 'unread'
                         ? 'bg-white dark:bg-[#2C2C2E] text-slate-900 dark:text-white shadow-sm'
                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white',
@@ -648,7 +651,7 @@ export function NotificationsMenu({ size = 'md' }: { size?: 'sm' | 'md' } = {}) 
                 <Link
                   to="/notifications"
                   onClick={close}
-                  className="group flex min-h-[36px] items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-[#007AFF] dark:text-[#0A84FF] transition-all hover:bg-[#007AFF]/10 dark:hover:bg-[#0A84FF]/15"
+                  className="group flex min-h-[44px] items-center gap-1 px-3 py-1.5 rounded-xl text-[12px] font-semibold text-[#007AFF] dark:text-[#0A84FF] transition-all hover:bg-[#007AFF]/10 dark:hover:bg-[#0A84FF]/15"
                 >
                   <span>{t('common.viewAll') || "To'liq sahifada ochish"}</span>
                   <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />

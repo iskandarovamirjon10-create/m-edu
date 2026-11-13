@@ -42,6 +42,11 @@ export interface WebcamCaptureProps {
   onAutoScanToggle?: () => void;
   showAutoScanToggle?: boolean;
   isKiosk?: boolean;
+  /** When true, suppresses internal corner brackets and reticle to prevent collision with custom TrueDepth HUDs */
+  hideViewfinderOverlay?: boolean;
+  modeVariant?: 'recognition' | 'enrollment' | 'default';
+  /** Optional custom overlays to render directly inside the biometric viewport */
+  children?: React.ReactNode;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -305,6 +310,9 @@ export function WebcamCapture({
   onAutoScanToggle,
   showAutoScanToggle = false,
   isKiosk = false,
+  hideViewfinderOverlay = false,
+  modeVariant: _modeVariant = 'default',
+  children,
 }: WebcamCaptureProps) {
   const { t } = useSafeI18n();
   const { playTick, playShutter } = usePremiumSound();
@@ -588,58 +596,70 @@ export function WebcamCapture({
         </div>
 
         {/* ── Viewfinder ── */}
-        {status === 'ready' && cameraOn && (
+        {status === 'ready' && cameraOn && !hideViewfinderOverlay && (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
             <div
               className={[
-                'relative flex items-center justify-center transition-all duration-300 ease-out',
-                isKiosk ? 'w-52 h-52 sm:w-72 sm:h-72' : 'w-44 h-44 sm:w-64 sm:h-64',
+                'relative flex items-center justify-center transition-all duration-500 ease-out',
+                isKiosk ? 'w-56 h-56 sm:w-80 sm:h-80' : 'w-48 h-48 sm:w-72 sm:h-72',
               ].join(' ')}
             >
-              {/* Frame guide */}
+              {/* Apple Ambient Dynamic Glow */}
               <div
                 className={[
-                  'absolute inset-0 rounded-[2.25rem] sm:rounded-[2.75rem] border transition-colors duration-300',
+                  'absolute -inset-4 rounded-[3.25rem] transition-all duration-700',
                   isScanningActive
-                    ? 'border-blue-500/50 bg-blue-500/[0.04]'
-                    : 'border-white/25 bg-white/[0.01]',
+                    ? 'opacity-100 shadow-[0_0_60px_rgba(34,211,238,0.35),inset_0_0_40px_rgba(37,99,235,0.25)]'
+                    : 'opacity-40 shadow-[0_0_30px_rgba(255,255,255,0.08)]',
                 ].join(' ')}
               />
-
-              {/* Corner brackets */}
+              {/* Apple TrueDepth Smooth Rounded Bezel */}
+              <div
+                className={[
+                  'absolute inset-0 rounded-[2.75rem] sm:rounded-[3.25rem] border transition-all duration-500 backdrop-blur-[2px]',
+                  isScanningActive
+                    ? 'border-cyan-400/80 bg-cyan-500/[0.04] shadow-[0_0_25px_rgba(34,211,238,0.4)]'
+                    : 'border-white/30 bg-white/[0.015] shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]',
+                ].join(' ')}
+              />
+              {/* Scanning Laser Mesh Sweep */}
+              {isScanningActive && !reduced && (
+                <motion.div
+                  initial={{ y: '-100%', opacity: 0 }}
+                  animate={{ y: ['-100%', '100%'], opacity: [0, 0.9, 0] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                  className="pointer-events-none absolute inset-x-4 h-1 rounded-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee]"
+                />
+              )}
               <CornerBrackets active={isScanningActive} />
-
-              {/* Central Face guide glyph */}
               <div className="relative flex flex-col items-center justify-center select-none">
                 <motion.svg
                   viewBox="0 0 48 48"
                   className={[
-                    'w-14 h-14 sm:w-16 sm:h-16 transition-colors duration-300',
-                    isScanningActive
-                      ? 'text-blue-400'
-                      : 'text-white/30',
+                    'w-16 h-16 sm:w-20 sm:h-20 transition-all duration-300 drop-shadow-md',
+                    isScanningActive ? 'text-cyan-400' : 'text-white/40',
                   ].join(' ')}
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2.25"
+                  strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   animate={
                     isScanningActive && !reduced
-                      ? { scale: [0.98, 1.02, 0.98], opacity: [0.85, 1, 0.85] }
-                      : { scale: 1, opacity: 0.35 }
+                      ? { scale: [0.98, 1.04, 0.98], opacity: [0.85, 1, 0.85] }
+                      : { scale: 1, opacity: 0.45 }
                   }
                   transition={{ duration: 1.5, repeat: isScanningActive ? Infinity : 0, ease: 'easeInOut' }}
                   aria-hidden
                 >
-                  <line x1="16" y1="18" x2="16" y2="21" strokeWidth="3" />
-                  <line x1="32" y1="18" x2="32" y2="21" strokeWidth="3" />
-                  <path d="M24 22v4l-2 1" strokeWidth="2" />
-                  <path d="M16 32c2 3.5 14 3.5 16 0" strokeWidth="2.5" />
+                  <circle cx="24" cy="24" r="19" strokeWidth="1.5" strokeDasharray="4 3" className={isScanningActive ? 'animate-spin' : ''} style={{ animationDuration: '12s' }} />
+                  <line x1="17" y1="19" x2="17" y2="22" strokeWidth="3" />
+                  <line x1="31" y1="19" x2="31" y2="22" strokeWidth="3" />
+                  <path d="M24 22v5l-2 1" strokeWidth="2.25" />
+                  <path d="M17 33c2.5 3 11.5 3 14 0" strokeWidth="2.5" />
                 </motion.svg>
               </div>
             </div>
-
             {/* Guidance pill */}
             <div className="absolute bottom-3 inset-x-0 flex justify-center">
               <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/60 px-3.5 py-1.5 backdrop-blur-md shadow-md">
@@ -774,6 +794,8 @@ export function WebcamCapture({
           </div>
         )}
       </div>
+        {/* Custom biometric viewport overlays */}
+        {children}
 
       {/* ═══════════════════════════════════════════════════════
           CONTROLS
@@ -819,36 +841,37 @@ export function WebcamCapture({
               )}
 
               {/* Shutter */}
-              <button
+              <motion.button
                 type="button"
                 onClick={handleCapture}
                 disabled={status !== 'ready' || busy || isCapturing}
                 title={label || t('face.captureFace', 'Scan face')}
                 aria-label={label || t('face.captureFace', 'Scan face')}
+                whileTap={reduced ? undefined : { scale: 0.92 }}
                 className={[
-                  'group relative flex h-16 w-16 items-center justify-center rounded-full',
-                  'border-4 border-white/40 bg-white/10 shadow-md backdrop-blur-md',
-                  'outline-none transition-all duration-200',
-                  'hover:border-white/70 focus-visible:ring-2 focus-visible:ring-blue-500/60',
-                  'active:scale-95 disabled:cursor-not-allowed disabled:opacity-40',
-                  'sm:h-20 sm:w-20',
+                  'group relative flex h-20 w-20 items-center justify-center rounded-full p-1.5',
+                  'border-2 border-white/50 bg-white/10 dark:border-white/25 dark:bg-black/30',
+                  'shadow-[0_16px_40px_-10px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.4)]',
+                  'backdrop-blur-2xl outline-none transition-all duration-300',
+                  'hover:border-white/80 focus-visible:ring-2 focus-visible:ring-cyan-400/60',
+                  'disabled:cursor-not-allowed disabled:opacity-40',
                 ].join(' ')}
               >
                 <div
                   className={[
-                    'flex items-center justify-center rounded-full transition-all duration-200',
+                    'flex h-full w-full items-center justify-center rounded-full transition-all duration-300',
                     isScanningActive
-                      ? 'h-10 w-10 bg-blue-600 shadow-md'
-                      : 'h-12 w-12 bg-white shadow-sm group-hover:scale-95 sm:h-14 sm:w-14',
+                      ? 'bg-gradient-to-tr from-cyan-500 to-blue-600 shadow-[0_0_24px_rgba(34,211,238,0.7)]'
+                      : 'bg-white shadow-[0_4px_16px_rgba(0,0,0,0.2),inset_0_-2px_4px_rgba(0,0,0,0.1)] group-hover:scale-95',
                   ].join(' ')}
                 >
                   {isScanningActive ? (
-                    <Spinner size={20} />
+                    <Spinner size={24} />
                   ) : (
-                    <span className="h-6 w-6 rounded-full border-2 border-slate-300" aria-hidden />
+                    <div className="h-7 w-7 rounded-full border-2 border-slate-300/80 bg-slate-50 transition-transform group-hover:scale-90" aria-hidden />
                   )}
                 </div>
-              </button>
+              </motion.button>
             </div>
 
             <span className="select-none text-center text-[12px] font-semibold tracking-tight text-[var(--text-muted)]">

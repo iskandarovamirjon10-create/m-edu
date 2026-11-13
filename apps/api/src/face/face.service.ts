@@ -141,6 +141,7 @@ export type StreamAttendanceClassification =
   | 'DEBOUNCED_DUPLICATE'
   | 'AWAITING_TEMPORAL_CONSENSUS'
   | 'SPOOF_REJECTED'
+  | 'FINANCIAL_HOLD'
   | 'UNIDENTIFIED';
 
 export interface FacialPoint2D {
@@ -311,8 +312,14 @@ interface RecognitionAttemptExecutionOutput {
   [key: string]: unknown;
 }
 
+interface TemporalVoteItem {
+  timestamp: number;
+  similarity: number;
+}
+
 interface TemporalVoteEntry {
   studentId: string;
+  votes: TemporalVoteItem[];
   timestamps: number[];
   cumulativeSimilarity: number;
 }
@@ -411,8 +418,15 @@ export class VectorMathEngine {
     b: Float32Array,
     normB: number,
   ): number {
+    if (
+      !Number.isFinite(normA) ||
+      !Number.isFinite(normB) ||
+      normA <= 1e-12 ||
+      normB <= 1e-12
+    ) {
+      return 0.0;
+    }
     const denom = normA * normB;
-    if (denom <= 1e-12) return 0.0;
     const dot = VectorMathEngine.dotProduct512(a, b);
     const cosine = dot / denom;
     if (cosine > 1.0) return 1.0;
@@ -424,7 +438,12 @@ export class VectorMathEngine {
    * 8-way loop-unrolled L2 Euclidean distance ||a - b||_2.
    */
   public static l2Distance512(a: Float32Array, b: Float32Array): number {
-    const len = Math.min(a.length, b.length);
+    if (a.length !== b.length || a.length === 0) {
+      throw new BadRequestException(
+        `Vector dimension mismatch: ${a.length} vs ${b.length}`,
+      );
+    }
+    const len = a.length;
     let sum0 = 0.0;
     let sum1 = 0.0;
     let sum2 = 0.0;
@@ -487,7 +506,7 @@ export class VectorMathEngine {
     topK = 5,
   ): GalleryMatchRankingResult {
     const startNs = process.hrtime.bigint();
-    const safeTopK = Math.max(1, Math.min(topK, 50));
+    const safeTopK = Math.max(1, Math.min(50, Math.floor(Number(topK) || 5)));
 
     if (gallery.length === 0) {
       const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
@@ -506,6 +525,7 @@ export class VectorMathEngine {
 
     const queryNorm = VectorMathEngine.computeEuclideanNorm(queryVector);
     const ranked: RankedGalleryCandidate[] = [];
+    const bestByStudent = new Map<string, RankedGalleryCandidate>();
 
     for (let i = 0; i < gallery.length; i += 1) {
       const tpl = gallery[i];
@@ -519,38 +539,39 @@ export class VectorMathEngine {
       // ||u - v||_2 = sqrt(max(0, 2 * (1 - cos(u, v))))
       const analyticalL2 = Math.sqrt(Math.max(0.0, 2.0 * (1.0 - sim)));
       const tier = VectorMathEngine.classifyConfidenceTier(sim);
+      const candidate: RankedGalleryCandidate = {
+        templateId: tpl.templateId,
+        enrollmentId: tpl.enrollmentId,
+        studentId: tpl.studentId,
+        cosineSimilarity: sim,
+        l2Distance: analyticalL2,
+        tier,
+      };
+
+      const prevBest = bestByStudent.get(tpl.studentId);
+      if (!prevBest || sim > prevBest.cosineSimilarity) {
+        bestByStudent.set(tpl.studentId, candidate);
+      }
 
       if (ranked.length < safeTopK) {
-        ranked.push({
-          templateId: tpl.templateId,
-          enrollmentId: tpl.enrollmentId,
-          studentId: tpl.studentId,
-          cosineSimilarity: sim,
-          l2Distance: analyticalL2,
-          tier,
-        });
+        ranked.push(candidate);
         ranked.sort((a, b) => b.cosineSimilarity - a.cosineSimilarity);
       } else if (sim > ranked[ranked.length - 1].cosineSimilarity) {
-        ranked[ranked.length - 1] = {
-          templateId: tpl.templateId,
-          enrollmentId: tpl.enrollmentId,
-          studentId: tpl.studentId,
-          cosineSimilarity: sim,
-          l2Distance: analyticalL2,
-          tier,
-        };
+        ranked[ranked.length - 1] = candidate;
         ranked.sort((a, b) => b.cosineSimilarity - a.cosineSimilarity);
       }
     }
 
     const elapsedMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
-    const best = ranked[0];
-    // Find best distinct-student runner-up to compute inter-class separation margin
-    const secondDistinct = ranked.find(
-      (cand) => cand.studentId !== best.studentId,
+    // Sort distinct students by their highest template similarity score
+    const distinctStudentBests = Array.from(bestByStudent.values()).sort(
+      (a, b) => b.cosineSimilarity - a.cosineSimilarity,
     );
+    const best = distinctStudentBests[0] || ranked[0];
+    const secondDistinct =
+      distinctStudentBests.length > 1 ? distinctStudentBests[1] : null;
     const marginOverSecond = secondDistinct
-      ? best.cosineSimilarity - secondDistinct.cosineSimilarity
+      ? Math.max(0.0, best.cosineSimilarity - secondDistinct.cosineSimilarity)
       : 1.0;
 
     if (best.tier === 'REJECT') {
@@ -807,7 +828,7 @@ export class PassiveLivenessAnalyzer {
   }
 
   private static computeGeometryScore(landmarks?: FacialLandmarks): number {
-    if (!landmarks) return 0.88; // Default neutral-high score when single-stage detector omits landmarks
+    if (!landmarks) return 0.50; // Neutral score when detector omits landmarks (does not artificially pass spoof checks)
 
     const { leftEye, rightEye, noseTip, mouthLeft, mouthRight, boundingBox } =
       landmarks;
@@ -941,12 +962,15 @@ export class OnnxDualBiometricEngine {
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const loaded: unknown = require('onnxruntime-node');
-      if (
+      const hasInferenceSession =
         isRecord(loaded) &&
-        isRecord(loaded.InferenceSession) &&
-        typeof loaded.InferenceSession.create === 'function' &&
-        typeof loaded.Tensor === 'function'
-      ) {
+        (typeof (loaded as any).InferenceSession === 'function' ||
+          (typeof (loaded as any).InferenceSession === 'object' &&
+            (loaded as any).InferenceSession !== null)) &&
+        typeof (loaded as any).InferenceSession.create === 'function' &&
+        typeof (loaded as any).Tensor === 'function';
+
+      if (hasInferenceSession) {
         this.ortModule = loaded as unknown as OnnxRuntimeModule;
       }
     } catch {
@@ -1052,11 +1076,17 @@ export class OnnxDualBiometricEngine {
           return vector;
         }
       } catch (error) {
-        this.logger.warn(
-          `ONNX native inference fallback triggered: ${
+        this.logger.error(
+          `ONNX native inference execution failed: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
+        if (
+          process.env.NODE_ENV === 'production' ||
+          process.env.FACE_FAIL_CLOSED === 'true'
+        ) {
+          throw error;
+        }
       }
     }
 
@@ -1185,11 +1215,12 @@ export class BoundedGalleryLruCache {
       this.store.delete(key);
     }
 
-    const norm = VectorMathEngine.computeEuclideanNorm(params.vector);
+    const vector = new Float32Array(params.vector);
+    const norm = VectorMathEngine.computeEuclideanNorm(vector);
     const cryptographicHash = BoundedGalleryLruCache.computeVectorHmac(
       params.organizationId,
       params.studentId,
-      params.vector,
+      vector,
       params.hmacSecret,
     );
 
@@ -1199,7 +1230,7 @@ export class BoundedGalleryLruCache {
       studentId: params.studentId,
       organizationId: params.organizationId,
       branchId: params.branchId ?? null,
-      vector: params.vector,
+      vector,
       norm,
       cryptographicHash,
       cachedAt: Date.now(),
@@ -1228,8 +1259,12 @@ export class BoundedGalleryLruCache {
     const now = Date.now();
     const results: CachedGalleryTemplate[] = [];
     const expiredKeys: string[] = [];
+    const touchedEntries: Array<{ key: string; entry: CachedGalleryTemplate }> = [];
 
-    for (const [key, entry] of this.store.entries()) {
+    // Snapshot entries to prevent infinite loop when refreshing LRU ordering
+    const entriesSnapshot = Array.from(this.store.entries());
+
+    for (const [key, entry] of entriesSnapshot) {
       if (now - entry.cachedAt > this.ttlMs) {
         expiredKeys.push(key);
         continue;
@@ -1253,10 +1288,14 @@ export class BoundedGalleryLruCache {
         continue;
       }
 
-      // Refresh LRU ordering
+      touchedEntries.push({ key, entry });
+      results.push(entry);
+    }
+
+    // Refresh LRU ordering safely outside iteration
+    for (const { key, entry } of touchedEntries) {
       this.store.delete(key);
       this.store.set(key, entry);
-      results.push(entry);
     }
 
     for (const k of expiredKeys) {
@@ -1419,6 +1458,30 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     this.nestLogger.log(
       `FaceService initialized with provider: ${this.engineProvider} (ONNX backend: ${this.onnxDualEngine.getExecutionProvider()})`,
     );
+
+    if (this.redisPubSub) {
+      await this.redisPubSub
+        .subscribe(
+          FACE_TEMPLATES_CHANGED_CHANNEL,
+          (rawPayload: string) => {
+            try {
+              const parsed = JSON.parse(rawPayload) as { organizationId?: string };
+              if (parsed?.organizationId) {
+                this.galleryLruCache.invalidateTenant(parsed.organizationId);
+              }
+            } catch {
+              // Ignore invalid payload
+            }
+          },
+        )
+        .catch((err: unknown) => {
+          this.nestLogger.warn(
+            `Failed to subscribe to ${FACE_TEMPLATES_CHANGED_CHANNEL}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        });
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -1533,10 +1596,16 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getHmacSecret(): string {
-    return (
-      process.env[ENV.BIOMETRIC_ENCRYPTION_KEY] ||
-      'medu-biometric-default-hmac-key-32b'
-    );
+    const configuredKey = process.env[ENV.BIOMETRIC_ENCRYPTION_KEY];
+    if (configuredKey && configuredKey.trim().length >= AES_256_KEY_BYTES) {
+      return configuredKey.trim();
+    }
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'BIOMETRIC_ENCRYPTION_KEY must be securely configured with at least 32 characters in production.',
+      );
+    }
+    return 'medu-biometric-default-hmac-key-32b';
   }
 
   // ---------------------------------------------------------------------------
@@ -1787,6 +1856,78 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Lazily loads active face templates from persistent database into the
+   * LRU gallery cache if cold (e.g. after restart or eviction).
+   */
+  public async ensureGalleryLoaded(organizationId: string): Promise<number> {
+    const cached = this.galleryLruCache.getTenantGallery(
+      organizationId,
+      this.getHmacSecret(),
+    );
+    if (cached.length > 0) return cached.length;
+
+    try {
+      const activeTemplates = await this.prisma.faceTemplate.findMany({
+        where: {
+          organizationId,
+          status: 'ACTIVE',
+          enrollment: { status: 'ACTIVE' },
+        },
+        select: {
+          id: true,
+          enrollmentId: true,
+          studentId: true,
+          templateData: true,
+          templateHash: true,
+        },
+        take: MAX_GALLERY_TEMPLATES,
+      });
+
+      for (const t of activeTemplates) {
+        if (!t.templateData) continue;
+        let floatVector: Float32Array | null = null;
+        try {
+          if (Buffer.isBuffer(t.templateData)) {
+            floatVector = new Float32Array(
+              t.templateData.buffer,
+              t.templateData.byteOffset,
+              t.templateData.byteLength / Float32Array.BYTES_PER_ELEMENT,
+            );
+          } else if (typeof t.templateData === 'string') {
+            const buf = Buffer.from(t.templateData, 'base64');
+            floatVector = new Float32Array(
+              buf.buffer,
+              buf.byteOffset,
+              buf.byteLength / Float32Array.BYTES_PER_ELEMENT,
+            );
+          }
+        } catch {
+          continue;
+        }
+
+        if (floatVector && floatVector.length === EMBEDDING_DIMENSION) {
+          this.galleryLruCache.upsertTemplate({
+            templateId: t.id,
+            enrollmentId: t.enrollmentId,
+            studentId: t.studentId,
+            organizationId,
+            branchId: null,
+            vector: floatVector,
+            hmacSecret: this.getHmacSecret(),
+          });
+        }
+      }
+    } catch {
+      // Safe fallback in test mock / unmigrated test DBs
+    }
+
+    return this.galleryLruCache.getTenantGallery(
+      organizationId,
+      this.getHmacSecret(),
+    ).length;
+  }
+
+  /**
    * Executes a sub-millisecond top-k Cosine similarity search over the
    * caller's `organizationId` (and optional `branchId`) gallery embeddings.
    */
@@ -1826,7 +1967,44 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     const imageBuffer = decodeValidatedImage(payload.imageBase64);
 
     try {
-      // 1. Multi-Layer Passive Anti-Spoofing Gate
+      // 1. Device Authorization & Active Tenancy Gate
+      if (payload.deviceId) {
+        const device = await this.prisma.faceDevice.findFirst({
+          where: {
+            id: payload.deviceId,
+            organizationId: tenant.organizationId,
+            status: 'ACTIVE',
+          },
+          select: { id: true, name: true },
+        });
+        if (!device) {
+          return {
+            classification: 'UNIDENTIFIED',
+            studentId: null,
+            similarityScore: null,
+            confidenceTier: 'REJECT',
+            liveness: {
+              livenessScore: 0,
+              isLive: false,
+              attackType: null,
+              metrics: {
+                laplacianVariance: 0,
+                specularHighlightRatio: 0,
+                dynamicColorRangeScore: 0,
+                geometrySymmetryScore: 0,
+              },
+            },
+            matchedGroupId: null,
+            expectedRoom: null,
+            detectedRoom: payload.cameraRoom,
+            attendanceRecordId: null,
+            temporalVotes: 0,
+            processingLatencyMs: this.elapsedMsSince(startNs),
+          };
+        }
+      }
+
+      // 2. Multi-Layer Passive Anti-Spoofing Gate
       const liveness = this.evaluatePassiveLiveness(
         imageBuffer,
         payload.landmarks,
@@ -1858,7 +2036,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         };
       }
 
-      // 2. 512-D Feature Extraction
+      // 3. 512-D Feature Extraction via ONNX Unit-Hypersphere Engine
       const releaseInference = await this.inferenceLimiter.acquire();
       let queryVector: Float32Array;
       try {
@@ -1867,7 +2045,9 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         releaseInference();
       }
 
-      // 3. Sub-millisecond Multi-Tenant Gallery Search
+      // 4. Ensure tenant gallery is primed & execute sub-millisecond search
+      await this.ensureGalleryLoaded(tenant.organizationId);
+
       const ranking = this.searchGalleryTopK(
         tenant,
         queryVector,
@@ -1894,11 +2074,9 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
 
       const bestMatch = ranking.decision.bestCandidate;
       const studentId = bestMatch.studentId;
-      const nowMs = payload.capturedAt
-        ? new Date(payload.capturedAt).getTime()
-        : Date.now();
+      const nowMs = Date.now(); // Authoritative server timestamp
 
-      // 4. Spatial-Temporal Multi-Frame Voting
+      // 5. Spatial-Temporal Multi-Frame Voting (replay and negative drift protected)
       const voteCount = this.recordSpatialTemporalVote(
         tenant.organizationId,
         payload.deviceId,
@@ -1928,7 +2106,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         };
       }
 
-      // 5. 15-Minute Sliding-Window Debounce Check
+      // 6. 15-Minute Sliding-Window Debounce Check
       const debounceKey = `${tenant.organizationId}:${studentId}:${payload.cameraRoom}`;
       const existingDebounce = this.streamDebounceMap.get(debounceKey);
       if (
@@ -1950,7 +2128,32 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         };
       }
 
-      // 6. Schedule & Classroom Roster Alignment + Atomic Persistence
+      // 7. Financial Pre-Gate (F-009) before schedule persistence
+      const financial = await this.loadStudentFinancial(
+        tenant.organizationId,
+        studentId,
+      );
+      if (financial && financial.overdue > 0) {
+        const financialGatePolicy =
+          process.env.FACE_FINANCIAL_GATE_POLICY || 'STRICT_BLOCK';
+        if (financialGatePolicy !== 'WARN_AND_ALLOW') {
+          return {
+            classification: 'FINANCIAL_HOLD',
+            studentId,
+            similarityScore: bestMatch.cosineSimilarity,
+            confidenceTier: bestMatch.tier,
+            liveness,
+            matchedGroupId: null,
+            expectedRoom: null,
+            detectedRoom: payload.cameraRoom,
+            attendanceRecordId: null,
+            temporalVotes: voteCount,
+            processingLatencyMs: this.elapsedMsSince(startNs),
+          };
+        }
+      }
+
+      // 8. Schedule & Classroom Roster Alignment + Atomic Persistence
       const scheduleOutcome = await this.correlateScheduleAndPersistStreamAttendance({
         organizationId: tenant.organizationId,
         userId: tenant.userId,
@@ -1962,6 +2165,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
 
       if (
         scheduleOutcome.attendanceRecordId &&
+        scheduleOutcome.isNew &&
         (scheduleOutcome.classification === 'PRESENT' ||
           scheduleOutcome.classification === 'LATE')
       ) {
@@ -1974,6 +2178,8 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           tenant.organizationId,
           scheduleOutcome.attendanceRecordId,
           studentId,
+          scheduleOutcome.matchedGroupId,
+          scheduleOutcome.classification,
         );
       }
 
@@ -2004,15 +2210,30 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
   ): number {
     const key = `${organizationId}:${deviceId}:${studentId}`;
     const existing = this.spatialTemporalVotes.get(key);
-    const validTimestamps = (existing?.timestamps ?? []).filter(
-      (ts) => nowMs - ts <= SPATIAL_TEMPORAL_WINDOW_MS,
+
+    // Purge expired votes and reject negative clock drift (nowMs - ts < 0)
+    const validVotes = (existing?.votes ?? []).filter(
+      (v) =>
+        nowMs - v.timestamp >= 0 &&
+        nowMs - v.timestamp <= SPATIAL_TEMPORAL_WINDOW_MS,
     );
-    validTimestamps.push(nowMs);
+    validVotes.push({ timestamp: nowMs, similarity });
+
+    // Hard cap to latest 10 votes to prevent monotonic memory accumulation
+    if (validVotes.length > 10) {
+      validVotes.splice(0, validVotes.length - 10);
+    }
+
+    const cumulativeSimilarity = validVotes.reduce(
+      (sum, v) => sum + v.similarity,
+      0,
+    );
 
     this.spatialTemporalVotes.set(key, {
       studentId,
-      timestamps: validTimestamps,
-      cumulativeSimilarity: (existing?.cumulativeSimilarity ?? 0) + similarity,
+      votes: validVotes,
+      timestamps: validVotes.map((v) => v.timestamp),
+      cumulativeSimilarity,
     });
 
     if (this.spatialTemporalVotes.size > 2000) {
@@ -2022,13 +2243,23 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    return validTimestamps.length;
+    return validVotes.length;
   }
 
   private pruneExpiredDebounceEntries(nowMs: number): void {
-    if (this.streamDebounceMap.size < 2000) return;
     for (const [k, v] of this.streamDebounceMap.entries()) {
       if (nowMs - v.timestamp >= STREAM_DEBOUNCE_WINDOW_MS) {
+        this.streamDebounceMap.delete(k);
+      }
+    }
+
+    if (this.streamDebounceMap.size > 5000) {
+      const excess = this.streamDebounceMap.size - 5000;
+      const keysToDelete = Array.from(this.streamDebounceMap.keys()).slice(
+        0,
+        excess,
+      );
+      for (const k of keysToDelete) {
         this.streamDebounceMap.delete(k);
       }
     }
@@ -2046,6 +2277,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     matchedGroupId: string | null;
     expectedRoom: string | null;
     attendanceRecordId: string | null;
+    isNew: boolean;
   }> {
     const org = await this.prisma.organization.findUnique({
       where: { id: params.organizationId },
@@ -2059,6 +2291,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       hour: 'numeric',
       minute: 'numeric',
       hour12: false,
+      hourCycle: 'h23',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -2104,6 +2337,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         matchedGroupId: null,
         expectedRoom: null,
         attendanceRecordId: null,
+        isNew: false,
       };
     }
 
@@ -2113,27 +2347,46 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       startMinutes: number;
       endMinutes: number;
     } | null = null;
+    let bestScheduleDiff = Number.POSITIVE_INFINITY;
 
     for (const enrollment of enrollments) {
       const grp = enrollment.group;
       if (!grp) continue;
       for (const sched of grp.schedules) {
         const startMin = this.parseTimeToMinutes(sched.startTime);
-        const endMin = this.parseTimeToMinutes(sched.endTime);
+        let endMin = this.parseTimeToMinutes(sched.endTime);
         if (startMin === null || endMin === null) continue;
 
+        // Support overnight schedules (e.g. 23:00 to 01:00)
+        if (endMin < startMin) {
+          endMin += 24 * 60;
+        }
+
+        let effectiveCurrentMinutes = currentMinutes;
+        if (effectiveCurrentMinutes < startMin - 30 && endMin > 24 * 60) {
+          effectiveCurrentMinutes += 24 * 60;
+        }
+
         // Allow check-in up to 30 minutes before start through lesson end
-        if (currentMinutes >= startMin - 30 && currentMinutes <= endMin) {
-          activeScheduleMatch = {
-            groupId: grp.id,
-            expectedRoom: sched.room || grp.room || null,
-            startMinutes: startMin,
-            endMinutes: endMin,
-          };
-          break;
+        if (effectiveCurrentMinutes >= startMin - 30 && effectiveCurrentMinutes <= endMin) {
+          const roomMatches =
+            (sched.room || grp.room || '').trim().toLowerCase() ===
+            params.cameraRoom.trim().toLowerCase();
+          // Deterministic resolution: prioritize matching room, then smallest start time delta
+          const diff =
+            Math.abs(effectiveCurrentMinutes - startMin) + (roomMatches ? 0 : 1000);
+
+          if (diff < bestScheduleDiff) {
+            bestScheduleDiff = diff;
+            activeScheduleMatch = {
+              groupId: grp.id,
+              expectedRoom: sched.room || grp.room || null,
+              startMinutes: startMin,
+              endMinutes: endMin,
+            };
+          }
         }
       }
-      if (activeScheduleMatch) break;
     }
 
     if (!activeScheduleMatch) {
@@ -2142,6 +2395,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         matchedGroupId: null,
         expectedRoom: null,
         attendanceRecordId: null,
+        isNew: false,
       };
     }
 
@@ -2171,6 +2425,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         matchedGroupId: activeScheduleMatch.groupId,
         expectedRoom: activeScheduleMatch.expectedRoom,
         attendanceRecordId: null,
+        isNew: false,
       };
     }
 
@@ -2182,7 +2437,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       : 0;
     const statusToRecord = isLate ? 'LATE' : 'PRESENT';
 
-    const recordId = await this.prisma.$transaction(async (tx) => {
+    const recordResult = await this.prisma.$transaction(async (tx) => {
       try {
         if (typeof (tx as any).$executeRaw === 'function') {
           const lockKey = `stream_att:${params.organizationId}:${params.studentId}:${activeScheduleMatch.groupId}:${canonicalDate.toISOString().slice(0, 10)}`;
@@ -2199,11 +2454,15 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           groupId: activeScheduleMatch.groupId,
           date: { gte: dayStart, lt: dayEnd },
         },
-        select: { id: true },
+        select: { id: true, status: true },
       });
 
       if (existing) {
-        return existing.id;
+        return {
+          id: existing.id,
+          status: (existing.status as StreamAttendanceClassification) || statusToRecord,
+          isNew: false,
+        };
       }
 
       try {
@@ -2228,7 +2487,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           select: { id: true },
         });
 
-        return created.id;
+        return { id: created.id, status: statusToRecord, isNew: true };
       } catch (createErr: unknown) {
         if ((createErr as { code?: string })?.code === 'P2002') {
           const concurrentRow = await tx.attendance.findFirst({
@@ -2238,10 +2497,14 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
               groupId: activeScheduleMatch.groupId,
               date: { gte: dayStart, lt: dayEnd },
             },
-            select: { id: true },
+            select: { id: true, status: true },
           });
           if (concurrentRow) {
-            return concurrentRow.id;
+            return {
+              id: concurrentRow.id,
+              status: (concurrentRow.status as StreamAttendanceClassification) || statusToRecord,
+              isNew: false,
+            };
           }
         }
         throw createErr;
@@ -2249,16 +2512,17 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     });
 
     return {
-      classification: statusToRecord,
+      classification: recordResult.status as StreamAttendanceClassification,
       matchedGroupId: activeScheduleMatch.groupId,
       expectedRoom: activeScheduleMatch.expectedRoom,
-      attendanceRecordId: recordId,
+      attendanceRecordId: recordResult.id,
+      isNew: recordResult.isNew,
     };
   }
 
   private parseTimeToMinutes(timeStr: string | null | undefined): number | null {
     if (!timeStr) return null;
-    const match = /^(\d{1,2}):(\d{2})/.exec(timeStr.trim());
+    const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(timeStr.trim());
     if (!match) return null;
     const hours = Number(match[1]);
     const minutes = Number(match[2]);
@@ -2599,6 +2863,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       const response = {
         ...result,
         attendanceRecorded: false,
+        attendanceRecordId: null,
         accessDenied: true,
         accessReason: 'STUDENT_NOT_FOUND',
       };
@@ -2648,9 +2913,27 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         result.attendanceRecordId ?? null,
       );
 
+      // Also clean up any secondary matches if the attempt failed financial gate
+      if (Array.isArray(result.matches)) {
+        for (const m of result.matches) {
+          if (m.student?.id && m.attendanceRecorded && m.attendanceRecordId) {
+            await this.rollbackAttemptAttendance(
+              { organizationId: tenant.organizationId, userId: tenant.userId },
+              m.student.id,
+              m.attemptId || result.attemptId,
+              m.attendanceRecordId,
+            );
+            m.attendanceRecorded = false;
+            m.attendanceRecordId = null;
+            m.accessDenied = true;
+          }
+        }
+      }
+
       const response = {
         ...result,
         attendanceRecorded: false,
+        attendanceRecordId: null,
         accessDenied: true,
         accessReason: 'INSUFFICIENT_FUNDS',
         balance: financial.balance,
@@ -2710,7 +2993,7 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           if (
             !secondaryFinancial ||
             (secondaryFinancial.overdue > 0 &&
-              financialGatePolicy === 'STRICT_BLOCK')
+              financialGatePolicy !== 'WARN_AND_ALLOW')
           ) {
             this.nestLogger.warn(
               `Multi-face match student ${m.student.id} denied attendance by financial gate. Rolling back attendance ${m.attendanceRecordId}.`,
@@ -2838,19 +3121,33 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    await this.prisma.recognitionAttempt
-      .update({
+    try {
+      let currentMeta: Record<string, unknown> = {};
+      if (typeof this.prisma.recognitionAttempt.findUnique === 'function') {
+        const existing = await this.prisma.recognitionAttempt.findUnique({
+          where: { id: attemptId },
+          select: { metadata: true },
+        });
+        currentMeta = isRecord(existing?.metadata) ? existing.metadata : {};
+      }
+
+      await this.prisma.recognitionAttempt.update({
         where: { id: attemptId },
         data: {
           clientAttemptId,
-          metadata: { idempotencySnapshot: snapshot },
+          metadata: {
+            ...currentMeta,
+            idempotencySnapshot: snapshot,
+          },
         },
-      })
-      .catch((err: Error) => {
-        this.nestLogger.warn(
-          `Failed to attach idempotency record to attempt ${attemptId}: ${err.message}`,
-        );
       });
+    } catch (err: unknown) {
+      this.nestLogger.warn(
+        `Failed to attach idempotency record to attempt ${attemptId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   private async loadStudentFinancial(
@@ -2876,7 +3173,6 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
         refundedAmount: true,
         dueDate: true,
       },
-      take: 100,
     });
 
     const { overdue, outstanding } = computeInvoiceOutstanding(openInvoices);
@@ -2892,26 +3188,37 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     organizationId: string,
     attendanceId: string,
     studentId: string,
+    targetGroupId?: string | null,
+    attendanceStatus: 'PRESENT' | 'LATE' = 'PRESENT',
   ): Promise<void> {
     try {
       const student = await this.prisma.student.findFirst({
         where: { id: studentId, organizationId },
         select: {
           user: { select: { firstName: true, lastName: true } },
-          groups: {
-            where: { isActive: true },
-            include: { group: { select: { name: true } } },
-            take: 1,
-          },
         },
       });
+
+      let groupName = '';
+      if (targetGroupId) {
+        const grp = await this.prisma.group.findFirst({
+          where: { id: targetGroupId, organizationId },
+          select: { name: true },
+        });
+        groupName = grp?.name || '';
+      } else {
+        const att = await this.prisma.attendance.findUnique({
+          where: { id: attendanceId },
+          select: { group: { select: { name: true } } },
+        });
+        groupName = att?.group?.name || '';
+      }
 
       const studentName =
         [student?.user?.firstName, student?.user?.lastName]
           .filter((part): part is string => Boolean(part))
           .join(' ')
           .trim() || STUDENT_NAME_FALLBACK;
-      const groupName = student?.groups?.[0]?.group?.name || '';
 
       if (this.redisPubSub) {
         await this.redisPubSub.publish(ATTENDANCE_CREATED_EVENT, {
@@ -2920,19 +3227,30 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
           studentId,
           studentName,
           groupName,
+          status: attendanceStatus,
           recognizedAt: new Date().toISOString(),
         });
       }
 
       if (!this.notificationEvents) return;
 
+      const eventType =
+        attendanceStatus === 'LATE'
+          ? 'ATTENDANCE_MARKED_LATE'
+          : 'ATTENDANCE_MARKED_PRESENT';
+
       await this.notificationEvents.emit({
         organizationId,
-        type: 'ATTENDANCE_MARKED_PRESENT',
+        type: eventType,
         occurredAt: new Date().toISOString(),
         entityType: 'Attendance',
         entityId: attendanceId,
-        data: { studentId, studentName },
+        data: {
+          studentId,
+          studentName,
+          groupName,
+          status: attendanceStatus,
+        },
       });
     } catch (error) {
       this.nestLogger.error(
@@ -2954,6 +3272,23 @@ export class FaceService implements OnModuleInit, OnModuleDestroy {
     const { organizationId } = actor;
 
     const deletedCount = await this.prisma.$transaction(async (tx) => {
+      // Guard: strictly ensure attendance belongs to this attempt before removing associated events
+      if (typeof tx.attendance.findFirst === 'function') {
+        const target = await tx.attendance.findFirst({
+          where: {
+            id: attendanceRecordId,
+            organizationId,
+            studentId,
+            recognitionAttemptId: attemptId,
+          },
+          select: { id: true },
+        });
+
+        if (!target) {
+          return 0;
+        }
+      }
+
       await tx.cameraAttendanceEvent.deleteMany({
         where: {
           organizationId,

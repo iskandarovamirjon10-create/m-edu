@@ -101,10 +101,10 @@ export class SecurityService {
     if (query.type) {
       items = items.filter(a => a.type === query.type);
     }
-    if (query.resolved === 'true') {
+    if (query.resolved === 'true' || query.status === 'RESOLVED') {
       items = items.filter(a => a.resolvedAt !== null);
     }
-    if (query.resolved === 'false') {
+    if (query.resolved === 'false' || query.status === 'NEW' || query.status === 'UNRESOLVED') {
       items = items.filter(a => a.resolvedAt === null);
     }
 

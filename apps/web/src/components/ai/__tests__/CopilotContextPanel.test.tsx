@@ -21,8 +21,8 @@ describe('CopilotContextPanel', () => {
   );
 
   it('hides insights and suggestions when flags are false', () => {
-    (AI_FLAGS as any).insights = false;
-    (AI_FLAGS as any).suggestions = false;
+    AI_FLAGS.insights = false;
+    AI_FLAGS.suggestions = false;
     
     render(
       <CopilotContextPanel routeContext="/test" onActionClick={() => {}} />,
@@ -36,8 +36,8 @@ describe('CopilotContextPanel', () => {
   });
 
   it('shows insights and suggestions when flags are true', () => {
-    (AI_FLAGS as any).insights = true;
-    (AI_FLAGS as any).suggestions = true;
+    AI_FLAGS.insights = true;
+    AI_FLAGS.suggestions = true;
     
     render(
       <CopilotContextPanel routeContext="/test" onActionClick={() => {}} />,

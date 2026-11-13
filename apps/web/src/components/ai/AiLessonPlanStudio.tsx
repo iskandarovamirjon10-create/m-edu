@@ -488,11 +488,14 @@ export const AiLessonPlanStudio = memo(function AiLessonPlanStudio({
     }
   }, [initialSubject]);
 
-  // Cleanup timers on unmount
+  // Cleanup timers on unmount — ref obyektlarini ushlab qolamiz, shunda
+  // keyinchalik o‘rnatilgan timer ham to‘g‘ri tozalanadi.
   useEffect(() => {
+    const timers = timerRef;
+    const copyTimers = copyTimerRef;
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      if (timers.current) clearTimeout(timers.current);
+      if (copyTimers.current) clearTimeout(copyTimers.current);
     };
   }, []);
 
@@ -534,12 +537,12 @@ export const AiLessonPlanStudio = memo(function AiLessonPlanStudio({
     try {
       const blooms =
         level === "Boshlang'ich" ? 'understand' : level === "O'rta" ? 'apply' : 'analyze';
-      const response = await aiApi.generateLessonPlan({
+      const response = (await aiApi.generateLessonPlan({
         topic: cleanTopic,
         level,
         durationMinutes: duration,
         bloomsTaxonomyLevel: blooms,
-      });
+      })) as Partial<LessonPlanResult>;
 
       if (response && response.warmup && response.theory && response.handsOn) {
         setGeneratedPlan({
@@ -872,7 +875,7 @@ export const AiLessonPlanStudio = memo(function AiLessonPlanStudio({
                         setDuration(opt.value);
                       }}
                       className={cn(
-                        'relative rounded-xl py-2 text-center text-xs font-bold transition-colors',
+                        'relative rounded-xl py-2 min-h-[40px] tap-extend text-center text-xs font-bold transition-colors',
                         active
                           ? 'text-indigo-600 dark:text-indigo-300'
                           : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
@@ -913,7 +916,7 @@ export const AiLessonPlanStudio = memo(function AiLessonPlanStudio({
                         setLevel(opt.id);
                       }}
                       className={cn(
-                        'relative truncate rounded-xl px-1.5 py-2 text-center text-[11px] font-bold transition-colors',
+                        'relative truncate rounded-xl px-2 py-2 min-h-[40px] tap-extend text-center text-[11px] font-bold transition-colors',
                         active
                           ? 'text-indigo-600 dark:text-indigo-300'
                           : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
@@ -950,7 +953,7 @@ export const AiLessonPlanStudio = memo(function AiLessonPlanStudio({
                 setTopic(preset);
               }}
               className={cn(
-                'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all',
+                'rounded-full border px-3 py-1.5 min-h-[36px] tap-extend text-[11px] font-semibold transition-all',
                 topic === preset
                   ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-600 dark:text-indigo-300'
                   : 'border-black/[0.06] bg-black/[0.025] text-slate-600 hover:bg-black/[0.05] dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-400 dark:hover:text-slate-200',
@@ -1148,7 +1151,7 @@ export const AiLessonPlanStudio = memo(function AiLessonPlanStudio({
                         setActiveStageFilter(st.id);
                       }}
                       className={cn(
-                        'relative shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors',
+                        'relative shrink-0 rounded-xl px-3.5 py-2 min-h-[40px] tap-extend text-xs font-bold transition-colors',
                         active
                           ? 'text-indigo-600 dark:text-indigo-300'
                           : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',

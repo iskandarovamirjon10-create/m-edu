@@ -25,7 +25,7 @@ import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ErrorBoundaryWrapper, PageFallback, Protected, PublicOnly } from '../App';
 import { useAuth } from '@/auth/AuthContext';
-import { ADMIN_ROLES, STAFF_ROLES, TEACHER_ROLES } from '@/lib/roles';
+import { ADMIN_ROLES, STAFF_ROLES, STUDENT_ROLES, TEACHER_ROLES } from '@/lib/roles';
 import type { Role } from '@/lib/types';
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -154,6 +154,7 @@ const HomeworkPage             = lazyPage(() => import('@/pages/Homework'), 'Hom
 const GradesPage               = lazyPage(() => import('@/pages/Grades'), 'GradesPage');
 const SchedulePage             = lazyPage(() => import('@/pages/Schedule'), 'SchedulePage');
 const LibraryPage              = lazyPage(() => import('@/pages/Library'), 'LibraryPage');
+const StudyStudioPage          = lazyPage(() => import('@/pages/StudyStudio'), 'StudyStudioPage');
 const ExamsPage                = lazyPage(() => import('@/pages/Exams'), 'ExamsPage');
 const CertificatesPage         = lazyPage(() => import('@/pages/Certificates'), 'CertificatesPage');
 
@@ -169,7 +170,6 @@ const ForecastingPage          = lazyPage(() => import('@/pages/Forecasting'), '
 const ImportExportPage         = lazyPage(() => import('@/pages/ImportExport'), 'ImportExportPage');
 const RelationshipGraphPage    = lazyPage(() => import('@/pages/RelationshipGraph'), 'RelationshipGraphPage');
 const NotificationsCenterPage  = lazyPage(() => import('@/pages/NotificationsCenter'), 'NotificationsCenterPage');
-const WhatChangedPage          = lazyPage(() => import('@/pages/WhatChanged'), 'WhatChangedPage');
 const ChatPage                 = lazyPage(() => import('@/pages/Chat'), 'ChatPage');
 const DocumentsPage            = lazyPage(() => import('@/pages/Documents'), 'DocumentsPage');
 const ResourceBookingPage      = lazyPage(() => import('@/pages/ResourceBooking'), 'ResourceBookingPage');
@@ -180,6 +180,7 @@ const CommunicationHistoryPage = lazyPage(() => import('@/pages/CommunicationHis
 const AiCopilotPage            = lazyPage(() => import('@/pages/AiCopilot'), 'default');
 const ParentPortalPage         = lazyPage(() => import('@/pages/ParentPortal'), 'ParentPortalPage');
 const ExecutiveDashboardPage   = lazyPage(() => import('@/pages/ExecutiveDashboard'), 'ExecutiveDashboardPage');
+const ShowcasePage             = lazyPage(() => import('@/pages/Showcase'), 'Showcase');
 const AutomationEnginePage     = lazyPage(() => import('@/pages/AutomationEngine'), 'AutomationEnginePage');
 const TelegramPage             = lazyPage(() => import('@/pages/Telegram'), 'TelegramPage');
 const TelegramWebAppPage       = lazyPage(() => import('@/pages/TelegramWebApp'), 'TelegramWebAppPage');
@@ -188,13 +189,10 @@ const TelegramWebAppPage       = lazyPage(() => import('@/pages/TelegramWebApp')
 const CamerasPage              = lazyPage(() => import('@/pages/Cameras'), 'CamerasPage');
 const UsersPage                = lazyPage(() => import('@/pages/Users'), 'UsersPage');
 const AuditPage                = lazyPage(() => import('@/pages/Audit'), 'AuditPage');
-const AuditTimelinePage        = lazyPage(() => import('@/pages/AuditTimeline'), 'AuditTimelinePage');
 const UniversalSearchPage      = lazyPage(() => import('@/pages/UniversalSearch'), 'UniversalSearchPage');
-const DataQualityCenterPage    = lazyPage(() => import('@/pages/DataQualityCenter'), 'DataQualityCenterPage');
 const DataGovernancePage       = lazyPage(() => import('@/pages/DataGovernance'), 'DataGovernancePage');
 const AnomalyDetectionPage     = lazyPage(() => import('@/pages/AnomalyDetection'), 'AnomalyDetectionPage');
 const FeatureFlagsPage         = lazyPage(() => import('@/pages/FeatureFlags'), 'FeatureFlagsPage');
-const SecurityCenterPage       = lazyPage(() => import('@/pages/SecurityCenter'), 'SecurityCenterPage');
 const SystemHealthPage         = lazyPage(() => import('@/pages/SystemHealth'), 'SystemHealthPage');
 const ApiKeysPage              = lazyPage(() => import('@/pages/ApiKeys'), 'ApiKeysPage');
 const ObservabilityPage        = lazyPage(() => import('@/pages/Observability'), 'ObservabilityPage');
@@ -226,9 +224,11 @@ const PRELOAD_MAP: Record<string, PreloadableComponent<any>> = {
   '/schedule': SchedulePage,
   '/homework': HomeworkPage,
   '/grades': GradesPage,
+  '/study': StudyStudioPage,
   '/exams': ExamsPage,
   '/ai-copilot': AiCopilotPage,
   '/executive-dashboard': ExecutiveDashboardPage,
+  '/showcase': ShowcasePage,
   '/settings': SettingsPage,
   '/settings/billing': BillingSettingsPage,
   '/super-admin': SuperAdminPage,
@@ -364,13 +364,13 @@ export const routeConfig: RouteConfig[] = [
       { path: 'users', element: <UsersPage />, title: 'Users', titleKey: 'nav.users', roles: ADMIN_ROLES },
       { path: 'users/:id', element: <UsersPage />, title: 'User Profile', titleKey: 'nav.users', roles: ADMIN_ROLES },
       { path: 'audit', element: <AuditPage />, title: 'Audit Log', titleKey: 'nav.audit', roles: ADMIN_ROLES },
-      { path: 'audit-timeline', element: <AuditTimelinePage />, title: 'Audit Timeline', titleKey: 'auditTimeline.title', roles: ADMIN_ROLES },
+      { path: 'audit-timeline', element: <Navigate to="/audit" replace />, roles: ADMIN_ROLES },
       { path: 'search', element: <UniversalSearchPage />, title: 'Universal Search', titleKey: 'search.title' },
-      { path: 'data-quality', element: <DataQualityCenterPage />, title: 'Data Quality Center', roles: ADMIN_ROLES },
+      { path: 'data-quality', element: <Navigate to="/audit" replace />, roles: ADMIN_ROLES },
       { path: 'documents', element: <DocumentsPage />, title: 'Documents', titleKey: 'documents.title' },
       { path: 'resources', element: <ResourceBookingPage />, title: 'Resource Booking', titleKey: 'resourceBooking.title', roles: ADMIN_ROLES },
       { path: 'feature-flags', element: <FeatureFlagsPage />, title: 'Feature Flags', titleKey: 'featureFlags.title', roles: ADMIN_ROLES },
-      { path: 'security', element: <SecurityCenterPage />, title: 'Security Center', roles: ADMIN_ROLES },
+      { path: 'security', element: <Navigate to="/audit" replace />, roles: ADMIN_ROLES },
       { path: 'system-health', element: <SystemHealthPage />, title: 'System Health', titleKey: 'systemHealth.title', roles: ADMIN_ROLES },
       { path: 'settings', element: <SettingsPage />, title: 'Settings', titleKey: 'nav.settings' },
       { path: 'settings/billing', element: <BillingSettingsPage />, title: 'Billing & Subscription', titleKey: 'nav.billing', roles: ADMIN_ROLES },
@@ -383,6 +383,7 @@ export const routeConfig: RouteConfig[] = [
       { path: 'schedule', element: <SchedulePage />, title: 'Schedule', titleKey: 'nav.schedule' },
       { path: 'library', element: <LibraryPage />, title: 'Library', titleKey: 'nav.library' },
       { path: 'library/books/:id', element: <LibraryPage />, title: 'Book Details', titleKey: 'nav.library' },
+      { path: 'study', element: <StudyStudioPage />, title: 'Study Studio', titleKey: 'study.title', roles: [...STAFF_ROLES, ...STUDENT_ROLES] },
       { path: 'exams', element: <ExamsPage />, title: 'Exams', titleKey: 'nav.exams', roles: STAFF_ROLES },
       { path: 'certificates', element: <CertificatesPage />, title: 'Certificates', titleKey: 'nav.certificates', roles: STAFF_ROLES },
       { path: 'certificates/:id', element: <CertificatesPage />, title: 'Certificate Details', titleKey: 'nav.certificates', roles: STAFF_ROLES },
@@ -401,14 +402,16 @@ export const routeConfig: RouteConfig[] = [
       { path: 'import-export', element: <ImportExportPage />, title: 'Import / Export', titleKey: 'importExport.title', roles: ADMIN_ROLES },
       { path: 'relationships', element: <RelationshipGraphPage />, title: 'Relationship Graph', titleKey: 'relationshipGraph.title', roles: ADMIN_ROLES },
       { path: 'notifications', element: <NotificationsCenterPage />, title: 'Notifications', titleKey: 'notifications.title' },
-      { path: 'what-changed', element: <WhatChangedPage />, title: 'What Changed?', titleKey: 'whatChanged.title' },
+      { path: 'what-changed', element: <Navigate to="/audit" replace /> },
       { path: 'chat', element: <ChatPage />, title: 'Messages', titleKey: 'chat.title' },
 
       // AI Copilot & Enterprise Modules
       { path: 'ai-copilot', element: <AiCopilotPage />, title: 'AI Copilot', titleKey: 'nav.aiCopilot', roles: STAFF_ROLES },
       { path: 'parent-portal', element: <ParentPortalPage />, roles: ['PARENT', ...ADMIN_ROLES], title: 'Parent Portal', titleKey: 'parentPortal.title' },
-      { path: 'telegram', element: <TelegramPage />, title: 'Telegram Hub', titleKey: 'nav.telegram', roles: ADMIN_ROLES },
+      { path: 'telegram', element: <TelegramPage />, title: 'Telegram Hub', titleKey: 'nav.telegram' },
       { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: ADMIN_ROLES },
+      { path: 'showcase', element: <ShowcasePage />, title: ' Apple Innovation Suite', titleKey: 'nav.showcase', roles: STAFF_ROLES },
+      { path: 'innovations', element: <Navigate to="/showcase" replace /> },
       { path: 'executive', element: <Navigate to="/executive-dashboard" replace /> },
       { path: 'automation', element: <AutomationEnginePage />, title: 'Automation Engine', titleKey: 'nav.automation', roles: ADMIN_ROLES },
       { path: 'payroll', element: <PayrollPage />, title: 'Payroll', titleKey: 'nav.payrollRuns', roles: ADMIN_ROLES },

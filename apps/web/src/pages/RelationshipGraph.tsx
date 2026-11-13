@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -571,6 +572,7 @@ function Shimmer({ className = '', radius = '0.75rem' }: { className?: string; r
  * ════════════════════════════════════════════════════════════════════════ */
 
 export function RelationshipGraphPage() {
+  const navigate = useNavigate();
   const { t } = useSafeI18n();
   usePageTitle(t('relationshipGraph.title') || 'Entity Relationship Graph');
   const { playPop } = usePremiumSound();
@@ -606,7 +608,7 @@ export function RelationshipGraphPage() {
       primaryAction: node.href ? {
         label: t('common.open') || 'Ochish',
         onExecute: () => {
-          window.location.href = node.href!;
+          navigate(node.href!);
         },
       } : undefined,
     };

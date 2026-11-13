@@ -204,16 +204,21 @@
 
   /* Ambient orblar. Traektoriya — Lissajous figura-8 (a:b = 1:2):
      x = 32·sin(2πt), y = 22·sin(4πt); masshtab 1 + 0.05·cos(2πt),
-     burilish 4°·sin(2πt), hue ±16°. 12 segment, chiziqli interpolyatsiya
-     (blur 92 px poligon qirralarini yashiradi). */
+     burilish 4°·sin(2πt). 12 segment, chiziqli interpolyatsiya
+     (blur 92 px poligon qirralarini yashiradi).
+
+     PERF: filtr statik. Ilgari keyframe'lar `hue-rotate`ni animatsiya
+     qilardi — bu har kadrda 92–105 px blur qatlamini qayta rasterlashtirib,
+     scroll paytida asosiy jank manbai bo‘lardi (±16° farq ko‘zga deyarli
+     sezilmaydi). Endi faqat transform animatsiyalanadi (compositor). */
   .orb {
     position: fixed;
     pointer-events: none;
     border-radius: 50%;
-    filter: blur(92px) hue-rotate(var(--aurora-hue-shift, 0deg));
+    filter: blur(92px);
     opacity: 0.56;
     z-index: 0;
-    will-change: transform, filter;
+    will-change: transform;
     transform: translate3d(0, 0, 0);
     contain: layout style;
     animation: orb-lissajous calc(var(--dur-ambient) * 1.4) linear infinite;
@@ -259,24 +264,24 @@
 
   :is(.dark, [data-theme="dark"]) .orb {
     opacity: 0.42;
-    filter: blur(105px) hue-rotate(var(--aurora-hue-shift, 0deg));
+    filter: blur(105px);
   }
   [data-theme="oled"] .orb { display: none; }
 
   @keyframes orb-lissajous {
-    0%      { transform: translate3d(0px, 0px, 0) scale(1.05) rotate(0deg); --aurora-hue-shift: 0deg; }
-    8.33%   { transform: translate3d(16px, 19.1px, 0) scale(1.043) rotate(2deg); --aurora-hue-shift: 8deg; }
-    16.67%  { transform: translate3d(27.7px, 19.1px, 0) scale(1.025) rotate(3.5deg); --aurora-hue-shift: 13.9deg; }
-    25%     { transform: translate3d(32px, 0px, 0) scale(1) rotate(4deg); --aurora-hue-shift: 16deg; }
-    33.33%  { transform: translate3d(27.7px, -19.1px, 0) scale(0.975) rotate(3.5deg); --aurora-hue-shift: 13.9deg; }
-    41.67%  { transform: translate3d(16px, -19.1px, 0) scale(0.957) rotate(2deg); --aurora-hue-shift: 8deg; }
-    50%     { transform: translate3d(0px, 0px, 0) scale(0.95) rotate(0deg); --aurora-hue-shift: 0deg; }
-    58.33%  { transform: translate3d(-16px, 19.1px, 0) scale(0.957) rotate(-2deg); --aurora-hue-shift: -8deg; }
-    66.67%  { transform: translate3d(-27.7px, 19.1px, 0) scale(0.975) rotate(-3.5deg); --aurora-hue-shift: -13.9deg; }
-    75%     { transform: translate3d(-32px, 0px, 0) scale(1) rotate(-4deg); --aurora-hue-shift: -16deg; }
-    83.33%  { transform: translate3d(-27.7px, -19.1px, 0) scale(1.025) rotate(-3.5deg); --aurora-hue-shift: -13.9deg; }
-    91.67%  { transform: translate3d(-16px, -19.1px, 0) scale(1.043) rotate(-2deg); --aurora-hue-shift: -8deg; }
-    100%    { transform: translate3d(0px, 0px, 0) scale(1.05) rotate(0deg); --aurora-hue-shift: 0deg; }
+    0%      { transform: translate3d(0px, 0px, 0) scale(1.05) rotate(0deg); }
+    8.33%   { transform: translate3d(16px, 19.1px, 0) scale(1.043) rotate(2deg); }
+    16.67%  { transform: translate3d(27.7px, 19.1px, 0) scale(1.025) rotate(3.5deg); }
+    25%     { transform: translate3d(32px, 0px, 0) scale(1) rotate(4deg); }
+    33.33%  { transform: translate3d(27.7px, -19.1px, 0) scale(0.975) rotate(3.5deg); }
+    41.67%  { transform: translate3d(16px, -19.1px, 0) scale(0.957) rotate(2deg); }
+    50%     { transform: translate3d(0px, 0px, 0) scale(0.95) rotate(0deg); }
+    58.33%  { transform: translate3d(-16px, 19.1px, 0) scale(0.957) rotate(-2deg); }
+    66.67%  { transform: translate3d(-27.7px, 19.1px, 0) scale(0.975) rotate(-3.5deg); }
+    75%     { transform: translate3d(-32px, 0px, 0) scale(1) rotate(-4deg); }
+    83.33%  { transform: translate3d(-27.7px, -19.1px, 0) scale(1.025) rotate(-3.5deg); }
+    91.67%  { transform: translate3d(-16px, -19.1px, 0) scale(1.043) rotate(-2deg); }
+    100%    { transform: translate3d(0px, 0px, 0) scale(1.05) rotate(0deg); }
   }
 
   /* Arxitektura to‘ri: 56 px = 14 × 4 px grid */
@@ -351,7 +356,13 @@
       filter: blur(56px);
       opacity: 0.26;
       animation: none;
+      will-change: auto;
     }
+  }
+
+  /* Harakat kamaytirilganda ambient harakat butunlay to‘xtaydi */
+  @media (prefers-reduced-motion: reduce) {
+    .orb { animation: none !important; }
   }
 }
 
@@ -1164,6 +1175,81 @@
     padding-block: clamp(0.75rem, 2vw, 1.75rem);
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     ACTION LAYOUT SYSTEM — yagona tugma tartibi shartnomasi
+     · Har bir action qatori: 8px ritm, 40px nazorat balandligi
+     · Tartib: secondary → primary (primary har doim oxirida)
+     · Telefonda primary birinchi to‘liq qatorni oladi, qolganlari teng
+     ═══════════════════════════════════════════════════════════════════════ */
+  .action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .action-bar > * { flex-shrink: 0; min-width: 0; }
+  .action-bar--end { justify-content: flex-end; }
+  .action-bar--between { justify-content: space-between; }
+
+  .action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+  .action-group--attached { gap: 0; }
+  .action-group--attached > * + * {
+    margin-inline-start: -1px;
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+  .action-group--attached > *:not(:last-child) {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .action-divider {
+    flex-shrink: 0;
+    width: 1px;
+    height: 20px;
+    margin-inline: var(--space-1);
+    background: var(--border-medium);
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 56px;
+    padding: var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-glass);
+    backdrop-filter: var(--glass-backdrop-2);
+  }
+  .toolbar__spacer { flex: 1 1 auto; min-width: var(--space-2); }
+
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+  }
+  .icon-button--sm { width: 32px; height: 32px; border-radius: var(--radius-sm); }
+  .icon-button--lg { width: 44px; height: 44px; border-radius: var(--radius-lg); }
+
+  @media (max-width: 639px) {
+    .action-bar--stack { width: 100%; gap: var(--space-2); }
+    .action-bar--stack > * { flex: 1 1 0; }
+    .action-bar--stack > [data-action='primary'] { flex-basis: 100%; order: -1; }
+    .action-bar--stack > [data-action='utility'] { flex: 0 0 auto; }
+    .toolbar { border-radius: var(--radius-md); }
+  }
+
   /* Tactile press (faqat transform — kompozitor, 120 Hz) */
   .apple-press {
     transition: transform var(--spring-bouncy-duration) var(--spring-bouncy);
@@ -1504,4 +1590,534 @@
 
   h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
   img, svg, table, figure { break-inside: avoid; page-break-inside: avoid; }
+}
+
+/* ============================================================================
+ * Apple-Grade Smooth Theme View Transitions (Circular Ripple & Velvet Dissolve)
+ * ========================================================================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+.dark::view-transition-old(root) {
+  z-index: 9999;
+}
+
+.dark::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* Reduced motion fallback: soft crossfade */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root) {
+    animation: 120ms cubic-bezier(0.2, 0, 0, 1) both fade-out;
+  }
+  ::view-transition-new(root) {
+    animation: 120ms cubic-bezier(0.2, 0, 0, 1) both fade-in;
+  }
+}
+
+/* ============================================================================
+ * STEVE JOBS SIGNATURE LIQUID GLASS 3.0 & APPLE INTELLIGENCE SUITE
+ * ========================================================================== */
+
+@layer utilities {
+  /* Apple VisionOS / macOS Sequoia Master Specular Glass */
+  .steve-specular-glass {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.42) 100%),
+                color-mix(in srgb, var(--bg-surface) 60%, transparent);
+    -webkit-backdrop-filter: blur(48px) saturate(220%);
+    backdrop-filter: blur(48px) saturate(220%);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+                0 16px 36px -12px rgba(15, 23, 42, 0.12),
+                inset 0 1.5px 0 0 rgba(255, 255, 255, 0.95),
+                inset 0 -1px 0 0 rgba(0, 122, 255, 0.1);
+  }
+
+  .dark .steve-specular-glass {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%),
+                color-mix(in srgb, #0d111a 75%, transparent);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 20px 48px -14px rgba(0, 0, 0, 0.6),
+                inset 0 1.5px 0 0 rgba(255, 255, 255, 0.22),
+                inset 0 -1px 0 0 rgba(10, 132, 255, 0.16);
+  }
+
+  /* Holographic Foil (Apple Card metallic reflection) */
+  .holographic-foil {
+    position: relative;
+    overflow: hidden;
+  }
+  .holographic-foil::before {
+    content: '';
+    position: absolute;
+    inset: -150%;
+    background: conic-gradient(
+      from var(--aurora-conic-angle, 0deg) at 50% 50%,
+      rgba(255, 100, 150, 0.18),
+      rgba(150, 100, 255, 0.18),
+      rgba(50, 200, 255, 0.18),
+      rgba(50, 255, 180, 0.18),
+      rgba(255, 200, 100, 0.18),
+      rgba(255, 100, 150, 0.18)
+    );
+    opacity: 0.65;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  .dark .holographic-foil::before {
+    opacity: 0.45;
+  }
+
+  /* Apple Intelligence Chromatic Edge Aura */
+  .apple-intelligence-aura {
+    position: relative;
+  }
+  .apple-intelligence-aura::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    padding: 3px;
+    background: linear-gradient(
+      135deg,
+      #ff2d55,
+      #af52de,
+      #007aff,
+      #5856d6,
+      #34c759,
+      #ff9500,
+      #ff2d55
+    );
+    background-size: 300% 300%;
+    animation: apple-intel-flow 4s ease infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.88;
+    filter: drop-shadow(0 0 12px rgba(175, 82, 222, 0.5));
+  }
+
+  /* TrueDepth Biometric Reticle Mesh */
+  .true-depth-grid {
+    background-size: 24px 24px;
+    background-image:
+      linear-gradient(to right, rgba(34, 211, 238, 0.12) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(34, 211, 238, 0.12) 1px, transparent 1px);
+  }
+
+  /* Tactile Physical Press Spring */
+  .apple-spring-press {
+    transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.18s ease;
+  }
+  .apple-spring-press:active {
+    transform: scale(0.965) translateY(1px);
+  }
+}
+
+@keyframes apple-intel-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+
+
+/* ═══ §Perf · Touch GPU guard ═════════════════════════════════════════════
+   Fixed nav / sidebar sirtlari scroll paytida har kadrda orqasidagi
+   kontentni qayta blur qiladi. Telefon va planshetlarda 64 px blur vizual
+   jihatdan deyarli farq qilmaydi, lekin GPU uchun bir necha barobar
+   qimmat. Shuning uchun touch qurilmalarda Tailwind'ning eng og‘ir blur
+   utilitalari 12–14 px bilan cheklanadi (utility `--tw-backdrop-blur`
+   o‘zgaruvchisini o‘qiydi, shuning uchun qiymatni shu yerda almashtiramiz). */
+@media (max-width: 1024px), (pointer: coarse) {
+  [class*="backdrop-blur-3xl"] { --tw-backdrop-blur: blur(14px); }
+  [class*="backdrop-blur-2xl"] { --tw-backdrop-blur: blur(12px); }
+
+  .steve-specular-glass {
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+  }
+}
+
+/* Touch qurilmalarda doimiy hover-dekorativ animatsiyalar o‘chadi:
+   ular foydalanuvchi ko‘rmaydigan effekt uchun GPU band qilmasin. */
+@media (hover: none) {
+  .holographic-foil::before,
+  .apple-intelligence-aura::after { animation: none; }
+}
+
+
+/* ═══ §Liquid Dock · iOS 26 mobile tab bar ════════════════════════════════
+   "Liquid glass" uchta arzon statik qatlamdan yig‘iladi:
+     1) sirt  — blur + kuchli saturate: orqadagi kontent "suyuladi"
+     2) gloss — egri yuza bo‘ylab yorug‘lik (radial + chiziqli gradient)
+     3) rim   — 1 px spekulyar/chromatik qirra (mask bilan chiziladi)
+   Qatlamlarning hech biri animatsiyalanmaydi, shuning uchun scroll paytida
+   qayta bo‘yash (repaint) bo‘lmaydi — faqat backdrop blur qoladi. */
+
+.lg-dock-surface {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+  border: 0.75px solid rgba(255, 255, 255, 0.72);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.34));
+  -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(1.05);
+  backdrop-filter: blur(24px) saturate(190%) brightness(1.05);
+  box-shadow:
+    inset 0 0.75px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -0.75px 0 rgba(255, 255, 255, 0.45),
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 10px 24px -8px rgba(15, 23, 42, 0.26),
+    0 28px 56px -20px rgba(15, 23, 42, 0.34);
+}
+
+:is(.dark, [data-theme="dark"]) .lg-dock-surface {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(38, 40, 46, 0.62), rgba(15, 16, 20, 0.72));
+  box-shadow:
+    inset 0 0.75px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -0.75px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 28px -8px rgba(0, 0, 0, 0.6),
+    0 30px 60px -20px rgba(0, 0, 0, 0.75);
+}
+
+.lg-dock-gloss {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 120% at 28% -28%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.24) 38%, transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 44%);
+}
+
+:is(.dark, [data-theme="dark"]) .lg-dock-gloss {
+  background:
+    radial-gradient(90% 120% at 28% -28%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.05) 40%, transparent 64%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 48%);
+}
+
+/* Pastki qirradan qaytgan yorug‘lik — shisha qalinligi hissi */
+.lg-dock-underlight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(0deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.08) 22%, transparent 42%);
+}
+
+:is(.dark, [data-theme="dark"]) .lg-dock-underlight {
+  background: linear-gradient(0deg, rgba(120, 190, 255, 0.12), rgba(255, 255, 255, 0.02) 24%, transparent 44%);
+}
+
+/* Chap/o‘ng qirradagi xromatik dispersiya (refraktsiya) */
+.lg-dock-edge {
+  position: absolute;
+  top: 16%;
+  bottom: 16%;
+  z-index: 2;
+  width: 1.5px;
+  pointer-events: none;
+  filter: blur(0.6px);
+}
+.lg-dock-edge--l {
+  left: 0;
+  background: linear-gradient(180deg, transparent, rgba(90, 200, 250, 0.8) 28%, rgba(255, 255, 255, 0.9) 54%, rgba(94, 92, 230, 0.5) 78%, transparent);
+}
+.lg-dock-edge--r {
+  right: 0;
+  background: linear-gradient(180deg, transparent, rgba(94, 92, 230, 0.6) 26%, rgba(255, 255, 255, 0.85) 50%, rgba(90, 200, 250, 0.65) 74%, transparent);
+}
+
+/* 1 px spekulyar rim: gradient chegara mask orqali chiziladi */
+.lg-dock-rim,
+.lg-lens-rim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: inherit;
+  padding: 1.1px;
+  pointer-events: none;
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 255, 255, 0.16) 18%,
+    rgba(90, 200, 250, 0.55) 42%,
+    rgba(255, 255, 255, 0.1) 56%,
+    rgba(94, 92, 230, 0.5) 78%,
+    rgba(255, 255, 255, 0.92) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+:is(.dark, [data-theme="dark"]) .lg-dock-rim,
+:is(.dark, [data-theme="dark"]) .lg-lens-rim {
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.1) 20%,
+    rgba(90, 200, 250, 0.65) 45%,
+    rgba(255, 255, 255, 0.06) 58%,
+    rgba(94, 92, 230, 0.7) 80%,
+    rgba(255, 255, 255, 0.7) 100%
+  );
+}
+
+/* Aktiv tab: suyuq linza — ichki nur, shisha qalinligi va yumshoq soya */
+.lg-dock-lens {
+  border: 0.75px solid rgba(255, 255, 255, 0.92);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.68) 55%, rgba(236, 246, 255, 0.6) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -8px 14px -8px rgba(0, 122, 255, 0.35),
+    0 4px 14px -4px rgba(0, 0, 0, 0.18),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+:is(.dark, [data-theme="dark"]) .lg-dock-lens {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0.1) 58%, rgba(90, 200, 250, 0.1) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -8px 14px -8px rgba(10, 132, 255, 0.5),
+    0 4px 16px -4px rgba(0, 0, 0, 0.55);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .lg-dock-gloss,
+  .lg-dock-underlight,
+  .lg-dock-edge,
+  .lg-dock-rim,
+  .lg-lens-rim { display: none; }
+  .lg-dock-surface {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--bg-card);
+  }
+}
+
+/* Linza ichidagi nur va pastki kaustika — pseudo-qatlamlar (markup shishmasin) */
+.lg-dock-lens::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(120% 95% at 30% -10%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.32) 42%, transparent 70%);
+}
+.lg-dock-lens::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(70% 100% at 50% 118%, rgba(90, 200, 250, 0.42), transparent 72%);
+}
+
+:is(.dark, [data-theme="dark"]) .lg-dock-lens::before {
+  background: radial-gradient(120% 95% at 30% -10%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06) 44%, transparent 72%);
+}
+:is(.dark, [data-theme="dark"]) .lg-dock-lens::after {
+  background: radial-gradient(70% 100% at 50% 118%, rgba(10, 132, 255, 0.5), transparent 72%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .lg-dock-lens::before,
+  .lg-dock-lens::after { display: none; }
+}
+
+
+/* ═══ §TopBar · semantic design tokens ════════════════════════════════════
+   TopBar va uning barcha popover/kontrol elementlari shu o‘zgaruvchilardan
+   oziqlanadi. Komponentlarda inline rgba/soya qiymatlari qolmasligi kerak:
+   rangni o‘zgartirish uchun faqat shu blok tahrirlanadi. */
+
+:root {
+  --tb-surface-bg: color-mix(in srgb, var(--bg-surface) 74%, transparent);
+  --tb-surface-border: rgba(15, 23, 42, 0.075);
+  --tb-surface-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 0 rgba(15, 23, 42, 0.02),
+    0 8px 24px -20px rgba(15, 23, 42, 0.35);
+
+  --tb-float-bg: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+  --tb-float-border: rgba(255, 255, 255, 0.55);
+  --tb-float-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 10px 30px -12px rgba(15, 23, 42, 0.22),
+    0 2px 8px -2px rgba(15, 23, 42, 0.06);
+
+  --tb-control-bg: rgba(255, 255, 255, 0.52);
+  --tb-control-bg-hover: rgba(255, 255, 255, 0.86);
+  --tb-control-bg-focus: rgba(255, 255, 255, 0.92);
+  --tb-control-border: rgba(15, 23, 42, 0.075);
+  --tb-control-border-hover: rgba(15, 23, 42, 0.14);
+  --tb-control-fg: var(--text-secondary);
+  --tb-control-fg-hover: var(--text-primary);
+  --tb-control-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+
+  --tb-active-bg: color-mix(in srgb, var(--c-blue) 14%, transparent);
+  --tb-active-border: color-mix(in srgb, var(--c-blue) 38%, transparent);
+  --tb-active-fg: var(--c-blue);
+
+  --tb-popover-bg: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  --tb-popover-border: rgba(255, 255, 255, 0.6);
+  --tb-popover-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 24px 56px -18px rgba(15, 23, 42, 0.24),
+    0 4px 16px -6px rgba(15, 23, 42, 0.08);
+
+  --tb-blur: 20px;
+  --tb-saturate: 180%;
+}
+
+:is(.dark, [data-theme="dark"]) {
+  --tb-surface-bg: color-mix(in srgb, #12141a 80%, transparent);
+  --tb-surface-border: rgba(255, 255, 255, 0.085);
+  --tb-surface-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 0 rgba(0, 0, 0, 0.35),
+    0 10px 28px -20px rgba(0, 0, 0, 0.8);
+
+  --tb-float-bg: color-mix(in srgb, #14161c 86%, transparent);
+  --tb-float-border: rgba(255, 255, 255, 0.12);
+  --tb-float-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 14px 34px -12px rgba(0, 0, 0, 0.7);
+
+  --tb-control-bg: rgba(255, 255, 255, 0.06);
+  --tb-control-bg-hover: rgba(255, 255, 255, 0.1);
+  --tb-control-bg-focus: rgba(255, 255, 255, 0.12);
+  --tb-control-border: rgba(255, 255, 255, 0.1);
+  --tb-control-border-hover: rgba(255, 255, 255, 0.18);
+  --tb-control-fg: var(--text-secondary);
+  --tb-control-fg-hover: var(--text-primary);
+  --tb-control-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+
+  --tb-active-bg: color-mix(in srgb, var(--c-blue) 26%, transparent);
+  --tb-active-border: color-mix(in srgb, var(--c-blue) 48%, transparent);
+  --tb-active-fg: #7cb8ff;
+
+  --tb-popover-bg: color-mix(in srgb, #191b21 94%, transparent);
+  --tb-popover-border: rgba(255, 255, 255, 0.1);
+  --tb-popover-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 28px 64px -18px rgba(0, 0, 0, 0.75),
+    0 4px 18px -6px rgba(0, 0, 0, 0.5);
+}
+
+.tb-surface {
+  background: var(--tb-surface-bg);
+  border-bottom: 1px solid var(--tb-surface-border);
+  box-shadow: var(--tb-surface-shadow);
+  -webkit-backdrop-filter: blur(var(--tb-blur)) saturate(var(--tb-saturate));
+  backdrop-filter: blur(var(--tb-blur)) saturate(var(--tb-saturate));
+}
+
+.tb-float {
+  background: var(--tb-float-bg);
+  border: 1px solid var(--tb-float-border);
+  box-shadow: var(--tb-float-shadow);
+  -webkit-backdrop-filter: blur(var(--tb-blur)) saturate(var(--tb-saturate));
+  backdrop-filter: blur(var(--tb-blur)) saturate(var(--tb-saturate));
+}
+
+.tb-control {
+  border: 1px solid var(--tb-control-border);
+  background: var(--tb-control-bg);
+  color: var(--tb-control-fg);
+  box-shadow: var(--tb-control-shadow);
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
+}
+.tb-control:hover {
+  background: var(--tb-control-bg-hover);
+  border-color: var(--tb-control-border-hover);
+  color: var(--tb-control-fg-hover);
+}
+.tb-control-active,
+.tb-control[data-active="true"] {
+  background: var(--tb-active-bg);
+  border-color: var(--tb-active-border);
+  color: var(--tb-active-fg);
+}
+.tb-control-active:hover,
+.tb-control[data-active="true"]:hover {
+  background: color-mix(in srgb, var(--tb-active-bg) 82%, var(--tb-control-bg-hover));
+  color: var(--tb-active-fg);
+}
+
+.tb-search {
+  height: 2.25rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--tb-control-border);
+  background: var(--tb-control-bg);
+  box-shadow: var(--tb-control-shadow);
+  padding-left: 2.25rem;
+  padding-right: 4.75rem;
+  font-size: 13.5px;
+  line-height: 1.2;
+  color: var(--text-primary);
+  outline: none;
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-normal) var(--ease-standard);
+}
+.tb-search::placeholder { color: var(--text-placeholder); }
+.tb-search:focus {
+  border-color: var(--tb-active-border);
+  background: var(--tb-control-bg-focus);
+  box-shadow:
+    inset 0 1px 1px rgba(15, 23, 42, 0.02),
+    0 0 0 3.5px var(--focus-ring),
+    0 10px 24px -18px color-mix(in srgb, var(--c-blue) 45%, transparent);
+}
+@media (min-width: 1024px) {
+  .tb-search { padding-right: 5.5rem; }
+}
+
+.tb-popover {
+  background: var(--tb-popover-bg);
+  border: 1px solid var(--tb-popover-border);
+  box-shadow: var(--tb-popover-shadow);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* prefers-reduced-transparency: barcha shisha sirtlar qattiq fonga o‘tadi */
+@media (prefers-reduced-transparency: reduce) {
+  .tb-surface { background: var(--bg-card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .tb-float { background: var(--bg-card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .tb-popover { background: var(--bg-card); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

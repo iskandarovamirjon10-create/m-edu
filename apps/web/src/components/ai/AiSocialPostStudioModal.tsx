@@ -179,8 +179,8 @@ const T = {
     'focus:border-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/25 transition-colors',
   eyebrow: 'text-xs font-semibold text-zinc-500 dark:text-zinc-400',
   ghostBtn:
-    'inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 ' +
-    'hover:bg-zinc-50 dark:hover:bg-zinc-700 px-3 py-2.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 transition-colors',
+    'inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 ' +
+    'hover:bg-zinc-50 dark:hover:bg-zinc-700 px-3 py-2.5 min-h-[44px] tap-extend text-xs font-semibold text-zinc-700 dark:text-zinc-200 transition-colors',
 } as const;
 
 // ============================================================================

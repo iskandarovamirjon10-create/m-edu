@@ -6,6 +6,16 @@ import {
 } from '@medu/contracts';
 import type { PrismaService } from '../../../prisma/prisma.service';
 
+function getTashkentStartOfDay(): Date {
+  const now = new Date();
+  const tashkentOffsetMs = 5 * 60 * 60 * 1000;
+  const tashkentTime = new Date(now.getTime() + tashkentOffsetMs);
+  const year = tashkentTime.getUTCFullYear();
+  const month = tashkentTime.getUTCMonth();
+  const day = tashkentTime.getUTCDate();
+  return new Date(Date.UTC(year, month, day, -5, 0, 0));
+}
+
 export function createBiometricsTools(prisma: PrismaService): AiToolDefinition[] {
   return [
     {
@@ -17,8 +27,7 @@ export function createBiometricsTools(prisma: PrismaService): AiToolDefinition[]
       requiresConfirmation: false,
       permission: AiPermission.BIOMETRICS_READ,
       execute: async (_input, context) => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = getTashkentStartOfDay();
 
         const [cameras, totalEnrolledFaces, todayEventsCount] = await Promise.all([
           prisma.camera.findMany({

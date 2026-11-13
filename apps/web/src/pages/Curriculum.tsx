@@ -60,6 +60,10 @@ export interface Subject {
   name: string;
 }
 
+interface SubjectListResponse {
+  items?: Subject[];
+}
+
 export interface Curriculum {
   id: string;
   name: string;
@@ -350,7 +354,7 @@ function StatTile({
       />
 
       <div
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform group-hover:scale-105"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
         style={{
           background: c.bg,
           color: c.fg,
@@ -591,9 +595,9 @@ export function CurriculumPage() {
   const formNameId = useId();
 
   /* ---------------- Data ---------------- */
-  const { data: subjects } = useQuery({
+  const { data: subjects } = useQuery<SubjectListResponse>({
     queryKey: ['subjects'],
-    queryFn: () => subjectsApi.list(),
+    queryFn: () => subjectsApi.list() as Promise<SubjectListResponse>,
   });
 
   const {
@@ -856,7 +860,7 @@ export function CurriculumPage() {
                   playPop();
                   setIsAiStudioOpen(true);
                 }}
-                className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-5 py-2.5 text-xs font-bold shadow-sm transition-all active:scale-95"
+                className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 px-5 py-2.5 text-xs font-bold shadow-sm transition-all active:scale-95"
               >
                 <span className="text-sm">✨</span>
                 {t('curriculum.aiLessonStudio', 'AI Dars & Test Generatori')}
@@ -867,7 +871,7 @@ export function CurriculumPage() {
                   playPop();
                   setIsModalOpen(true);
                 }}
-                className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:opacity-95 active:scale-95"
+                className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:opacity-95 active:scale-95"
               >
                 <Icon paths={I.plus} size={15} strokeWidth={2.5} />
                 {t('curriculum.create', 'Yangi reja yaratish')}
@@ -910,7 +914,7 @@ export function CurriculumPage() {
 
       {/* FILTER & KEYBOARD BAR */}
       <motion.div variants={cardVariants} className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between">
-        <div className="liquid-glass-surface flex min-h-[44px] items-center gap-2 rounded-2xl px-3.5 py-1.5 border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 shadow-sm backdrop-blur-2xl">
+        <div className="liquid-glass-surface flex min-h-[44px] items-center gap-2 rounded-xl px-3.5 py-1.5 border border-black/[0.08] dark:border-white/[0.12] bg-white/80 dark:bg-surface-900/80 shadow-sm backdrop-blur-2xl">
           <label htmlFor={filterSelectId} className="text-slate-500 dark:text-slate-400">
             <Icon paths={I.graduationCap} size={16} strokeWidth={2.2} />
           </label>
@@ -925,7 +929,7 @@ export function CurriculumPage() {
             aria-label={t('curriculum.filterAria', "Fan bo‘yicha filtrlash")}
           >
             <option value="">{t('curriculum.allSubjects', 'Barcha fanlar')}</option>
-            {subjects?.items?.map((s: any) => (
+            {subjects?.items?.map((s) => (
               <option key={s.id} value={s.id} className="dark:bg-surface-900">
                 {s.name} ({s.code})
               </option>
@@ -1089,10 +1093,10 @@ export function CurriculumPage() {
                       setFormErrors((p) => ({ ...p, subject: undefined }));
                     }}
                     aria-invalid={Boolean(formErrors.subject)}
-                    className="min-h-[44px] w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-surface-800/80 dark:text-white"
+                    className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-surface-800/80 dark:text-white"
                   >
                     <option value="">{t('curriculum.form.chooseSubject', 'Fanni tanlang')}</option>
-                    {subjects?.items?.map((s: any) => (
+                    {subjects?.items?.map((s) => (
                       <option key={s.id} value={s.id} className="dark:bg-surface-900">
                         {s.name} ({s.code})
                       </option>
@@ -1121,7 +1125,7 @@ export function CurriculumPage() {
                     }}
                     placeholder={t('curriculum.form.namePlaceholder', 'Masalan: Ingliz tili B2 Intensive')}
                     aria-invalid={Boolean(formErrors.name)}
-                    className="min-h-[44px] w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-surface-800/80 dark:text-white"
+                    className="min-h-[44px] w-full rounded-xl border border-black/10 bg-white/80 px-4 py-2 text-sm font-semibold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-surface-800/80 dark:text-white"
                   />
                   {formErrors.name && (
                     <p className="mt-1 text-xs font-semibold text-red-500">{formErrors.name}</p>

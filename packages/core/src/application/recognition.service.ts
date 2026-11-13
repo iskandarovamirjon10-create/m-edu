@@ -128,6 +128,15 @@ const GALLERY_STREAM_BATCH_SIZE = 500;
 const MAX_FACES_PER_FRAME = 5;
 const MAX_TEMPLATE_CACHE_ENTRIES = 100_000;
 
+/** Portable yield to event loop across Node.js, Edge, and browser runtimes */
+function yieldToEventLoop(): Promise<void> {
+  if (typeof setImmediate === 'function') {
+    return new Promise((resolve) => setImmediate(resolve));
+  }
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+
 // ===========================================================================
 // 3. SERVICE IMPLEMENTATION
 // ===========================================================================
@@ -1025,7 +1034,7 @@ export class RecognitionService {
     );
 
     for await (const batch of stream) {
-      await new Promise((resolve) => setImmediate(resolve));
+      await yieldToEventLoop();
 
       for (const template of batch) {
         const storedEmbedding = await this.resolveGalleryTemplateEmbedding(
@@ -1087,7 +1096,7 @@ export class RecognitionService {
     );
 
     for await (const batch of stream) {
-      await new Promise((resolve) => setImmediate(resolve));
+      await yieldToEventLoop();
 
       for (const template of batch) {
         const storedEmbedding = await this.resolveGalleryTemplateEmbedding(

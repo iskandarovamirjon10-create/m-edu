@@ -64,9 +64,10 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
     staleTime: 60_000,
   });
 
-  const paymentWarnings: PaymentWarningItem[] =
-    (warningsData as { items?: PaymentWarningItem[] } | undefined)?.items ||
-    (Array.isArray(warningsData) ? (warningsData as PaymentWarningItem[]) : []);
+  const paymentWarnings = useMemo<PaymentWarningItem[]>(() => {
+    if (Array.isArray(warningsData)) return warningsData as PaymentWarningItem[];
+    return (warningsData as { items?: PaymentWarningItem[] } | undefined)?.items ?? [];
+  }, [warningsData]);
 
   const items = useMemo<TaskItem[]>(() => {
     const list: TaskItem[] = [];

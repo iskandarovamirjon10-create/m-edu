@@ -31,11 +31,11 @@ const VARIANT: Record<CopilotButtonVariant, string> = {
 };
 
 const SIZE: Record<CopilotButtonSize, string> = {
-  sm: 'h-8 px-3 text-[12px]',
-  md: 'h-10 px-4 text-[13px]',
-  lg: 'h-12 px-5 text-[14px] rounded-[16px]',
-  icon: 'h-11 w-11 p-0',
-  'icon-sm': 'h-9 w-9 p-0',
+  sm: 'h-8 min-h-[38px] px-3 text-[12px] tap-extend',
+  md: 'h-10 min-h-[44px] px-4 text-[13px] tap-extend',
+  lg: 'h-12 min-h-[48px] px-5 text-[14px] rounded-[16px] tap-extend',
+  icon: 'h-11 w-11 min-h-[44px] min-w-[44px] p-0 tap-extend',
+  'icon-sm': 'h-9 w-9 min-h-[44px] min-w-[44px] p-0 tap-extend',
 };
 
 type NativeButtonProps = Omit<
@@ -160,9 +160,9 @@ export const CopilotIconButton = forwardRef<HTMLButtonElement, CopilotIconButton
         variant={variant}
         size={size}
         className={cn(
-          'cp-icon-btn',
-          size === 'icon' && '!h-11 !w-11',
-          size === 'icon-sm' && '!h-9 !w-9',
+          'cp-icon-btn tap-extend',
+          size === 'icon' && '!h-11 !w-11 min-h-[44px] min-w-[44px]',
+          size === 'icon-sm' && '!h-9 !w-9 min-h-[44px] min-w-[44px]',
           active && 'border-[color:var(--cp-accent-line)] bg-[color:var(--cp-accent-soft)] text-[color:var(--cp-accent)]',
           className,
         )}

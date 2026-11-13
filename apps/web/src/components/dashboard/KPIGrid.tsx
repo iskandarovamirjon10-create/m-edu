@@ -62,12 +62,18 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
   const totalOverdue = Math.max(0, Number(stats.totalOverdue) || 0);
 
   // 4. Marketing Leads & Sales Conversion
-  const totalLeads = Number(stats.totalLeads) || 0;
-  const wonLeads = Number(stats.wonLeads) || 0;
-  const newLeadsThisMonth = Number(stats.newLeadsThisMonth) || 0;
+  // `wonLeads` is an all-time counter while `totalLeads` reflects the live
+  // pipeline, so the naive ratio can exceed 100% — clamp it to a valid share.
+  const totalLeads = Math.max(0, Number(stats.totalLeads) || 0);
+  const wonLeads = Math.max(0, Number(stats.wonLeads) || 0);
+  const newLeadsThisMonth = Math.max(0, Number(stats.newLeadsThisMonth) || 0);
+  const reportedConversion = Number(stats.conversionRate);
   const conversionRate =
-    Number(stats.conversionRate) ||
-    (totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0);
+    Number.isFinite(reportedConversion) && reportedConversion > 0
+      ? Math.min(100, Math.round(reportedConversion))
+      : totalLeads > 0
+        ? Math.min(100, Math.round((wonLeads / totalLeads) * 100))
+        : 0;
 
   return (
     <section aria-label={t('dashboard.kpiSection', "Asosiy strategik ko'rsatkichlar")}>
@@ -80,11 +86,11 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
           description={`${t('common.total', 'Jami')}: ${totalStudents} · ${activeGroups} ${t('dashboard.groupsSuffix', 'ta faol guruh')}`}
           trend={{
             label: `${stats.totalTeachers || 0} ${t('dashboard.teachersCountSuffix', "o'qituvchi")}`,
-            isPositive: true,
+            isNeutral: true,
           }}
           accentColor="#5E5CE6"
           href="/students"
-          icon={<Icon name="users" size={18} />}
+          icon={<Icon name="users" size={18} strokeWidth={2.2} />}
           delay={0}
         />
 
@@ -105,11 +111,13 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
                   isPositive: mom > 0,
                   isNeutral: mom === 0,
                 }
-              : { label: t('dashboard.stable', 'Barqaror'), isPositive: true }
+              // No comparable history yet — report "stable" as neutral, never
+              // as an unsupported positive trend.
+              : { label: t('dashboard.stable', 'Barqaror'), isNeutral: true }
           }
           accentColor="#34C759"
           href="/payments"
-          icon={<Icon name="creditCard" size={18} />}
+          icon={<Icon name="creditCard" size={18} strokeWidth={2.2} />}
           delay={0.06}
         />
 
@@ -130,7 +138,7 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
           }
           accentColor="#FF9F0A"
           href="/invoices?status=OVERDUE"
-          icon={<Icon name="alert" size={18} />}
+          icon={<Icon name="alert" size={18} strokeWidth={2.2} />}
           delay={0.12}
         />
 
@@ -147,7 +155,7 @@ export function KPIGrid({ stats, paidShare, revenueTrend }: KPIGridProps) {
           }
           accentColor="#0A84FF"
           href="/leads"
-          icon={<Icon name="target" size={18} />}
+          icon={<Icon name="target" size={18} strokeWidth={2.2} />}
           delay={0.18}
         />
       </div>

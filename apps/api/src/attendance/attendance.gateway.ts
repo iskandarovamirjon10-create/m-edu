@@ -10,6 +10,7 @@ import { UseGuards, Logger, Injectable, OnModuleInit, Optional } from '@nestjs/c
 import { WsJwtGuard, AuthenticatedSocket } from '../chat/ws-jwt.guard';
 import { RedisPubSubService } from '../common/redis/redis-pubsub.service';
 import { JwtService } from '@nestjs/jwt';
+import { JwtStrategy } from '../auth/jwt.strategy';
 
 export const ATTENDANCE_CREATED_EVENT = 'attendance.created';
 
@@ -31,6 +32,7 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
   constructor(
     @Optional() private readonly redisPubSub?: RedisPubSubService,
     private readonly jwtService?: JwtService,
+    @Optional() private readonly jwtStrategy?: JwtStrategy,
   ) {}
 
   onModuleInit() {
@@ -39,7 +41,7 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
         try {
           const data = JSON.parse(payload);
           if (data && data.organizationId) {
-            // Broadcase ONLY to the room matching organizationId
+            // Broadcast ONLY to the room matching organizationId
             this.server.to(`org:${data.organizationId}`).emit(ATTENDANCE_CREATED_EVENT, data);
           }
         } catch (err) {
@@ -70,9 +72,13 @@ export class AttendanceGateway implements OnGatewayConnection, OnGatewayDisconne
       if (!token) throw new Error('No token');
       if (!this.jwtService) throw new Error('JWT service not available');
       const payload = this.jwtService.verify(token);
-      client.user = payload;
-      
-      const organizationId = payload.organizationId;
+      // A valid signature is not enough: REST auth also rejects revoked /
+      // expired sessions and deactivated accounts. Reuse that validation so a
+      // logged-out user cannot keep listening to live attendance events.
+      const principal = this.jwtStrategy ? await this.jwtStrategy.validate(payload) : payload;
+      client.user = principal;
+
+      const organizationId = principal.organizationId;
       if (organizationId) {
         client.join(`org:${organizationId}`);
         this.logger.log(`Client ${client.id} joined attendance room org:${organizationId}`);

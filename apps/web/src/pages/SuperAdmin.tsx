@@ -60,6 +60,35 @@ interface TenantOrganization {
   } | null;
 }
 
+interface PlatformStatistics {
+  mrr?: number;
+  arr?: number;
+  orgCount?: number;
+  activeOrgs?: number;
+  studentCount?: number;
+  statusCounts?: Record<string, number>;
+}
+
+interface PlatformPlan {
+  id: string;
+  code: string;
+  name: string;
+  priceUzs: number;
+  maxStudents: number;
+  maxBranches: number;
+  maxEmployees: number;
+  hasFaceId: boolean;
+}
+
+interface SubscriptionQuotaUpdate {
+  maxStudents: number;
+  maxBranches: number;
+  maxEmployees: number;
+  hasFaceId: boolean;
+  hasAiCopilot: boolean;
+  status: string;
+}
+
 export function SuperAdminPage() {
   const queryClient = useQueryClient();
   const { push } = useToasts();
@@ -77,26 +106,26 @@ export function SuperAdminPage() {
   const [subStatus, setSubStatus] = useState<string>('ACTIVE');
 
   // Queries
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<PlatformStatistics>({
     queryKey: ['platform-statistics'],
-    queryFn: platformApi.getStatistics,
+    queryFn: () => platformApi.getStatistics() as Promise<PlatformStatistics>,
     refetchInterval: 15000,
   });
 
   const { data: organizations = [] } = useQuery<TenantOrganization[]>({
     queryKey: ['platform-organizations'],
-    queryFn: platformApi.getOrganizations,
+    queryFn: () => platformApi.getOrganizations() as Promise<TenantOrganization[]>,
     refetchInterval: 15000,
   });
 
-  const { data: plans = [] } = useQuery({
+  const { data: plans = [] } = useQuery<PlatformPlan[]>({
     queryKey: ['platform-plans'],
-    queryFn: platformApi.getPlans,
+    queryFn: () => platformApi.getPlans() as Promise<PlatformPlan[]>,
   });
 
   // Mutations
   const updateSubMutation = useMutation({
-    mutationFn: ({ orgId, data }: { orgId: string; data: any }) =>
+    mutationFn: ({ orgId, data }: { orgId: string; data: SubscriptionQuotaUpdate }) =>
       platformApi.updateOrganizationSubscription(orgId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-organizations'] });
@@ -104,7 +133,7 @@ export function SuperAdminPage() {
       setIsEditModalOpen(false);
       push('success', 'Organization subscription and quotas updated');
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       push('error', err.message || 'Failed to update organization');
     },
   });
@@ -129,7 +158,7 @@ export function SuperAdminPage() {
 
   const createInviteMutation = useMutation({
     mutationFn: (data: { maxUses: number; expiresAt: string }) =>
-      platformApi.createInvitation(data),
+      platformApi.createInvitation(data) as Promise<{ code: string; expiresAt: string }>,
     onSuccess: (data) => {
       setGeneratedInvite(data);
       push('success', 'Platform invitation code created');
@@ -416,7 +445,7 @@ export function SuperAdminPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-          {plans.map((p: any) => (
+          {plans.map((p) => (
             <GlassCard
               key={p.id}
               padding="md"

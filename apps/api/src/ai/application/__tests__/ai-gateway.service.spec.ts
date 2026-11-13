@@ -16,6 +16,7 @@ import type { ToolRegistryService } from '../../tools/registry/tool-registry.ser
 import type { ToolOrchestratorService } from '../tool-orchestrator.service';
 import type { ConversationService } from '../conversation.service';
 import type { AiActionService } from '../action.service';
+import type { AiPolicyService } from '../ai-policy.service';
 
 const context: AiContext = {
   userId: 'user-1',
@@ -98,6 +99,10 @@ describe('AiGatewayService', () => {
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
       }),
     };
+    const policy = {
+      canExecuteTool: vi.fn().mockReturnValue(true),
+      assertCanExecuteTool: vi.fn(),
+    };
 
     gateway = new AiGatewayService(
       provider as unknown as AiProvider,
@@ -105,6 +110,7 @@ describe('AiGatewayService', () => {
       orchestrator as unknown as ToolOrchestratorService,
       conversation as unknown as ConversationService,
       actionService as unknown as AiActionService,
+      policy as unknown as AiPolicyService,
     );
   });
 

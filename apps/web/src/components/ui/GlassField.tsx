@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, useId, type ReactNode } from 'react';
 import { cn } from '@/lib/design';
 
 export interface GlassFieldProps {
@@ -11,7 +11,7 @@ export interface GlassFieldProps {
   /** @deprecated no-op */ noReflection?: boolean;
   /** @deprecated no-op */ enableNoise?: boolean;
   /** @deprecated no-op */ glassDepth?: number;
-  /** @deprecated no-op */ variant?: any;
+  /** @deprecated no-op */ variant?: unknown;
   children: ReactNode;
   className?: string;
   htmlFor?: string;
@@ -32,7 +32,7 @@ function injectFieldId(
 
   // If it's a direct input or interactive form control
   if (isFormControl && element.type !== 'div') {
-    const p: any = {};
+    const p: Record<string, unknown> = {};
     if (!element.props.id) p.id = id;
     if (!element.props.name) p.name = id;
     if (error && element.props['aria-invalid'] === undefined) p['aria-invalid'] = true;

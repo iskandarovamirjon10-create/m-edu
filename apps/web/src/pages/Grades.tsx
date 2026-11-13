@@ -33,6 +33,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { parseFinancialAmount } from '@/lib/format';
 import type { Paginated, Grade, Student, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
@@ -361,13 +362,13 @@ export function GradesPage() {
 
   const studentsQ = useQuery({
     queryKey: queryKeys.students.selectors(),
-    queryFn: () => studentsApi.list({ limit: 200 }),
+    queryFn: () => studentsApi.list({ limit: 500 }),
     staleTime: 5 * 60 * 1000,
   });
 
   const groupsQ = useQuery({
     queryKey: queryKeys.groups.selectors(),
-    queryFn: () => groupsApi.list({ limit: 200 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -377,8 +378,8 @@ export function GradesPage() {
       gradesApi.create({
         studentId: d.studentId,
         groupId: d.groupId,
-        value: parseFloat(d.value),
-        maxValue: d.maxValue ? parseFloat(d.maxValue) : undefined,
+        value: parseFinancialAmount(d.value),
+        maxValue: d.maxValue ? parseFinancialAmount(d.maxValue) : undefined,
         label: d.label || undefined,
         notes: d.notes || undefined,
       }),
@@ -394,8 +395,8 @@ export function GradesPage() {
   const updateMut = useMutation({
     mutationFn: (d: GradeFormState & { id: string }) =>
       gradesApi.update(d.id, {
-        value: parseFloat(d.value),
-        maxValue: d.maxValue ? parseFloat(d.maxValue) : undefined,
+        value: parseFinancialAmount(d.value),
+        maxValue: d.maxValue ? parseFinancialAmount(d.maxValue) : undefined,
         label: d.label || undefined,
         notes: d.notes || undefined,
       }),
@@ -452,7 +453,8 @@ export function GradesPage() {
     const errs: Partial<Record<keyof GradeFormState, string>> = {};
     if (!form.studentId) errs.studentId = t('common.required');
     if (!form.groupId) errs.groupId = t('common.required');
-    if (!form.value || isNaN(parseFloat(form.value))) errs.value = t('grades.validation.number');
+    const parsedVal = parseFinancialAmount(form.value);
+    if (!form.value || isNaN(parsedVal) || parsedVal < 0) errs.value = t('grades.validation.number');
     setFormErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -574,16 +576,23 @@ export function GradesPage() {
       const sName = formatStudentName((g as { student?: any }).student);
       const grpName = (g as { group?: { name?: string } }).group?.name ?? '—';
       const tier = getScoreTier(g.value, g.maxValue ?? 100);
+      const escapeCsvCell = (val: unknown) => {
+        let str = String(val ?? '');
+        if (/^[=+\-@\t\r]/.test(str)) {
+          str = "'" + str;
+        }
+        return '"' + str.replace(/"/g, '""') + '"';
+      };
       return [
-        `"${g.id}"`,
-        `"${sName}"`,
-        `"${grpName}"`,
-        g.value,
-        g.maxValue ?? 100,
-        `"${tier.pct}%"`,
-        `"${tier.grade}"`,
-        `"${g.label ?? ''}"`,
-        `"${g.notes ?? ''}"`,
+        escapeCsvCell(g.id),
+        escapeCsvCell(sName),
+        escapeCsvCell(grpName),
+        escapeCsvCell(g.value),
+        escapeCsvCell(g.maxValue ?? 100),
+        escapeCsvCell(tier.pct + '%'),
+        escapeCsvCell(tier.grade),
+        escapeCsvCell(g.label ?? ''),
+        escapeCsvCell(g.notes ?? ''),
       ].join(',');
     });
 
@@ -602,11 +611,21 @@ export function GradesPage() {
     if (selectedIds.size === 0) return;
     try {
       const ids = Array.from(selectedIds);
-      await Promise.all(ids.map((id) => gradesApi.remove(id)));
+      let successCount = 0;
+      const CHUNK_SIZE = 5;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.allSettled(chunk.map((id) => gradesApi.remove(id)));
+        successCount += results.filter((r) => r.status === 'fulfilled').length;
+      }
       qc.invalidateQueries({ queryKey: ['grades'] });
-      push('success', t('grades.batch.deleteSuccess', { count: ids.length }));
       clearSelection();
-      playSuccess();
+      if (successCount > 0) {
+        push('success', t('grades.batch.deleteSuccess', { count: successCount }));
+        playSuccess();
+      } else {
+        push('error', t('grades.batch.deleteFailed', 'Baholarni o‘chirib bo‘lmadi'));
+      }
     } catch (err) {
       push('error', getErrorMessage(err));
     } finally {

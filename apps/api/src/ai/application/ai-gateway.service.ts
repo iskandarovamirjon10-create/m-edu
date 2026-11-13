@@ -16,6 +16,7 @@ import { ToolRegistryService } from '../tools/registry/tool-registry.service';
 import { AiActionService } from './action.service';
 import { ConversationService } from './conversation.service';
 import { ToolOrchestratorService } from './tool-orchestrator.service';
+import { AiPolicyService } from './ai-policy.service';
 
 const MAX_TOOL_ROUNDS = 4;
 const HISTORY_LIMIT = 20;
@@ -38,6 +39,7 @@ export class AiGatewayService {
     private readonly orchestrator: ToolOrchestratorService,
     private readonly conversation: ConversationService,
     private readonly actionService: AiActionService,
+    private readonly policy: AiPolicyService,
   ) {}
 
   async sendMessage(
@@ -87,8 +89,11 @@ export class AiGatewayService {
       }));
 
     const systemInstruction = this.buildSystemInstruction(context);
-    const tools = this.registry.toProviderTools();
+    const tools = this.registry.toProviderTools((tool) =>
+      this.policy.canExecuteTool(context, tool),
+    );
 
+    let consecutiveToolErrors = 0;
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const response = await this.generate(context, {
         messages: providerMessages,
@@ -114,6 +119,7 @@ export class AiGatewayService {
       const tool = this.registry.get(call.name);
 
       if (!tool) {
+        consecutiveToolErrors += 1;
         providerMessages.push(
           { role: AiRole.ASSISTANT, content: '', toolCalls: [call] },
           {
@@ -123,8 +129,42 @@ export class AiGatewayService {
             toolResult: { error: 'Unknown tool' },
           },
         );
+        if (consecutiveToolErrors >= 2) {
+          this.logger.warn(
+            `Aborting tool loop early for conversation ${conversationId}: consecutive tool errors threshold reached.`,
+          );
+          break;
+        }
         continue;
       }
+
+      // Defense-in-depth: Never trust model-generated tool selection.
+      // Re-verify authorization before doing anything with the tool call.
+      if (!this.policy.canExecuteTool(context, tool)) {
+        consecutiveToolErrors += 1;
+        this.logger.warn(
+          `Unauthorized tool invocation attempt: user ${context.userId} (role: ${context.role}) on tool ${tool.name}`,
+        );
+        providerMessages.push(
+          { role: AiRole.ASSISTANT, content: '', toolCalls: [call] },
+          {
+            role: AiRole.TOOL,
+            content: '',
+            toolCallId: call.id,
+            toolResult: { error: 'You are not allowed to run this tool.' },
+          },
+        );
+        if (consecutiveToolErrors >= 2) {
+          this.logger.warn(
+            `Aborting tool loop early for conversation ${conversationId}: consecutive authorization failures.`,
+          );
+          break;
+        }
+        continue;
+      }
+
+      // Valid tool recognized and authorized -> reset error streak
+      consecutiveToolErrors = 0;
 
       if (tool.requiresConfirmation) {
         return this.proposeAction(context, conversationId, userMessage, call);
@@ -150,6 +190,114 @@ export class AiGatewayService {
       status: AiMessageStatus.COMPLETED,
     });
     return { conversationId, messages: [userMessage, fallback], pendingAction: null };
+  }
+
+  /**
+   * Ephemeral single-turn execution for unpersisted channels (e.g. Telegram
+   * bot, quick parent answers). Executes through the canonical orchestration
+   * layer, applying identical permission filtering and tool sandboxing.
+   */
+  async executeEphemeral(
+    context: AiContext,
+    content: string,
+    history: Array<{ role: string; content: string }> = [],
+  ): Promise<string> {
+    if (!context?.organizationId || !context?.userId) {
+      throw new AiException(
+        AiErrorCode.AI_TOOL_NOT_AUTHORIZED,
+        'Tenant and user context required',
+      );
+    }
+
+    if (!content || !content.trim()) {
+      throw new AiException(
+        AiErrorCode.AI_INVALID_INPUT,
+        'Message content cannot be empty',
+      );
+    }
+
+    const providerMessages: AiProviderMessage[] = [
+      ...history
+        .filter((m) => m.content && m.content.trim().length > 0)
+        .map((m) => ({
+          role: m.role === 'user' ? AiRole.USER : AiRole.ASSISTANT,
+          content: m.content,
+        })),
+      { role: AiRole.USER, content },
+    ];
+
+    const systemInstruction = this.buildSystemInstruction(context);
+    const tools = this.registry.toProviderTools((tool) =>
+      this.policy.canExecuteTool(context, tool),
+    );
+
+    let ephemeralToolErrors = 0;
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+      const response = await this.generate(context, {
+        messages: providerMessages,
+        tools,
+        systemInstruction,
+      });
+
+      if (!response.toolCall) {
+        return response.text ?? '';
+      }
+
+      const call = response.toolCall;
+      const tool = this.registry.get(call.name);
+
+      if (!tool) {
+        ephemeralToolErrors += 1;
+        providerMessages.push(
+          { role: AiRole.ASSISTANT, content: '', toolCalls: [call] },
+          {
+            role: AiRole.TOOL,
+            content: '',
+            toolCallId: call.id,
+            toolResult: { error: 'Unknown tool' },
+          },
+        );
+        if (ephemeralToolErrors >= 2) break;
+        continue;
+      }
+
+      if (!this.policy.canExecuteTool(context, tool)) {
+        ephemeralToolErrors += 1;
+        this.logger.warn(
+          `Ephemeral: User ${context.userId} (role: ${context.role}) attempted unauthorized execution of tool: ${tool.name}`,
+        );
+        providerMessages.push(
+          { role: AiRole.ASSISTANT, content: '', toolCalls: [call] },
+          {
+            role: AiRole.TOOL,
+            content: '',
+            toolCallId: call.id,
+            toolResult: { error: 'You are not allowed to run this tool.' },
+          },
+        );
+        if (ephemeralToolErrors >= 2) break;
+        continue;
+      }
+
+      ephemeralToolErrors = 0;
+
+      if (tool.requiresConfirmation) {
+        return `Ushbu amalni bajarish uchun platforma interfeysidan foydalanib tasdiqlash talab qilinadi: ${call.name}`;
+      }
+
+      const result = await this.orchestrator.executeReadTool(context, call);
+      providerMessages.push(
+        { role: AiRole.ASSISTANT, content: '', toolCalls: [call] },
+        {
+          role: AiRole.TOOL,
+          content: '',
+          toolCallId: call.id,
+          toolResult: result.ok ? result.data : result.error,
+        },
+      );
+    }
+
+    return 'I could not complete that request. Please try rephrasing it.';
   }
 
   private async proposeAction(

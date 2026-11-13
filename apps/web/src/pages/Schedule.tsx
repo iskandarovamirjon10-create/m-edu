@@ -372,7 +372,7 @@ function GridView({
                   <button
                     type="button"
                     onClick={() => onQuickAdd(day)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200/80 bg-white/80 text-[var(--text-secondary)] shadow-sm backdrop-blur-sm transition-all hover:border-blue-500/40 hover:bg-blue-50 hover:text-blue-600 active:scale-95 dark:border-white/10 dark:bg-white/10 dark:text-white/80 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
+                    className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-slate-200/80 bg-white/80 text-[var(--text-secondary)] shadow-sm backdrop-blur-sm transition-all hover:border-blue-500/40 hover:bg-blue-50 hover:text-blue-600 active:scale-95 dark:border-white/10 dark:bg-white/10 dark:text-white/80 dark:hover:bg-blue-500/20 dark:hover:text-blue-400"
                     title={t('schedule.new')}
                     aria-label={`${t('schedule.new')} - ${dayLabel}`}
                   >
@@ -956,7 +956,7 @@ export function SchedulePage() {
 
   const groupsQ = useQuery({
     queryKey: queryKeys.groups.selectors(),
-    queryFn: () => groupsApi.list({ limit: 200 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -1121,18 +1121,25 @@ export function SchedulePage() {
       t('groups.form.room'),
       t('schedule.conflict'),
     ];
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'` + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
     const rows = listToExport.map((s) => {
       const gName = s.group?.name ?? '';
       const rName = s.room || s.group?.room || '';
       const hasConf = conflictIds.has(s.id) ? 'Ha' : 'Yo‘q';
       const day = t(formatDay(s.dayOfWeek));
       return [
-        `"${day.replace(/"/g, '""')}"`,
-        s.startTime,
-        s.endTime,
-        `"${gName.replace(/"/g, '""')}"`,
-        `"${rName.replace(/"/g, '""')}"`,
-        hasConf,
+        escapeCsvCell(day),
+        escapeCsvCell(s.startTime),
+        escapeCsvCell(s.endTime),
+        escapeCsvCell(gName),
+        escapeCsvCell(rName),
+        escapeCsvCell(hasConf),
       ];
     });
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
@@ -1328,7 +1335,7 @@ export function SchedulePage() {
           >
             {/* Left Title & Breadcrumbs */}
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2563EB] to-[#6366F1] text-white shadow-[0_4px_16px_-4px_rgba(37,99,235,0.5)]">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#2563EB] to-[#6366F1] text-white shadow-[0_4px_16px_-4px_rgba(37,99,235,0.5)]">
                 <Icon paths={I.calendarCheck} size={18} strokeWidth={2.2} />
               </div>
               <div className="min-w-0">
@@ -1422,7 +1429,7 @@ export function SchedulePage() {
                     onClick={() => setIsOptimizerOpen(true)}
                     title="AI Ziddiyatlar & Optimizator (O)"
                     aria-label="AI Ziddiyatlar & Optimizator"
-                    className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-cyan-500"
+                    className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 hover:bg-cyan-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-cyan-500"
                   >
                     <span className="text-sm">⚡</span>
                     <span className="text-xs font-semibold hidden md:inline">Optimizator</span>
@@ -1438,7 +1445,7 @@ export function SchedulePage() {
                   variant="primary"
                   size="md"
                   onClick={openCreate}
-                  className="min-h-[44px] px-4 font-bold shadow-md shadow-blue-500/20 active:scale-95 !rounded-2xl"
+                  className="min-h-[44px] px-4 font-bold shadow-md shadow-blue-500/20 active:scale-95 !rounded-xl"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={16} strokeWidth={2.5} />
@@ -1769,7 +1776,7 @@ export function SchedulePage() {
                   <button
                     type="button"
                     onClick={clearAllFilters}
-                    className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl bg-blue-500/10 text-[12px] font-bold text-blue-600 dark:text-blue-400"
+                    className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-500/10 text-[12px] font-bold text-blue-600 dark:text-blue-400"
                   >
                     <Icon paths={I.filterX} size={14} strokeWidth={2.4} />
                     <span>{t('common.clear')}</span>

@@ -57,6 +57,75 @@ const rowVariants: Variants = {
 };
 
 /* ============================================================================
+ * DOMAIN TYPES
+ * ========================================================================== */
+
+interface PayrollSummaryResponse {
+  status?: string;
+  message?: string;
+  totalPayroll?: number;
+  paidPayroll?: number;
+  averagePerTeacher?: number;
+  totalLessons?: number;
+  teacherCount?: number;
+  paidCount?: number;
+  totalCount?: number;
+}
+
+interface PayrollTeacherRow {
+  teacherId?: string;
+  name?: string;
+  totalLessons?: number;
+  runs?: number;
+  totalNet?: number;
+  totalGross?: number;
+  statuses?: Record<string, number>;
+  costPerLesson?: number;
+  rank?: number;
+}
+
+interface PayrollByTeacherResponse {
+  status?: string;
+  message?: string;
+  teachers?: PayrollTeacherRow[];
+}
+
+interface PayrollTrendPoint {
+  month: string;
+  total: number;
+  paid: number;
+  count: number;
+}
+
+interface PayrollTrendResponse {
+  status?: string;
+  message?: string;
+  trend?: PayrollTrendPoint[];
+}
+
+interface PayrollRatioPoint {
+  month: string;
+  ratio: number | null;
+  payroll: number;
+  revenue: number;
+}
+
+interface PayrollRatioResponse {
+  status?: string;
+  message?: string;
+  months?: PayrollRatioPoint[];
+}
+
+interface PayrollEfficiencyResponse {
+  status?: string;
+  message?: string;
+  overallCostPerLesson?: number;
+  totalPayroll?: number;
+  totalLessons?: number;
+  teachers?: PayrollTeacherRow[];
+}
+
+/* ============================================================================
  * CUSTOM ICONS (SVG Icons)
  * ========================================================================== */
 
@@ -605,7 +674,7 @@ function StatusChips({ statuses }: { statuses: Record<string, number> }) {
 function SummaryTab({ t }: { t: (k: string) => string }) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll-summary'],
-    queryFn: () => analyticsApi.payrollSummary() as Promise<any>,
+    queryFn: () => analyticsApi.payrollSummary() as Promise<PayrollSummaryResponse>,
   });
 
   if (isLoading) return <AnalyticsSkeleton blocks={4} />;
@@ -687,7 +756,7 @@ function SummaryTab({ t }: { t: (k: string) => string }) {
           {/* Teachers */}
           <div className="flex items-center gap-3">
             <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
               style={{
                 background: 'linear-gradient(135deg, #AF52DE 0%, #FF2D55 100%)',
                 boxShadow:
@@ -709,7 +778,7 @@ function SummaryTab({ t }: { t: (k: string) => string }) {
           {/* Paid / total */}
           <div className="flex items-center gap-3">
             <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
               style={{
                 background: 'linear-gradient(135deg, #34C759 0%, #32ADE6 100%)',
                 boxShadow:
@@ -734,7 +803,7 @@ function SummaryTab({ t }: { t: (k: string) => string }) {
           {/* Completion rate */}
           <div className="flex items-center gap-3">
             <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
               style={{
                 background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
                 boxShadow:
@@ -774,31 +843,36 @@ function SummaryTab({ t }: { t: (k: string) => string }) {
  * TAB: BY TEACHER
  * ========================================================================== */
 
-function handleOpenTeacherPayrollAnalyticsSidecar(row: any) {
+function handleOpenTeacherPayrollAnalyticsSidecar(
+  row: PayrollTeacherRow,
+  t: (k: string) => string,
+) {
+  const lessons = row.totalLessons ?? 0;
+  const runs = row.runs ?? 0;
   const sidecarData: QuickLookData = {
     id: row.teacherId || row.name || 'teacher-analytics',
     type: 'teacher',
-    title: row.name || 'O\'qituvchi',
-    subtitle: `${row.totalLessons ?? 0} ta dars o'tildi · ${row.runs ?? 0} ta hisoblash`,
+    title: row.name || t('payrollAnalytics.teacher'),
+    subtitle: `${lessons} ${t('payrollAnalytics.lessons')} · ${runs} ${t('payrollAnalytics.runs')}`,
     badge: {
-      text: 'FAOL',
+      text: t('payrollAnalytics.active'),
       tone: 'emerald',
     },
     avatar: {
-      text: (row.name || 'OQ').slice(0, 2).toUpperCase(),
+      text: (row.name || t('payrollAnalytics.teacher')).slice(0, 2).toUpperCase(),
       color: '#007AFF',
     },
     metrics: [
-      { label: 'Jami to\'langan', value: formatCurrency(row.totalNet ?? 0) },
-      { label: 'Brut summa', value: formatCurrency(row.totalGross ?? 0) },
-      { label: 'O\'tilgan darslar', value: `${row.totalLessons ?? 0} ta` },
-      { label: 'Hisoblashlar', value: `${row.runs ?? 0} ta` },
+      { label: t('payrollAnalytics.totalNet'), value: formatCurrency(row.totalNet ?? 0) },
+      { label: t('payrollAnalytics.totalGross'), value: formatCurrency(row.totalGross ?? 0) },
+      { label: t('payrollAnalytics.totalLessons'), value: String(lessons) },
+      { label: t('payrollAnalytics.runs'), value: String(runs) },
     ],
     details: [
-      { label: 'O\'qituvchi', value: row.name || '—' },
-      { label: 'Jami to\'lov', value: formatCurrency(row.totalNet ?? 0) },
-      { label: 'Jami brut', value: formatCurrency(row.totalGross ?? 0) },
-      { label: 'Darslar', value: `${row.totalLessons ?? 0} ta` },
+      { label: t('payrollAnalytics.teacher'), value: row.name || '—' },
+      { label: t('payrollAnalytics.totalNet'), value: formatCurrency(row.totalNet ?? 0) },
+      { label: t('payrollAnalytics.totalGross'), value: formatCurrency(row.totalGross ?? 0) },
+      { label: t('payrollAnalytics.totalLessons'), value: String(lessons) },
     ],
   };
   openSidecar(sidecarData);
@@ -807,7 +881,7 @@ function handleOpenTeacherPayrollAnalyticsSidecar(row: any) {
 function ByTeacherTab({ t }: { t: (k: string) => string }) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll-by-teacher'],
-    queryFn: () => analyticsApi.payrollByTeacher() as Promise<any>,
+    queryFn: () => analyticsApi.payrollByTeacher() as Promise<PayrollByTeacherResponse>,
   });
 
   if (isLoading) return <AnalyticsSkeleton blocks={3} />;
@@ -852,7 +926,7 @@ function ByTeacherTab({ t }: { t: (k: string) => string }) {
         }}
       >
         <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-          {data.teachers.map((row: any, idx: number) => (
+          {data.teachers.map((row, idx) => (
             <motion.div
               key={row.teacherId}
               initial={{ opacity: 0, x: -8 }}
@@ -861,7 +935,7 @@ function ByTeacherTab({ t }: { t: (k: string) => string }) {
               className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-[#007AFF]/[0.03]"
             >
               <div
-                className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+                className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white"
                 style={{
                   background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
                   boxShadow:
@@ -904,10 +978,10 @@ function ByTeacherTab({ t }: { t: (k: string) => string }) {
               </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <StatusChips statuses={row.statuses} />
+                <StatusChips statuses={row.statuses ?? {}} />
                 <button
                   type="button"
-                  onClick={() => handleOpenTeacherPayrollAnalyticsSidecar(row)}
+                  onClick={() => handleOpenTeacherPayrollAnalyticsSidecar(row, t)}
                   title="Split View Sidecar"
                   className="flex h-8 w-8 items-center justify-center rounded-xl text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-emerald-600 dark:hover:bg-white/[0.08]"
                 >
@@ -930,7 +1004,7 @@ function TrendTab({ t }: { t: (k: string) => string }) {
   const [months, setMonths] = useState(6);
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll-trend', months],
-    queryFn: () => analyticsApi.payrollTrend({ months }) as Promise<any>,
+    queryFn: () => analyticsApi.payrollTrend({ months }) as Promise<PayrollTrendResponse>,
   });
 
   if (isLoading) return <AnalyticsSkeleton blocks={2} />;
@@ -964,11 +1038,11 @@ function TrendTab({ t }: { t: (k: string) => string }) {
     );
   }
 
-  const maxVal = Math.max(1, ...trend.map((d: any) => d.total));
+  const maxVal = Math.max(1, ...trend.map((d) => d.total));
   const w = 640;
   const h = 200;
 
-  const points = trend.map((d: any, i: number) => {
+  const points = trend.map((d, i) => {
     const x = (i / (trend.length - 1 || 1)) * w;
     const y = h - (d.total / maxVal) * h * 0.85;
     return { x, y, label: d.month, val: d.total };
@@ -1021,7 +1095,7 @@ function TrendTab({ t }: { t: (k: string) => string }) {
         }}
       >
         <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-          {trend.map((d: any, idx: number) => (
+          {trend.map((d, idx) => (
             <motion.div
               key={d.month}
               initial={{ opacity: 0, x: -8 }}
@@ -1064,7 +1138,7 @@ function RatioTab({ t }: { t: (k: string) => string }) {
   const [months, setMonths] = useState(6);
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll-ratio', months],
-    queryFn: () => analyticsApi.payrollRatio({ months }) as Promise<any>,
+    queryFn: () => analyticsApi.payrollRatio({ months }) as Promise<PayrollRatioResponse>,
   });
 
   if (isLoading) return <AnalyticsSkeleton blocks={2} />;
@@ -1098,12 +1172,12 @@ function RatioTab({ t }: { t: (k: string) => string }) {
     );
   }
 
-  const maxRatio = Math.max(1, ...monthsData.map((d: any) => d.ratio ?? 0));
+  const maxRatio = Math.max(1, ...monthsData.map((d) => d.ratio ?? 0));
   const w = 640;
   const h = 200;
 
-  const validData = monthsData.filter((d: any) => d.ratio !== null);
-  const points = validData.map((d: any, i: number) => {
+  const validData = monthsData.filter((d) => d.ratio !== null);
+  const points = validData.map((d, i) => {
     const x = (i / (validData.length - 1 || 1)) * w;
     const y = h - ((d.ratio ?? 0) / maxRatio) * h * 0.85;
     return { x, y, label: d.month, val: d.ratio ?? 0 };
@@ -1153,7 +1227,7 @@ function RatioTab({ t }: { t: (k: string) => string }) {
         }}
       >
         <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-          {monthsData.map((d: any, idx: number) => {
+          {monthsData.map((d, idx) => {
             const ratioTone: Tone =
               d.ratio === null
                 ? 'purple'
@@ -1213,7 +1287,7 @@ function RatioTab({ t }: { t: (k: string) => string }) {
 function EfficiencyTab({ t }: { t: (k: string) => string }) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll-efficiency'],
-    queryFn: () => analyticsApi.payrollEfficiency() as Promise<any>,
+    queryFn: () => analyticsApi.payrollEfficiency() as Promise<PayrollEfficiencyResponse>,
   });
 
   if (isLoading) return <AnalyticsSkeleton blocks={3} />;
@@ -1239,6 +1313,7 @@ function EfficiencyTab({ t }: { t: (k: string) => string }) {
 
   const fmt = formatCurrency;
   const overall = data?.overallCostPerLesson ?? 0;
+  const teacherRows = data?.teachers ?? [];
 
   return (
     <motion.div variants={containerVariants} className="space-y-4">
@@ -1265,7 +1340,7 @@ function EfficiencyTab({ t }: { t: (k: string) => string }) {
         />
       </div>
 
-      {data?.teachers?.length > 0 && (
+      {teacherRows.length > 0 && (
         <motion.div
           variants={cardVariants}
           className="overflow-hidden rounded-3xl border border-[#ffffff60] bg-[#ffffff80] backdrop-blur-xl dark:border-[#ffffff10] dark:bg-[#1c1c1e80]"
@@ -1275,11 +1350,11 @@ function EfficiencyTab({ t }: { t: (k: string) => string }) {
           }}
         >
           <div className="divide-y divide-[#00000008] dark:divide-[#ffffff08]">
-            {data.teachers.map((row: any, idx: number) => {
-              const isOver = row.costPerLesson > overall;
+            {teacherRows.map((row, idx) => {
+              const isOver = (row.costPerLesson ?? 0) > overall;
               const tone: Tone = isOver ? 'red' : 'green';
               const cc = TONES[tone];
-              const isTop3 = row.rank <= 3;
+              const isTop3 = (row.rank ?? 0) <= 3;
               return (
                 <motion.div
                   key={row.teacherId}
@@ -1290,7 +1365,7 @@ function EfficiencyTab({ t }: { t: (k: string) => string }) {
                 >
                   {/* Rank */}
                   <div
-                    className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-bold tabular-nums text-white"
+                    className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold tabular-nums text-white"
                     style={{
                       background: isTop3
                         ? 'linear-gradient(135deg, #FF9500 0%, #FF2D55 100%)'
@@ -1435,7 +1510,7 @@ export function PayrollAnalyticsPage() {
                   Live
                 </span>
               </div>
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('payrollAnalytics.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">

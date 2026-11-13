@@ -106,6 +106,7 @@ export function toAiMessage(row: PrismaAiMessage): AiMessage {
     content: row.content,
     status: toMessageStatus(row.status),
     createdAt: row.createdAt.toISOString(),
+    ...(row.actionId ? { actionId: row.actionId } : {}),
     ...(toToolCalls(row.toolCalls) ? { toolCalls: toToolCalls(row.toolCalls) } : {}),
     ...(toolResult ? { toolResult } : {}),
     ...(toError(row.error) ? { error: toError(row.error) } : {}),

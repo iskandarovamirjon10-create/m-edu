@@ -22,7 +22,11 @@ import {
   Target,
   ListOrdered,
 } from 'lucide-react';
-import { aiStudioApi } from '@/lib/ai';
+import {
+  aiStudioApi,
+  type AiGeneratedQuiz,
+  type AiGeneratedLessonPlan,
+} from '@/lib/ai';
 import { cn } from '@/lib/design';
 
 export interface AiLessonQuizStudioModalProps {
@@ -62,8 +66,8 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
   const [durationMinutes, setDurationMinutes] = useState<number>(45);
 
   const [loading, setLoading] = useState(false);
-  const [quizData, setQuizData] = useState<any | null>(null);
-  const [lessonData, setLessonData] = useState<any | null>(null);
+  const [quizData, setQuizData] = useState<AiGeneratedQuiz | null>(null);
+  const [lessonData, setLessonData] = useState<AiGeneratedLessonPlan | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -114,9 +118,9 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
     if (mode === 'quiz' && quizData) {
       fullText = `# ${quizData.topic} — Viktorina & Testlar\n\n`;
       fullText += `**Fan:** ${quizData.subject || 'Umumiy'} | **Daraja:** ${quizData.level} | **Taksonomiya:** ${quizData.bloomsTaxonomyLevel}\n\n`;
-      quizData.questions?.forEach((q: any, i: number) => {
+      quizData.questions?.forEach((q, i) => {
         fullText += `### ${i + 1}. ${q.question}\n`;
-        q.options.forEach((opt: string) => (fullText += `- ${opt}\n`));
+        q.options.forEach((opt) => (fullText += `- ${opt}\n`));
         fullText += `\n**To'g'ri javob:** ${q.correctAnswer}\n**Izoh:** ${q.explanation}\n\n`;
       });
     } else if (mode === 'lesson' && lessonData) {
@@ -124,7 +128,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
       fullText += `**Davomiyligi:** ${lessonData.durationMinutes} daqiqa | **Daraja:** ${lessonData.level}\n\n`;
       fullText += `## Maqsadlar:\n${lessonData.learningObjectives?.map((o: string) => `- ${o}`).join('\n')}\n\n`;
       fullText += `## Dars bosqichlari:\n`;
-      lessonData.steps?.forEach((s: any) => {
+      lessonData.steps?.forEach((s) => {
         fullText += `### [${s.minuteRange} daq] ${s.phase}\n- **O'qituvchi:** ${s.teacherAction}\n- **O'quvchi:** ${s.studentAction}\n- **Nazorat:** ${s.checkpoint}\n\n`;
       });
       if (lessonData.differentiatedTasks) {
@@ -187,7 +191,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                   type="button"
                   onClick={() => setMode('quiz')}
                   className={cn(
-                    'flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-all',
+                    'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 min-h-[38px] tap-extend text-xs font-semibold transition-all',
                     mode === 'quiz'
                       ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
                       : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200',
@@ -200,7 +204,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                   type="button"
                   onClick={() => setMode('lesson')}
                   className={cn(
-                    'flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-all',
+                    'flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 min-h-[38px] tap-extend text-xs font-semibold transition-all',
                     mode === 'lesson'
                       ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
                       : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200',
@@ -214,7 +218,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg p-1.5 text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                className="rounded-lg p-1.5 h-9 w-9 min-h-[44px] min-w-[44px] tap-extend flex items-center justify-center text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -283,7 +287,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                           type="button"
                           onClick={() => setQuestionCount(num)}
                           className={cn(
-                            'flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all border',
+                            'flex-1 rounded-lg py-2 min-h-[38px] tap-extend text-xs font-semibold transition-all border',
                             questionCount === num
                               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                               : 'border-black/5 dark:border-white/5 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400',
@@ -305,7 +309,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                           type="button"
                           onClick={() => setDifficulty(diff)}
                           className={cn(
-                            'flex-1 rounded-lg py-1.5 text-[11px] font-semibold capitalize transition-all border',
+                            'flex-1 rounded-lg py-2 min-h-[38px] tap-extend text-[11px] font-semibold capitalize transition-all border',
                             difficulty === diff
                               ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                               : 'border-black/5 dark:border-white/5 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400',
@@ -330,7 +334,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                         type="button"
                         onClick={() => setDurationMinutes(mins)}
                         className={cn(
-                          'flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all border',
+                          'flex-1 rounded-lg py-2 min-h-[38px] tap-extend text-xs font-semibold transition-all border',
                           durationMinutes === mins
                             ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                             : 'border-black/5 dark:border-white/5 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400',
@@ -354,7 +358,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                     type="button"
                     onClick={() => setLevel(l)}
                     className={cn(
-                      'rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all',
+                      'rounded-lg px-2.5 py-1.5 min-h-[36px] tap-extend text-[11px] font-semibold transition-all',
                       level === l
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : 'bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-black/10 dark:hover:bg-white/10',
@@ -434,7 +438,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                 </div>
 
                 <div className="space-y-3">
-                  {quizData.questions?.map((q: any, idx: number) => (
+                  {quizData.questions?.map((q, idx) => (
                     <div
                       key={idx}
                       className="rounded-xl border border-black/8 dark:border-white/10 p-4 bg-white dark:bg-zinc-800/80 shadow-xs space-y-3"
@@ -505,7 +509,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                       Baholash mezonlari (Rubric):
                     </h5>
                     <div className="flex flex-wrap gap-1.5">
-                      {quizData.rubricCriteria.map((c: string, cIdx: number) => (
+                      {quizData.rubricCriteria.map((c, cIdx) => (
                         <span
                           key={cIdx}
                           className="rounded-lg bg-white dark:bg-zinc-700 px-2.5 py-1 text-[11px] text-zinc-700 dark:text-zinc-300 border border-black/5 dark:border-white/5"
@@ -584,7 +588,7 @@ export function AiLessonQuizStudioModal(props: AiLessonQuizStudioModalProps) {
                   </h5>
 
                   <div className="space-y-2.5">
-                    {lessonData.steps?.map((st: any, idx: number) => (
+                    {lessonData.steps?.map((st, idx) => (
                       <div
                         key={idx}
                         className="rounded-xl border border-black/8 dark:border-white/10 p-3.5 bg-white dark:bg-zinc-800/70 shadow-xs space-y-2 border-l-4 border-l-indigo-500"

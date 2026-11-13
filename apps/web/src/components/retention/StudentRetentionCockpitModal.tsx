@@ -26,13 +26,41 @@ interface StudentRetentionCockpitModalProps {
 
 type RiskTier = 'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
+interface RetentionStudent {
+  studentId?: string;
+  id?: string;
+  fullName?: string;
+  riskTier?: RiskTier;
+  riskScore?: number;
+  parentPhone?: string;
+  phone?: string;
+  groupNames?: string[];
+  overdueBalance?: number;
+  playbookAction?: string;
+  factors?: string[];
+}
+
+interface RetentionSummary {
+  totalEvaluated: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  totalAtRiskTuition: number;
+}
+
+interface RetentionCockpitResponse {
+  summary?: RetentionSummary;
+  students: RetentionStudent[];
+}
+
 export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModalProps> = ({
   isOpen,
   onClose,
 }) => {
   const { t } = useSafeI18n();
   const [selectedTier, setSelectedTier] = useState<RiskTier>('ALL');
-  const [activeInterventionStudent, setActiveInterventionStudent] = useState<any | null>(null);
+  const [activeInterventionStudent, setActiveInterventionStudent] = useState<RetentionStudent | null>(null);
   const [interventionType, setInterventionType] = useState<string>('DIRECTOR_CALL');
   const [interventionNote, setInterventionNote] = useState<string>('');
   const [followUpDays, setFollowUpDays] = useState<number>(3);
@@ -50,9 +78,10 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
 
   const tierParam = selectedTier === 'ALL' ? undefined : selectedTier;
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery<RetentionCockpitResponse>({
     queryKey: ['retention-cockpit', tierParam],
-    queryFn: () => retentionApi.getCockpit({ tier: tierParam, limit: 100 }),
+    queryFn: () =>
+      retentionApi.getCockpit({ tier: tierParam, limit: 100 }) as Promise<RetentionCockpitResponse>,
     enabled: isOpen,
     staleTime: 30_000,
   });
@@ -71,13 +100,13 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
       setInterventionNote('');
       queryClient.invalidateQueries({ queryKey: ['retention-cockpit'] });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || t('retention.interveneError', 'Intervensiyani qayd etishda xatolik yuz berdi'));
     },
   });
 
-  const handleStartIntervention = (student: any) => {
+  const handleStartIntervention = (student: RetentionStudent) => {
     playPop();
     setActiveInterventionStudent(student);
     setInterventionType(student.playbookAction || 'DIRECTOR_CALL');
@@ -260,7 +289,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
           </div>
         ) : (
           <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-            {data.students.map((student: any, idx: number) => (
+            {(data?.students ?? []).map((student: RetentionStudent, idx: number) => (
               <motion.div
                 key={student.studentId || student.id || idx}
                 initial={{ opacity: 0, y: 6 }}
@@ -272,7 +301,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
                     <span className="font-semibold text-sm text-foreground">
                       {student.fullName}
                     </span>
-                    {getTierBadge(student.riskTier)}
+                    {getTierBadge(student.riskTier ?? 'LOW')}
                     <span className="text-xs text-muted-foreground">
                       📞 {student.parentPhone || student.phone || 'Telefon kiritilmagan'}
                     </span>
@@ -280,9 +309,9 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
 
                   <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                     <span>Guruhlar: <strong className="text-foreground">{student.groupNames?.join(', ') || 'Guruhsiz'}</strong></span>
-                    {student.overdueBalance > 0 && (
+                    {(student.overdueBalance ?? 0) > 0 && (
                       <span className="text-rose-400 font-medium">
-                        Qarz: {formatCurrency(student.overdueBalance)}
+                        Qarz: {formatCurrency(student.overdueBalance ?? 0)}
                       </span>
                     )}
                   </div>
@@ -302,7 +331,7 @@ export const StudentRetentionCockpitModal: React.FC<StudentRetentionCockpitModal
 
                 <div className="flex items-center gap-3 shrink-0">
                   {/* Score Indicator */}
-                  <div className={`px-3 py-1.5 rounded-xl border text-center font-bold text-sm ${getScoreColor(student.riskScore)}`}>
+                  <div className={`px-3 py-1.5 rounded-xl border text-center font-bold text-sm ${getScoreColor(student.riskScore ?? 0)}`}>
                     <div className="text-[10px] uppercase tracking-wider font-medium opacity-80">Risk Ball</div>
                     {student.riskScore}/100
                   </div>

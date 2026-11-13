@@ -10,6 +10,20 @@ import { GlassSurface, GlassButton, GlassBadge, useToast } from '@/components/ui
 import { cn, Icon } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { academicRiskApi, studentsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
+
+/** Minimal student shape needed to derive churn signals. */
+interface StudentRiskRecord {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  balanceUzs?: number | string;
+  balance?: number | string;
+  primaryGroup?: string;
+  user?: { firstName?: string; lastName?: string };
+  group?: { name?: string };
+}
 
 export type ChurnRiskTier = 'critical' | 'moderate' | 'safe';
 
@@ -51,7 +65,12 @@ export function StudentChurnPredictionRadar({
     async function loadRiskData(): Promise<void> {
       try {
         const res = await academicRiskApi.list().catch(() => null);
-        const items = (res as { items?: Array<{ id: string; studentName?: string; riskLevel?: string; reason?: string }> })?.items;
+        const items = toList<{
+          id?: string;
+          studentName?: string;
+          riskLevel?: string;
+          reason?: string;
+        }>(res);
         
         if (isMounted && Array.isArray(items) && items.length > 0) {
           const mapped: AtRiskStudent[] = items.map((r, i) => ({
@@ -75,10 +94,10 @@ export function StudentChurnPredictionRadar({
 
         // Secondary fallback to real students from DB
         const studentsRes = await studentsApi.list({ limit: 50 }).catch(() => null);
-        const studentList = (studentsRes as any)?.data || (studentsRes as any)?.items || (Array.isArray(studentsRes) ? studentsRes : []);
+        const studentList = toList<StudentRiskRecord>(studentsRes);
         
         if (isMounted && Array.isArray(studentList) && studentList.length > 0) {
-          const mapped: AtRiskStudent[] = studentList.slice(0, 10).map((st: any, idx: number) => {
+          const mapped: AtRiskStudent[] = studentList.slice(0, 10).map((st, idx) => {
             const fullName = [st.user?.firstName || st.firstName, st.user?.lastName || st.lastName].filter(Boolean).join(' ') || st.name || `Talaba #${idx + 1}`;
             const balance = Number(st.balanceUzs ?? st.balance ?? 0);
             const isNegative = balance < 0;

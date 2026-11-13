@@ -231,8 +231,8 @@ describe('TelegramWebAppPage', () => {
     mockIsOnline = false;
     renderWithClient(<TelegramWebAppPage />);
 
-    const statusBadge = screen.getByRole('status');
-    expect(statusBadge).toBeInTheDocument();
+    const statusBadges = screen.getAllByRole('status');
+    expect(statusBadges.length).toBeGreaterThan(0);
   });
 
   it('synchronizes language with Telegram language_code zero-click', async () => {

@@ -743,7 +743,7 @@ export function DocumentsPage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('documents.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">

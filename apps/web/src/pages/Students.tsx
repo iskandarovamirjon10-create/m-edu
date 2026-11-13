@@ -902,7 +902,7 @@ const STAT_PALETTE: Record<
     pillBg: 'bg-amber-500/10 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300',
     glow: 'from-amber-500/14',
     sparkStroke: '#F59E0B',
-    sparkSeries: [18, 16, 20, 14, 18, 12, 16, 10, 14, 8, 12, 6],
+    sparkSeries: [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
   },
   purple: {
     iconBg: 'bg-gradient-to-br from-indigo-500/20 to-violet-500/5 dark:from-indigo-500/30 dark:to-violet-500/10',
@@ -2178,7 +2178,7 @@ export function StudentsPage() {
 
   const groups = useQuery({
     queryKey: queryKeys.groups.selectors(),
-    queryFn: () => groupsApi.list({ limit: 100 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000,
   });
@@ -2376,7 +2376,11 @@ export function StudentsPage() {
     const source = selectedIds.size > 0 ? studentList.filter((s) => selectedIds.has(s.id)) : studentList;
     if (source.length === 0) return;
 
-    const q = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const q = (v: unknown) => {
+      let s = String(v ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return `"${s.replace(/"/g, '""')}"`;
+    };
     const headers = ['ID', 'Ism Familiya', 'Email', 'Telefon', 'Guruhlar', 'Ota-ona', 'Holati'];
     const rows = source.map((s) => {
       const activeGroups = (s.groups ?? [])
@@ -2416,12 +2420,13 @@ export function StudentsPage() {
     if (!bulkDeleteIds || bulkDeleteIds.length === 0) return;
     let ok = 0;
     let failed = 0;
-    for (const id of bulkDeleteIds) {
-      try {
-        await studentsApi.remove(id);
-        ok += 1;
-      } catch {
-        failed += 1;
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < bulkDeleteIds.length; i += CHUNK_SIZE) {
+      const chunk = bulkDeleteIds.slice(i, i + CHUNK_SIZE);
+      const results = await Promise.allSettled(chunk.map((id) => studentsApi.remove(id)));
+      for (const r of results) {
+        if (r.status === 'fulfilled') ok += 1;
+        else failed += 1;
       }
     }
     setBulkDeleteIds(null);
@@ -2596,12 +2601,15 @@ export function StudentsPage() {
 
   // ── Header toolbar ───────────────────────────────────────────
   const toolBtn =
-    'h-10 w-10 min-w-[2.5rem] min-h-[2.5rem] shrink-0 p-0 flex items-center justify-center rounded-xl transition-all';
+    'h-11 w-11 min-w-[44px] min-h-[44px] shrink-0 p-0 flex items-center justify-center rounded-xl transition-all';
 
   const HeaderActions = useMemo(
     () => (
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-full">
-        <div className="inline-flex items-center gap-1.5 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.08] dark:border-white/10 shadow-xs max-w-full overflow-x-auto no-scrollbar">
+      <div className="action-bar action-bar--stack w-full sm:w-auto">
+        <div
+          data-action="secondary"
+          className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-black/[0.08] bg-black/[0.04] p-0.5 no-scrollbar shadow-xs backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]"
+        >
           <GlassButton
             type="button"
             variant="ghost"
@@ -2705,7 +2713,8 @@ export function StudentsPage() {
         <GlassButton
           asChild
           variant="primary"
-          className="h-10 min-h-[44px] w-full sm:w-auto shrink-0 rounded-2xl px-4 shadow-sm justify-center"
+          data-action="primary"
+          className="h-10 min-h-10 w-full shrink-0 justify-center rounded-xl px-4 shadow-sm sm:w-auto"
         >
           <Link to="/students/new">
             <span className="inline-flex items-center gap-2 text-xs font-bold sm:text-sm">
@@ -2815,17 +2824,18 @@ export function StudentsPage() {
                 <GlassInput
                   data-testid="students-search-input"
                   ref={searchInputRef}
-                  placeholder={t('students.searchPlaceholderEmail')}
+                  placeholder={t('students.searchPlaceholderEmail') || 'Qidirish...'}
                   value={search}
                   onChange={handleSearchChange}
                   aria-label={t('students.searchLabel')}
                   type="search"
+                  className="pr-12"
                   inputPrefix={<Icon paths={I.search} size={16} className="text-[var(--text-muted)]" />}
                 />
                 {!search && (
                   <kbd
                     aria-hidden="true"
-                    className={`pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 sm:inline-flex ${KBD}`}
+                    className={`pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 sm:inline-flex text-[10px] px-1.5 py-0.5 rounded border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-400 font-mono`}
                   >
                     ⌘K
                   </kbd>
@@ -2861,7 +2871,7 @@ export function StudentsPage() {
                   <button
                     type="button"
                     onClick={handleClearFilters}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-colors hover:bg-blue-500/15 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-[#38BDF8]"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11.5px] font-bold text-[#007AFF] transition-colors hover:bg-blue-500/15 dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-[#38BDF8]"
                   >
                     <Icon paths={I.close} size={12} strokeWidth={2.4} />
                     <span>{t('common.clear') || 'Tozalash'}</span>
@@ -2877,7 +2887,7 @@ export function StudentsPage() {
                     }}
                     aria-label="Saqlangan ko‘rinishlar"
                     aria-expanded={showSavedViews}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300 dark:hover:bg-white/[0.08]"
                   >
                     <Icon paths={I.bookmark} size={12} strokeWidth={2.2} />
                     <span className="hidden sm:inline">Ko‘rinish</span>
@@ -3075,7 +3085,7 @@ export function StudentsPage() {
             </motion.div>
           ) : (
             <motion.div key="table" variants={containerVariants} initial="hidden" animate="visible" className="relative z-10">
-              <div className="medu-scroll-x">
+              <div className="w-full overflow-x-auto no-scrollbar">
                 <table className="w-full border-collapse text-[13.5px]">
                   <thead className="lg-thead sticky top-0 z-10">
                     <tr>
@@ -3416,7 +3426,7 @@ export function StudentsPage() {
                       setFreezeForm((prev) => ({ ...prev, endDate: addDaysToIso(prev.startDate, preset.days - 1) }))
                     }
                     aria-pressed={calculateFreezeDays(freezeForm.startDate, freezeForm.endDate) === preset.days}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:-translate-y-px hover:border-sky-400 hover:text-sky-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:border-sky-400"
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:-translate-y-px hover:border-sky-400 hover:text-sky-600 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:border-sky-400"
                   >
                     <Icon paths={I.calendar} size={13} />
                     <span>{preset.label}</span>

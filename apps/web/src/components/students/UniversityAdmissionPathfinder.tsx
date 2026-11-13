@@ -18,6 +18,22 @@ import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
 import { studentsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
+
+/** Akademik profil maydonlari `Student` modeliga ixtiyoriy qo‘shiladi. */
+type StudentWithAdmission = Student & {
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  name?: string;
+  targetField?: string;
+  ieltsScore?: number | string;
+  dtmScore?: number | string;
+  gpaPercent?: number | string;
+  gradeAverage?: number | string;
+  satScore?: number | string;
+  careerGoal?: string;
+};
 
 export interface UniversityOption {
   id: string;
@@ -78,21 +94,28 @@ export const UniversityAdmissionPathfinder: React.FC<Props> = ({
     if (propStudents && propStudents.length > 0) return;
     let isMounted = true;
     studentsApi.list({ limit: 50 })
-      .then((res: any) => {
+      .then((res) => {
         if (!isMounted) return;
-        const list = res?.data || res?.items || (Array.isArray(res) ? res : []);
-        setDbStudents(list);
+        setDbStudents(toList<Student>(res));
       })
       .catch(() => {});
     return () => { isMounted = false; };
   }, [isOpen, propStudents]);
 
-  const activeStudents = (propStudents && propStudents.length > 0) ? propStudents : dbStudents;
-  
+  const activeStudents: StudentWithAdmission[] = propStudents && propStudents.length > 0
+    ? propStudents
+    : dbStudents;
+
   const studentProfiles = useMemo(() => {
-    if (!activeStudents || activeStudents.length === 0) return [];
-    return activeStudents.slice(0, 10).map((st: any) => {
-      const name = [st.user?.firstName || st.firstName, st.user?.lastName || st.lastName].filter(Boolean).join(' ') || (st as any).fullName || (st as any).name || 'Talaba';
+    if (activeStudents.length === 0) return [];
+    return activeStudents.slice(0, 10).map((st) => {
+      const name =
+        [st.user?.firstName || st.firstName, st.user?.lastName || st.lastName]
+          .filter(Boolean)
+          .join(' ') ||
+        st.fullName ||
+        st.name ||
+        'Talaba';
       return {
         id: st.id,
         studentName: name,

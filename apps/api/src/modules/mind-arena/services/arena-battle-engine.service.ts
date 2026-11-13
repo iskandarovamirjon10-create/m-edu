@@ -472,10 +472,10 @@ export class ArenaBattleEngineService {
     if (room.botAnswerTimer) clearTimeout(room.botAnswerTimer);
 
     // Determine winner
-    let p1 = room.players[0];
-    let p2 = room.players[1];
-    let p1Score = room.playerTotalScores.get(p1.studentId) || 0;
-    let p2Score = room.playerTotalScores.get(p2.studentId) || 0;
+    const p1 = room.players[0];
+    const p2 = room.players[1];
+    const p1Score = room.playerTotalScores.get(p1.studentId) || 0;
+    const p2Score = room.playerTotalScores.get(p2.studentId) || 0;
 
     let winnerId: string | null = null;
     let isDraw = false;
@@ -495,8 +495,8 @@ export class ArenaBattleEngineService {
     const expected1 = 1 / (1 + Math.pow(10, (p2.rating - p1.rating) / 400));
     const expected2 = 1 / (1 + Math.pow(10, (p1.rating - p2.rating) / 400));
 
-    let actual1 = isDraw ? 0.5 : winnerId === p1.studentId ? 1 : 0;
-    let actual2 = isDraw ? 0.5 : winnerId === p2.studentId ? 1 : 0;
+    const actual1 = isDraw ? 0.5 : winnerId === p1.studentId ? 1 : 0;
+    const actual2 = isDraw ? 0.5 : winnerId === p2.studentId ? 1 : 0;
 
     const ratingDelta1 = Math.round(K * (actual1 - expected1));
     const ratingDelta2 = Math.round(K * (actual2 - expected2));
@@ -512,8 +512,8 @@ export class ArenaBattleEngineService {
       const correctAnswers = room.playerCorrectCounts.get(player.studentId) || 0;
 
       // Rewards
-      let xpEarned = isWinner ? 150 : isPlayerDraw ? 75 : 50;
-      let coinsEarned = isWinner ? 10 : isPlayerDraw ? 4 : 2;
+      const xpEarned = isWinner ? 150 : isPlayerDraw ? 75 : 50;
+      const coinsEarned = isWinner ? 10 : isPlayerDraw ? 4 : 2;
 
       let newTitleUnlocked: any = null;
 

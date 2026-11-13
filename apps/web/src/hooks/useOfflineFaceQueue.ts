@@ -120,8 +120,26 @@ async function loadFromIdb(): Promise<OfflineAttempt[]> {
 function safeReadLocalStorage(): OfflineAttempt[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) return parsed;
+    // Corrupted non-array payload — preserve backup before resetting to prevent silent data loss
+    try {
+      localStorage.setItem(STORAGE_KEY + '_corrupted_backup', stored);
+    } catch {
+      // quota or blocked
+    }
+    return [];
   } catch {
+    // JSON parse error — preserve backup before wiping
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        localStorage.setItem(STORAGE_KEY + '_corrupted_backup', stored);
+      }
+    } catch {
+      // quota or blocked
+    }
     return [];
   }
 }
@@ -129,7 +147,7 @@ function safeReadLocalStorage(): OfflineAttempt[] {
 function safeWriteLocalStorage(items: OfflineAttempt[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch (err: unknown) {
+  } catch {
     // QuotaExceededError or SecurityError in private browsing
     // Evict older items to recover space if quota exceeded
     try {
@@ -172,10 +190,13 @@ export function useOfflineFaceQueue() {
     });
   }, []);
 
-  // Keep both localStorage and IndexedDB in sync with state
+  // Keep localStorage immediately in sync and debounce heavy IndexedDB persistence
   useEffect(() => {
     safeWriteLocalStorage(queue);
-    void persistToIdb(queue);
+    const timer = setTimeout(() => {
+      void persistToIdb(queue);
+    }, 120);
+    return () => clearTimeout(timer);
   }, [queue]);
 
   const enqueue = useCallback((item: { sessionId: string; imageBase64: string }): boolean => {

@@ -21,7 +21,7 @@ const MAX_PAGE = 1_000_000;
 
 export function parsePagination(query: PaginationQuery | undefined | null, options: PaginationOptions = {}) {
   const defaultLimit = options.limit ?? 20;
-  const maxLimit = options.maxLimit ?? 100;
+  const maxLimit = options.maxLimit ?? 1000;
 
   const page = Math.min(
     MAX_PAGE,

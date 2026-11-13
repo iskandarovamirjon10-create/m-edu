@@ -45,6 +45,7 @@ import {
   Square,
   Play,
   Sliders,
+  TrendingUp,
   HelpCircle,
   BookOpen,
   Clock,
@@ -60,7 +61,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
  * Types & Constants
  * ─────────────────────────────────────────────────────────────────────── */
 
-export type StudioTabId = 'churn' | 'debt' | 'diagnostic' | 'quiz' | 'rubric' | 'voice';
+export type StudioTabId = 'churn' | 'debt' | 'diagnostic' | 'quiz' | 'rubric' | 'voice' | 'scenario';
 
 export interface AiExecutiveSuperStudioProps {
   isOpen: boolean;
@@ -190,6 +191,20 @@ const STUDIO_TABS: readonly TabConfig[] = [
     buttonGradient: 'from-cyan-500 via-teal-500 to-emerald-600',
     glowShadow: 'shadow-[0_10px_28px_-6px_rgba(6,182,212,0.45),inset_0_1px_0_rgba(255,255,255,0.45)]',
   },
+  {
+    id: 'scenario',
+    label: 'Moliyaviy Ssenariy Modellashtirish',
+    shortLabel: 'What-If Model',
+    badge: 'Executive AI',
+    icon: TrendingUp,
+    accentText: 'text-amber-500 dark:text-amber-300',
+    accentBg: 'bg-amber-500/12 dark:bg-amber-500/20',
+    accentBorder: 'border-amber-500/30 dark:border-amber-400/35',
+    orbGradient:
+      'radial-gradient(circle, rgba(245,158,11,0.25) 0%, rgba(217,119,6,0.10) 45%, transparent 70%)',
+    buttonGradient: 'from-amber-500 via-orange-600 to-amber-600',
+    glowShadow: 'shadow-[0_10px_28px_-6px_rgba(245,158,11,0.48),inset_0_1px_0_rgba(255,255,255,0.45)]',
+  },
 ] as const;
 
 const QUIZ_PRESETS = [
@@ -303,6 +318,11 @@ export function AiExecutiveSuperStudio({
   }, [haptics, sound]);
 
   const [activeTab, setActiveTab] = useState<StudioTabId>(initialTab ?? 'churn');
+  // Scenario Simulator interactive state
+  const [studentDelta, setStudentDelta] = useState<number>(10);
+  const [priceDelta, setPriceDelta] = useState<number>(0);
+  const [expenseDelta, setExpenseDelta] = useState<number>(5);
+  const [churnReduction, setChurnReduction] = useState<number>(15);
 
   useEffect(() => {
     if (initialTab && isOpen) {
@@ -598,7 +618,7 @@ export function AiExecutiveSuperStudio({
     } finally {
       setQuizLoading(false);
     }
-  }, [quizTopic, quizSubject, quizLevel, quizCount, quizLoading]);
+  }, [quizTopic, quizSubject, quizLevel, quizLoading]);
 
   const generateRubric = useCallback(async () => {
     const cleanTopic = rubricTopic.trim();
@@ -971,7 +991,7 @@ export function AiExecutiveSuperStudio({
 
                         {/* At-Risk Student Cards */}
                         <div className="space-y-2.5">
-                          {(churnData.students || []).map((s: any) => {
+                          {(churnData.students || []).map((s) => {
                             const isHigh = s.riskLevel === 'HIGH';
                             const score = Math.min(100, Math.max(0, Number(s.riskScore) || 0));
                             return (
@@ -2110,6 +2130,209 @@ export function AiExecutiveSuperStudio({
                 {/* ════════════════════════════════════════════════════
                  * TAB 4: VOICE TTS (AI Ovozli Xabarnoma Studiyasi)
                  * ══════════════════════════════════════════════════ */}
+                
+                {/* ══════════════════════════════════════════════════
+                 * TAB 7: SCENARIO WHAT-IF MODELER (Executive C-Level)
+                 * ══════════════════════════════════════════════════ */}
+                {activeTab === 'scenario' && (
+                  <motion.div
+                    key="tab-scenario"
+                    id="studio-panel-scenario"
+                    role="tabpanel"
+                    aria-labelledby="studio-tab-scenario"
+                    tabIndex={0}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18 }}
+                    className="space-y-6 outline-none"
+                  >
+                    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            Moliyaviy va Kontingent "What-If" Ssenariy Simulyatori
+                          </h3>
+                          <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                            C-Level Modeling
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                          O'quvchilar soni, narxlar va xarajatlar tebranishining oylik va yillik sof foydaga ta'sirini interaktiv modellashtirish
+                        </p>
+                      </div>
+
+                      {onInsertPrompt && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            haptics.light();
+                            onInsertPrompt(
+                              `Hozirgi moliyaviy holatimiz bo'yicha ssenariy tahlilini hisoblab ber: o'quvchilar soni ${studentDelta >= 0 ? '+' : ''}${studentDelta}%, kurs narxi ${priceDelta >= 0 ? '+' : ''}${priceDelta}%, xarajatlar ${expenseDelta >= 0 ? '+' : ''}${expenseDelta}%, chiqib ketish (churn) kamayishi ${churnReduction}%. Boshqaruv xulosasi va 24h playbook bilan taqdim et.`
+                            );
+                            onClose();
+                          }}
+                          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-amber-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] min-h-11 sm:min-h-[40px] touch-manipulation"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Copilotga Ssenariyni Yuborish</span>
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Interactive Parameter Sliders */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {/* Slider 1: Students */}
+                      <div className="rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="text-slate-700 dark:text-slate-300">O'quvchilar Soni</span>
+                          <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-black', studentDelta >= 0 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400')}>
+                            {studentDelta >= 0 ? '+' : ''}{studentDelta}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-30"
+                          max="100"
+                          step="5"
+                          value={studentDelta}
+                          onChange={(e) => setStudentDelta(Number(e.target.value))}
+                          className="mt-3 w-full accent-amber-500"
+                        />
+                        <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                          <span>-30%</span>
+                          <span>0%</span>
+                          <span>+100%</span>
+                        </div>
+                      </div>
+
+                      {/* Slider 2: Price */}
+                      <div className="rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="text-slate-700 dark:text-slate-300">Kurs Narxi O'zgarishi</span>
+                          <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-black', priceDelta >= 0 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400')}>
+                            {priceDelta >= 0 ? '+' : ''}{priceDelta}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-20"
+                          max="50"
+                          step="5"
+                          value={priceDelta}
+                          onChange={(e) => setPriceDelta(Number(e.target.value))}
+                          className="mt-3 w-full accent-amber-500"
+                        />
+                        <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                          <span>-20%</span>
+                          <span>0%</span>
+                          <span>+50%</span>
+                        </div>
+                      </div>
+
+                      {/* Slider 3: Expenses */}
+                      <div className="rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="text-slate-700 dark:text-slate-300">Xarajatlar Tebranishi</span>
+                          <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-black', expenseDelta <= 0 ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400')}>
+                            {expenseDelta >= 0 ? '+' : ''}{expenseDelta}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-20"
+                          max="40"
+                          step="5"
+                          value={expenseDelta}
+                          onChange={(e) => setExpenseDelta(Number(e.target.value))}
+                          className="mt-3 w-full accent-amber-500"
+                        />
+                        <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                          <span>-20%</span>
+                          <span>0%</span>
+                          <span>+40%</span>
+                        </div>
+                      </div>
+
+                      {/* Slider 4: Churn Reduction */}
+                      <div className="rounded-2xl border border-black/[0.08] bg-black/[0.02] p-4 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="text-slate-700 dark:text-slate-300">Chiqib Ketishni Kamaytirish</span>
+                          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-black text-emerald-600 dark:text-emerald-400">
+                            +{churnReduction}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="50"
+                          step="5"
+                          value={churnReduction}
+                          onChange={(e) => setChurnReduction(Number(e.target.value))}
+                          className="mt-3 w-full accent-amber-500"
+                        />
+                        <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+                          <span>0%</span>
+                          <span>25%</span>
+                          <span>+50%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Calculated Live Projection Matrix */}
+                    <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-transparent p-5">
+                      <div className="flex items-center justify-between border-b border-black/[0.06] pb-3 dark:border-white/[0.06]">
+                        <div className="flex items-center gap-2">
+                          <Target className="h-4 w-4 text-amber-500" />
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                            Dinamik Prognoz Matritsasi (Kalkulyatsiya)
+                          </h4>
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                          M-EDU Predictive Engine
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div className="rounded-xl border border-black/[0.06] bg-white/40 p-3.5 backdrop-blur-md dark:border-white/[0.06] dark:bg-white/[0.02]">
+                          <span className="text-[11px] font-bold text-slate-400">Daromad O'zgarishi</span>
+                          <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
+                            {studentDelta + priceDelta + Math.round(churnReduction * 0.4) >= 0 ? '+' : ''}
+                            {studentDelta + priceDelta + Math.round(churnReduction * 0.4)}%
+                          </p>
+                          <span className="text-[10px] text-slate-500">Talabalar va narx kümülatifi</span>
+                        </div>
+
+                        <div className="rounded-xl border border-black/[0.06] bg-white/40 p-3.5 backdrop-blur-md dark:border-white/[0.06] dark:bg-white/[0.02]">
+                          <span className="text-[11px] font-bold text-slate-400">Xarajatlar Bosimi</span>
+                          <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
+                            {expenseDelta >= 0 ? '+' : ''}{expenseDelta}%
+                          </p>
+                          <span className="text-[10px] text-slate-500">Operatsion yuk</span>
+                        </div>
+
+                        <div className="rounded-xl border border-black/[0.06] bg-white/40 p-3.5 backdrop-blur-md dark:border-white/[0.06] dark:bg-white/[0.02]">
+                          <span className="text-[11px] font-bold text-slate-400">Kutilayotgan Sof Foyda</span>
+                          <p className="mt-1 text-lg font-black text-emerald-600 dark:text-emerald-400">
+                            {((studentDelta + priceDelta + Math.round(churnReduction * 0.4)) * 1.3 - expenseDelta * 0.6) >= 0 ? '+' : ''}
+                            {Math.round(((studentDelta + priceDelta + Math.round(churnReduction * 0.4)) * 1.3 - expenseDelta * 0.6) * 10) / 10}%
+                          </p>
+                          <span className="text-[10px] text-slate-500">Margin multiplikatori</span>
+                        </div>
+
+                        <div className="rounded-xl border border-black/[0.06] bg-white/40 p-3.5 backdrop-blur-md dark:border-white/[0.06] dark:bg-white/[0.02]">
+                          <span className="text-[11px] font-bold text-slate-400">Rentabellik Ko'rsatkichi</span>
+                          <p className="mt-1 text-lg font-black text-amber-500">
+                            {studentDelta >= 15 ? "BARQAROR O'SISH" : studentDelta < 0 ? "XAVF OSTIDA" : "OPTIMAL"}
+                          </p>
+                          <span className="text-[10px] text-slate-500">Boshqaruv signali</span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 {activeTab === 'voice' && (
                   <motion.div
                     key="tab-voice"

@@ -1,5 +1,6 @@
 import type { Teacher } from '@/types/academics';
 import { teachersApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 /**
  * M-EDU Teacher Classroom Quality & Pedagogical Audit Studio
  * AI-powered automated lesson observation, talk-time ratio analysis (TTT vs STT),
@@ -129,7 +130,7 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
       if (teachers && teachers.length > 0) return;
       try {
         const res = await teachersApi.list({ limit: 8 }).catch(() => null);
-        const items = Array.isArray((res as any)?.items) ? (res as any).items : Array.isArray(res) ? res : [];
+        const items = toList<Teacher>(res);
         if (isMounted && items.length > 0) {
           setDbTeachers(items);
         }
@@ -520,7 +521,7 @@ export const TeacherClassroomAuditStudio: React.FC<Props> = ({
                 </div>
 
                 <div className="space-y-3">
-                  {currentRecord.transcriptMoments.map((moment: any, idx: number) => (
+                  {currentRecord.transcriptMoments.map((moment, idx) => (
                     <div
                       key={idx}
                       className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 transition-all hover:border-blue-500/30"

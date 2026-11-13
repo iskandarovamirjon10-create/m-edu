@@ -13,11 +13,15 @@ import { triggerPrint } from '@/lib/printEngine';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { cn } from '@/lib/design';
 import { studentsApi, groupsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import type { Student } from '@/types/students';
+import type { Group } from '@/types/academics';
 
 export interface OfficialAttendanceRegisterModalProps {
   readonly open: boolean;
   readonly onClose: () => void;
+  readonly groupId?: string;
   readonly initialGroupName?: string;
   readonly initialTeacherName?: string;
 }
@@ -32,6 +36,7 @@ interface StudentRollRow {
 export function OfficialAttendanceRegisterModal({
   open,
   onClose,
+  groupId,
   initialGroupName = '',
   initialTeacherName = '',
 }: OfficialAttendanceRegisterModalProps): JSX.Element {
@@ -45,12 +50,39 @@ export function OfficialAttendanceRegisterModal({
     new Date().toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' }),
   );
   const [students, setStudents] = useState<StudentRollRow[]>([]);
+  const documentYear = new Date().getFullYear();
 
   // Load real registered students and group info from DB
   useEffect(() => {
     let isMounted = true;
+
+    const toRollRows = (studentItems: Student[]): StudentRollRow[] =>
+      studentItems.map((st) => ({
+        id: st.id,
+        name: [st.user?.firstName, st.user?.lastName].filter(Boolean).join(' ').trim() || '—',
+        phone: st.user?.phone || st.parentPhone || '—',
+        statuses: Array.from({ length: 12 }, () => 'UNKNOWN' as const),
+      }));
+
     async function loadRealEnrollments() {
       try {
+        // A selected group must drive the sheet — otherwise the "official"
+        // register prints students from unrelated groups.
+        if (groupId) {
+          const group = (await groupsApi.get(groupId)) as Group;
+          if (!isMounted || !group) return;
+          setGroupName(group.name || initialGroupName);
+          if (group.teacher?.user) {
+            setTeacherName(
+              `${group.teacher.user.firstName} ${group.teacher.user.lastName || ''}`.trim(),
+            );
+          }
+          const enrolled =
+            group.enrollments?.map((enrollment) => enrollment.student).filter(Boolean) ?? [];
+          setStudents(toRollRows(enrolled));
+          return;
+        }
+
         const [stRes, grRes] = await Promise.allSettled([
           studentsApi.list({ limit: 25 }),
           groupsApi.list({ limit: 5 }),
@@ -58,11 +90,10 @@ export function OfficialAttendanceRegisterModal({
 
         if (!isMounted) return;
 
-        const stData = stRes.status === 'fulfilled' ? (stRes.value as any) : null;
-        const grData = grRes.status === 'fulfilled' ? (grRes.value as any) : null;
-
-        const studentItems = Array.isArray(stData?.items) ? stData.items : [];
-        const groupItems = Array.isArray(grData?.items) ? grData.items : [];
+        const studentItems: Student[] =
+          stRes.status === 'fulfilled' ? toList<Student>(stRes.value) : [];
+        const groupItems: Group[] =
+          grRes.status === 'fulfilled' ? toList<Group>(grRes.value) : [];
 
         if (groupItems.length > 0) {
           setGroupName(groupItems[0].name || initialGroupName);
@@ -72,21 +103,7 @@ export function OfficialAttendanceRegisterModal({
         }
 
         if (studentItems.length > 0) {
-          const mapped: StudentRollRow[] = studentItems.map((st: any, idx: number) => {
-            const name = `${st.firstName} ${st.lastName || ''}`.trim();
-            const phone = st.user?.phone || st.guardianPhone || '+998 -- --- -- --';
-            const statuses: ('PRESENT' | 'ABSENT' | 'EXCUSED' | 'LATE' | 'UNKNOWN')[] = Array.from(
-              { length: 12 },
-              () => 'UNKNOWN' as const,
-            );
-            return {
-              id: st.id || String(idx + 1),
-              name,
-              phone,
-              statuses,
-            };
-          });
-          setStudents(mapped);
+          setStudents(toRollRows(studentItems));
         }
       } catch {
         // Fallback
@@ -96,7 +113,7 @@ export function OfficialAttendanceRegisterModal({
       void loadRealEnrollments();
     }
     return () => { isMounted = false; };
-  }, [open, initialGroupName]);
+  }, [open, groupId, initialGroupName]);
 
   // Lesson dates (e.g. 12 lessons in a month: Mon/Wed/Fri)
   const lessonDays = useMemo(() => [2, 5, 7, 9, 12, 14, 16, 19, 21, 23, 26, 28], []);
@@ -120,7 +137,10 @@ export function OfficialAttendanceRegisterModal({
       });
     });
 
-    const attendanceRate = totalSlots > 0 ? Math.round(((presentCount + lateCount) / totalSlots) * 100) : 0;
+    // Canonical rate: excused absences are not penalised.
+    const denominator = totalSlots - excusedCount;
+    const attendanceRate =
+      denominator > 0 ? Math.round(((presentCount + lateCount) / denominator) * 100) : 0;
     return { totalSlots, presentCount, absentCount, excusedCount, lateCount, attendanceRate };
   }, [students]);
 
@@ -280,7 +300,7 @@ export function OfficialAttendanceRegisterModal({
               <tbody className="divide-y divide-slate-200 dark:divide-white/10">
                 {students.length === 0 ? (
                   <tr>
-                    <td colSpan={16} className="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
+                    <td colSpan={lessonDays.length + 6} className="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
                       {t('attendance.registerSheet.emptyStudents')}
                     </td>
                   </tr>
@@ -299,7 +319,8 @@ export function OfficialAttendanceRegisterModal({
                   });
 
                   const total = st.statuses.filter((status) => status !== 'UNKNOWN').length;
-                  const rate = total > 0 ? Math.round(((p + l) / total) * 100) : 0;
+                  const denominator = total - exc;
+                  const rate = denominator > 0 ? Math.round(((p + l) / denominator) * 100) : 0;
 
                   return (
                     <tr key={st.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
@@ -351,7 +372,7 @@ export function OfficialAttendanceRegisterModal({
               <span className="text-sky-600 font-bold">K {t('attendance.registerSheet.legendLate')}</span>
             </div>
             <div>
-              Hujjat ID: <code>ATT-{month.slice(0, 3).toUpperCase()}-{groupName.slice(0, 4)}-2026</code>
+              Hujjat ID: <code>ATT-{month.slice(0, 3).toUpperCase()}-{groupName.slice(0, 4)}-{documentYear}</code>
             </div>
           </div>
 

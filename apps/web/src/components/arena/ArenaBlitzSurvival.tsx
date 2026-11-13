@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
@@ -82,6 +82,8 @@ export function ArenaBlitzSurvival() {
   });
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Timer ichidan eng so‘nggi game-over handlerini chaqirish uchun ref.
+  const handleGameOverRef = useRef<(reason: string) => void>(() => {});
 
   // Active question from shuffled pool
   const currentQuestion = useMemo<ArenaQuestion | null>(() => {
@@ -107,7 +109,7 @@ export function ArenaBlitzSurvival() {
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          handleGameOver('Vaqt tugadi!');
+          handleGameOverRef.current('Vaqt tugadi!');
           return 0;
         }
         if (prev <= 4) {
@@ -120,7 +122,7 @@ export function ArenaBlitzSurvival() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState]);
+  }, [gameState, playTick]);
 
   const startGame = () => {
     if (allQuestions.length === 0) return;
@@ -183,14 +185,21 @@ export function ArenaBlitzSurvival() {
     }
   };
 
-  const handleGameOver = (_reason: string) => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setGameState('GAMEOVER');
-    if (score >= highScore && score > 0) {
-      playCelebration();
-      haptic('celebration');
-    }
-  };
+  const handleGameOver = useCallback(
+    (_reason: string) => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setGameState('GAMEOVER');
+      if (score >= highScore && score > 0) {
+        playCelebration();
+        haptic('celebration');
+      }
+    },
+    [score, highScore, playCelebration, haptic],
+  );
+
+  useEffect(() => {
+    handleGameOverRef.current = handleGameOver;
+  }, [handleGameOver]);
 
   const currentSubject = currentQuestion
     ? SUBJECT_META[currentQuestion.subjectCategory] || {

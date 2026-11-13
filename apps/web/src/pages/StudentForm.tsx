@@ -793,11 +793,15 @@ export function StudentFormPage() {
   const formRef = useRef<HTMLFormElement>(null);
   const reduced = usePrefersReducedMotion();
 
-  const sectionRefs: Record<SectionKey, React.RefObject<HTMLDivElement | null>> = {
-    personal: useRef<HTMLDivElement | null>(null),
-    contact: useRef<HTMLDivElement | null>(null),
-    parent: useRef<HTMLDivElement | null>(null),
-  };
+  const personalRef = useRef<HTMLDivElement | null>(null);
+  const contactRef = useRef<HTMLDivElement | null>(null);
+  const parentRef = useRef<HTMLDivElement | null>(null);
+  const sectionRefs = useMemo<
+    Record<SectionKey, React.RefObject<HTMLDivElement | null>>
+  >(
+    () => ({ personal: personalRef, contact: contactRef, parent: parentRef }),
+    [],
+  );
 
   const [form, setForm] = useState<StudentFormState>(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof StudentFormState, string>>>({});
@@ -904,10 +908,10 @@ export function StudentFormPage() {
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof StudentFormState, string>> = {};
     if (!form.firstName.trim()) {
-      errors.firstName = t('teachers.form.firstNameRequired') || 'First name is required';
+      errors.firstName = t('studentForm.firstNameRequired') || 'First name is required';
     }
     if (!form.lastName.trim()) {
-      errors.lastName = t('teachers.form.lastNameRequired') || 'Last name is required';
+      errors.lastName = t('studentForm.lastNameRequired') || 'Last name is required';
     }
     if (!isEdit && form.email && !validateEmail(form.email)) {
       errors.email = t('common.emailInvalid') || 'Please enter a valid email address';
@@ -1086,7 +1090,7 @@ export function StudentFormPage() {
           title={isEdit ? t('studentForm.editTitle') : t('studentForm.addTitle')}
           subtitle={t('studentForm.subtitle')}
           actions={
-            <div className="hidden items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#86868B] sm:flex">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <kbd className="inline-flex h-6 items-center gap-1 rounded-md border border-[#00000015] bg-[#00000005] px-2 font-sans text-[10px] font-bold dark:border-[#ffffff20] dark:bg-[#ffffff10]">
                 <Icon paths={I.command} size={10} />S
               </kbd>

@@ -12,7 +12,10 @@ import {
 } from '@/components/ui';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
-import { studentsApi, coursesApi, paymentsApi, aiApi } from '@/lib/api';
+import { studentsApi, coursesApi, aiApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
+import type { Student } from '@/types/students';
+import type { Course } from '@/types/academics';
 
 export interface MonthlyForecastPoint {
   monthName: string;
@@ -34,9 +37,9 @@ export const ExecutiveCashflowForecastRadar: React.FC = () => {
     avgMonthlyFee: number;
     monthlyBurn: number;
   }>({
-    studentsCount: 2,
-    avgMonthlyFee: 650_000,
-    monthlyBurn: 1_200_000,
+    studentsCount: 0,
+    avgMonthlyFee: 0,
+    monthlyBurn: 0,
   });
 
   // Load real financial and academic baselines from PostgreSQL
@@ -45,19 +48,17 @@ export const ExecutiveCashflowForecastRadar: React.FC = () => {
 
     async function loadRealBaselines() {
       try {
-        const [studentsRes, coursesRes, paymentsRes]: any[] = await Promise.all([
+        const [studentsRes, coursesRes] = await Promise.all([
           studentsApi.list({ limit: 100 }).catch(() => null),
           coursesApi.list({ limit: 50 }).catch(() => null),
-          paymentsApi.list({ limit: 100 }).catch(() => null),
         ]);
 
         if (!active) return;
 
-        const studentsList: any[] = studentsRes?.data || studentsRes?.items || (Array.isArray(studentsRes) ? studentsRes : []);
-        const coursesList: any[] = coursesRes?.data || coursesRes?.items || (Array.isArray(coursesRes) ? coursesRes : []);
-        const paymentsList: any[] = paymentsRes?.data || paymentsRes?.items || (Array.isArray(paymentsRes) ? paymentsRes : []);
+        const studentsList = toList<Student>(studentsRes);
+        const coursesList = toList<Course>(coursesRes);
 
-        const studentsCount = Math.max(studentsList.length, 1);
+        const studentsCount = studentsList.length;
 
         // Average course price
         let totalCoursePrice = 0;
@@ -69,14 +70,10 @@ export const ExecutiveCashflowForecastRadar: React.FC = () => {
             countedCourses += 1;
           }
         }
-        const avgFee = countedCourses > 0 ? Math.round(totalCoursePrice / countedCourses) : 600_000;
+        const avgFee = countedCourses > 0 ? Math.round(totalCoursePrice / countedCourses) : 0;
 
-        // Calculate past 30 days expenses / payroll estimate
-        let totalPaid = 0;
-        for (const p of paymentsList) {
-          if (p.status === 'PAID') totalPaid += Number(p.amount) || 0;
-        }
-        const estimatedBurn = Math.max(Math.round((studentsCount * avgFee) * 0.45), 800_000);
+        // Oylik operatsion xarajat taxmini — real o‘quvchi va kurs narxidan.
+        const estimatedBurn = Math.round(studentsCount * avgFee * 0.45);
 
         setBaseMetrics({
           studentsCount,
@@ -96,9 +93,9 @@ export const ExecutiveCashflowForecastRadar: React.FC = () => {
     const multiplier = forecastModel === 'GROWTH' ? 1.25 : forecastModel === 'CONSERVATIVE' ? 0.85 : 1.0;
     const { studentsCount, avgMonthlyFee, monthlyBurn } = baseMetrics;
 
-    const m1Students = Math.max(1, Math.round(studentsCount * multiplier));
-    const m2Students = Math.max(1, Math.round(studentsCount * (multiplier * 1.15)));
-    const m3Students = Math.max(1, Math.round(studentsCount * (multiplier * 1.3)));
+    const m1Students = Math.max(0, Math.round(studentsCount * multiplier));
+    const m2Students = Math.max(0, Math.round(studentsCount * (multiplier * 1.15)));
+    const m3Students = Math.max(0, Math.round(studentsCount * (multiplier * 1.3)));
 
     const now = new Date();
     const getMonthName = (offset: number) => {

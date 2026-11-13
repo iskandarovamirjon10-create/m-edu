@@ -1,28 +1,5 @@
 'use client';
 
-/**
- * ============================================================================
- * M-EDU Attendance Page — v3.0 "Chromatic Liquid Glass · Biometric & Ledger Studio"
- * ============================================================================
- *
- * v2 → v3.0 Senior Architecture & Liquid Glass Upgrades:
- *  • [fix] Preserved existing `note` during `handleBatchMarkStatus` instead of
- *          wiping teacher comments with `note: ''`; skipped redundant updates.
- *  • [fix] Reordered Record Modal fields (Group -> Student) so selecting a group
- *          never wipes out an already-selected student.
- *  • [fix] Removed unnecessary debounce on discrete `<select>` and `<input type="date">`
- *          controls for zero-latency KPI tile and date-pill filtering.
- *  • [fix] Fixed `FloatingActionIsland` prop compatibility (`onClear` + `onClearSelection`)
- *          and resolved `'E'` / `'P'` keyboard shortcut collision when rows are selected.
- *  • [fix] Added async `URL.revokeObjectURL` cleanup for Safari/WebKit CSV downloads.
- *  • [feat] Added Biometric / Source filter (`FACE_ID`, `QR`, `MANUAL`, `SYSTEM`)
- *           and multi-criteria sorting (`Date`, `Student A-Z`, `Status`).
- *  • [feat] Added 1-Click Quick Note Preset Chips in Record & Edit modals.
- *  • [feat] Added Bulk "Late" & "Excused" actions alongside Bulk "Present".
- *  • [feat] Upgraded Bento Grid touch targets to full >=40px ergonomic glass buttons.
- * ============================================================================
- */
-
 import React, {
   useMemo,
   useState,
@@ -62,6 +39,7 @@ import type {
   AttendanceAnalytics,
 } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { useOptionalAuthState } from '@/auth/AuthContext';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { useAttendanceSocket } from '@/hooks/useAttendanceSocket';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
@@ -74,26 +52,27 @@ import { RushHourBatchAttendanceProcessor } from '@/components/camera/RushHourBa
 
 /* ============================================================================
  * iOS 27 SPRING PHYSICS & LIQUID GLASS TOKENS
+ * Calibrated via Critical Damping Ratio: zeta = c / (2 * sqrt(k * m))
  * ========================================================================== */
 
 const SPRING = {
-  snappy: { type: 'spring' as const, stiffness: 520, damping: 32, mass: 0.65 },
-  smooth: { type: 'spring' as const, stiffness: 360, damping: 31, mass: 0.82 },
-  soft: { type: 'spring' as const, stiffness: 220, damping: 28, mass: 1.0 },
-  liquid: { type: 'spring' as const, stiffness: 420, damping: 35, mass: 0.78 },
-  gel: { type: 'spring' as const, stiffness: 740, damping: 25, mass: 0.34 },
+  snappy: { type: 'spring' as const, stiffness: 520, damping: 35, mass: 0.65 }, // zeta ≈ 0.95
+  smooth: { type: 'spring' as const, stiffness: 360, damping: 32, mass: 0.82 }, // zeta ≈ 0.93
+  soft: { type: 'spring' as const, stiffness: 220, damping: 28, mass: 1.0 },    // zeta ≈ 0.94
+  liquid: { type: 'spring' as const, stiffness: 420, damping: 36, mass: 0.78 }, // zeta ≈ 0.99
+  gel: { type: 'spring' as const, stiffness: 680, damping: 28, mass: 0.36 },    // zeta ≈ 0.89
 } as const;
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.045, delayChildren: 0.02 },
+    transition: { staggerChildren: 0.04, delayChildren: 0.015 },
   },
 };
 
 const cardVariants: Variants = {
-  hidden: { opacity: 0, y: 14, scale: 0.992 },
+  hidden: { opacity: 0, y: 12, scale: 0.992 },
   visible: {
     opacity: 1,
     y: 0,
@@ -259,9 +238,11 @@ const I: Record<string, string[]> = {
     'M7 21.9l-4-4 4-4',
     'M21 11.8v2a4 4 0 0 1-4 4H4.2',
   ],
+  chevronLeft: ['M15 18l-6-6 6-6'],
+  chevronRight: ['M9 18l6-6-6-6'],
 };
 
-function Icon({
+const Icon = memo(function Icon({
   paths,
   size = 18,
   className = '',
@@ -292,7 +273,7 @@ function Icon({
       ))}
     </svg>
   );
-}
+});
 
 /* ============================================================================
  * APPLE LIQUID GLASS COLOR TOKENS
@@ -384,6 +365,13 @@ const STATUS_CYCLE_ORDER: Record<AttendanceStatus, AttendanceStatus> = {
   EXCUSED: 'PRESENT',
 };
 
+const STATUS_SHORT_LABEL: Record<AttendanceStatus, string> = {
+  PRESENT: '✓',
+  LATE: '⏰',
+  ABSENT: '✕',
+  EXCUSED: '🛡️',
+};
+
 const STATUS_TONE: Record<AttendanceStatus, Tone> = {
   PRESENT: 'emerald',
   ABSENT: 'red',
@@ -458,7 +446,13 @@ interface AttendanceFilters {
   groupId?: string;
   date?: string;
   status?: AttendanceStatus;
+  search?: string;
+  source?: string;
+  sort?: string;
 }
+
+/** Mirrors `@Roles(...)` on `DELETE /attendance/:id`. */
+const VOID_ROLES = new Set(['SUPER_ADMIN', 'ORG_ADMIN', 'MANAGER']);
 
 interface AttendanceFormState {
   studentId: string;
@@ -479,7 +473,7 @@ function createInitialForm(groupId = '', dateStr = ''): AttendanceFormState {
 }
 
 /* ============================================================================
- * HELPERS (Unicode-Safe)
+ * HELPERS (Unicode-Safe, Mathematical Apportionment & Smart Note Builder)
  * ========================================================================== */
 
 function getInitials(name: string): string {
@@ -546,6 +540,51 @@ function getYesterdayISO(): string {
   return toLocalISOString(d);
 }
 
+/** Shifts a YYYY-MM-DD date string by `deltaDays` in local time without UTC drift */
+function shiftLocalISO(isoDate: string, deltaDays: number): string {
+  const base = isoDate ? new Date(`${isoDate}T12:00:00`) : new Date();
+  if (Number.isNaN(base.getTime())) return toLocalISOString();
+  base.setDate(base.getDate() + deltaDays);
+  return toLocalISOString(base);
+}
+
+/** Smartly toggles a preset chip inside a freeform note string without wiping user text */
+function toggleNotePreset(currentNote: string, preset: string): string {
+  const parts = currentNote
+    .split('·')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const exists = parts.includes(preset);
+  if (exists) {
+    return parts.filter((p) => p !== preset).join(' · ');
+  }
+  return [...parts, preset].join(' · ');
+}
+
+/**
+ * Hamilton's Largest Remainder Method:
+ * Guarantees integer percentages always sum to exactly 100% when sum > 0.
+ */
+function apportionPercentages(counts: number[]): number[] {
+  const total = counts.reduce((acc, c) => acc + Math.max(0, c), 0);
+  if (total <= 0) return counts.map(() => 0);
+
+  const exacts = counts.map((c) => (Math.max(0, c) / total) * 100);
+  const floors = exacts.map((e) => Math.floor(e));
+  let remainderUnits = 100 - floors.reduce((acc, f) => acc + f, 0);
+
+  const indicesByRemainder = exacts
+    .map((e, i) => ({ index: i, rem: e - floors[i] }))
+    .sort((a, b) => b.rem - a.rem);
+
+  for (let i = 0; i < indicesByRemainder.length && remainderUnits > 0; i++) {
+    floors[indicesByRemainder[i].index] += 1;
+    remainderUnits -= 1;
+  }
+
+  return floors;
+}
+
 /* ============================================================================
  * LIQUID GLASS SUB-COMPONENTS
  * ========================================================================== */
@@ -593,10 +632,14 @@ function AttendanceSkeleton() {
   );
 }
 
-/** Smoothly interpolates from previous value to new value without resetting to 0 */
+/**
+ * Velocity-Continuous CountUp:
+ * Tracks instantaneous frame position (`currentFrameRef`) so mid-flight target changes
+ * smoothly redirect from the exact current interpolated number without jumping or flashing.
+ */
 const CountUp = memo(function CountUp({
   value,
-  duration = 0.85,
+  duration = 0.75,
   suffix = '',
 }: {
   value: number;
@@ -605,46 +648,52 @@ const CountUp = memo(function CountUp({
 }) {
   const safeTarget = Number.isFinite(value) ? value : 0;
   const reduced = usePrefersReducedMotion();
-  const [n, setN] = useState(safeTarget);
-  const prevValueRef = useRef(0);
+  const [displayVal, setDisplayVal] = useState(safeTarget);
+  const currentFrameRef = useRef(safeTarget);
 
   useEffect(() => {
     if (reduced) {
-      setN(safeTarget);
-      prevValueRef.current = safeTarget;
+      currentFrameRef.current = safeTarget;
+      setDisplayVal(safeTarget);
       return;
     }
-    const from = prevValueRef.current;
+
+    const from = currentFrameRef.current;
     const to = safeTarget;
-    if (from === to) {
-      setN(to);
+    if (Math.abs(from - to) < 0.01) {
+      currentFrameRef.current = to;
+      setDisplayVal(to);
       return;
     }
 
     let raf = 0;
     let startTs: number | null = null;
+    const totalMs = Math.max(120, duration * 1000);
+
     const step = (ts: number) => {
       if (startTs === null) startTs = ts;
-      const p = Math.min(1, (ts - startTs) / (duration * 1000));
+      const p = Math.min(1, (ts - startTs) / totalMs);
+      // Quartic ease-out: x(t) = 1 - (1 - t)^4
       const eased = 1 - Math.pow(1 - p, 4);
-      const current = from + (to - from) * eased;
-      setN(current);
+      const next = from + (to - from) * eased;
+      currentFrameRef.current = next;
+      setDisplayVal(next);
+
       if (p < 1) {
         raf = requestAnimationFrame(step);
       } else {
-        prevValueRef.current = to;
+        currentFrameRef.current = to;
+        setDisplayVal(to);
       }
     };
+
     raf = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(raf);
-      prevValueRef.current = to;
-    };
+    return () => cancelAnimationFrame(raf);
   }, [safeTarget, duration, reduced]);
 
   return (
     <span className="tabular-nums">
-      {Math.round(n).toLocaleString('uz-UZ')}
+      {Math.round(displayVal).toLocaleString('uz-UZ')}
       {suffix}
     </span>
   );
@@ -675,7 +724,7 @@ const KpiTile = memo(function KpiTile({
     <motion.div
       variants={rowVariants}
       whileHover={{ y: -3, scale: 1.01 }}
-      whileTap={onClick ? { scaleX: 1.03, scaleY: 0.96 } : undefined}
+      whileTap={onClick ? { scaleX: 1.025, scaleY: 0.965 } : undefined}
       transition={SPRING.smooth}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
@@ -692,7 +741,7 @@ const KpiTile = memo(function KpiTile({
           : undefined
       }
       className={cn(
-        'group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border px-4 py-3.5 backdrop-blur-2xl transition-all',
+        'group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border px-4 py-3.5 backdrop-blur-2xl transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
         onClick && 'cursor-pointer select-none',
         active
           ? 'bg-white/95 ring-2 dark:bg-surface-900/95'
@@ -752,7 +801,7 @@ const KpiTile = memo(function KpiTile({
   );
 });
 
-/** Interactive Status Badge with 1-Click Cycling Support */
+/** Interactive Status Badge with 1-Click Cycling & Optimistic Pulse */
 const StatusBadge = memo(function StatusBadge({
   status,
   label,
@@ -806,12 +855,12 @@ const StatusBadge = memo(function StatusBadge({
           e.stopPropagation();
           onCycle();
         }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scaleX: 1.06, scaleY: 0.92 }}
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
         transition={SPRING.gel}
         disabled={isUpdating}
         title={t('attendance.cycleStatusTitle')}
-        className="group/badge relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+        className="group/badge relative inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60"
         style={{
           background: c.bg,
           color: c.fg,
@@ -835,6 +884,59 @@ const StatusBadge = memo(function StatusBadge({
     >
       {content}
     </span>
+  );
+});
+
+/**
+ * NEW: Inline Direct Status Micro-Dock
+ * Lets teachers switch directly to PRESENT / LATE / ABSENT / EXCUSED in 1 click without cycling.
+ */
+const QuickStatusDock = memo(function QuickStatusDock({
+  currentStatus,
+  onSelectStatus,
+  disabled = false,
+  t,
+}: {
+  currentStatus: AttendanceStatus;
+  onSelectStatus: (target: AttendanceStatus) => void;
+  disabled?: boolean;
+  t: (k: string) => string;
+}) {
+  return (
+    <div
+      className="hidden items-center gap-0.5 rounded-xl border border-black/[0.06] bg-black/[0.025] p-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 xl:inline-flex dark:border-white/[0.08] dark:bg-white/[0.03]"
+      onClick={(e) => e.stopPropagation()}
+      role="group"
+      aria-label={t('attendance.selectStatus')}
+    >
+      {ATTENDANCE_STATUSES.map((st) => {
+        const isCurrent = currentStatus === st;
+        const c = TONES[STATUS_TONE[st]];
+        return (
+          <button
+            key={st}
+            type="button"
+            disabled={disabled || isCurrent}
+            onClick={() => onSelectStatus(st)}
+            title={t(`attendance.${st.toLowerCase()}`)}
+            aria-label={t(`attendance.${st.toLowerCase()}`)}
+            className={cn(
+              'flex h-6 w-6 items-center justify-center rounded-lg text-[10px] font-bold transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+              isCurrent
+                ? 'scale-100 shadow-xs'
+                : 'opacity-65 hover:scale-110 hover:opacity-100',
+            )}
+            style={
+              isCurrent
+                ? { background: c.gradient, color: '#fff' }
+                : { color: c.fg }
+            }
+          >
+            {STATUS_SHORT_LABEL[st]}
+          </button>
+        );
+      })}
+    </div>
   );
 });
 
@@ -916,7 +1018,7 @@ function StatusSegmented({
             aria-checked={active}
             onClick={() => onChange(s)}
             whileHover={{ y: -2 }}
-            whileTap={{ scaleX: 1.04, scaleY: 0.94 }}
+            whileTap={{ scaleX: 1.03, scaleY: 0.95 }}
             transition={SPRING.gel}
             className={cn(
               'relative flex min-h-[56px] flex-col items-center gap-1.5 rounded-2xl border px-3 py-3 text-[11.5px] font-bold tracking-tight outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-500',
@@ -968,72 +1070,123 @@ function StatusSegmented({
   );
 }
 
-/** Multi-segment iOS Storage-style Live Attendance Distribution Bar */
+/**
+ * Multi-segment iOS Storage-style Live Attendance Distribution Bar
+ * Upgraded with Hamilton Apportionment (exact 100% sum) & Interactive Segment Filtering
+ */
 const TelemetryDistributionBar = memo(function TelemetryDistributionBar({
   present,
   late,
   excused,
   absent,
+  activeStatus,
+  onSelectStatus,
+  biometricPct,
+  punctualityPct,
+  unexcusedCount,
   t,
 }: {
   present: number;
   late: number;
   excused: number;
   absent: number;
+  activeStatus: string;
+  onSelectStatus: (status: AttendanceStatus) => void;
+  biometricPct: number;
+  punctualityPct: number;
+  unexcusedCount: number;
   t: (k: string) => string;
 }) {
   const sum = present + late + excused + absent;
   if (sum <= 0) return null;
 
-  const segments = [
-    { key: 'present', label: t('attendance.present'), count: present, color: '#10B981' },
-    { key: 'late', label: t('attendance.late'), count: late, color: '#F59E0B' },
-    { key: 'excused', label: t('attendance.excused'), count: excused, color: '#007AFF' },
-    { key: 'absent', label: t('attendance.absent'), count: absent, color: '#EF4444' },
+  const rawDefs = [
+    { key: 'PRESENT' as AttendanceStatus, label: t('attendance.present'), count: present, color: '#10B981' },
+    { key: 'LATE' as AttendanceStatus, label: t('attendance.late'), count: late, color: '#F59E0B' },
+    { key: 'EXCUSED' as AttendanceStatus, label: t('attendance.excused'), count: excused, color: '#007AFF' },
+    { key: 'ABSENT' as AttendanceStatus, label: t('attendance.absent'), count: absent, color: '#EF4444' },
   ].filter((s) => s.count > 0);
+
+  const apportioned = apportionPercentages(rawDefs.map((d) => d.count));
+  const segments = rawDefs.map((d, idx) => ({
+    ...d,
+    pct: apportioned[idx] ?? 0,
+    exactWidth: (d.count / sum) * 100,
+  }));
 
   return (
     <motion.div
       variants={cardVariants}
-      className={cn(LIQUID_SURFACE, 'rounded-2xl px-4 py-3')}
+      className={cn(LIQUID_SURFACE, 'rounded-2xl px-4 py-3.5')}
     >
       <TopSpecular inset="inset-x-6" />
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B] dark:text-slate-400">
-          {t('executive.attendanceRate')} · {sum.toLocaleString('uz-UZ')}
-        </span>
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#64748B] dark:text-slate-400">
+            {t('executive.attendanceRate')} · {sum.toLocaleString('uz-UZ')}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+            ⏱ Intizom: {punctualityPct}%
+          </span>
+          {biometricPct > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:text-purple-400">
+              🛡️ Biometrik/QR: {biometricPct}%
+            </span>
+          )}
+          {unexcusedCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+              ⚠️ Izohsiz: {unexcusedCount}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           {segments.map((seg) => {
-            const pct = Math.round((seg.count / sum) * 100);
+            const isActive = activeStatus === seg.key;
             return (
-              <div
+              <button
                 key={seg.key}
-                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#1D1D1F] dark:text-[#F5F5F7]"
+                type="button"
+                onClick={() => onSelectStatus(seg.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all',
+                  isActive
+                    ? 'bg-slate-900/10 ring-1 ring-slate-400/50 dark:bg-white/15'
+                    : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06]',
+                )}
               >
                 <span className="h-2 w-2 rounded-full" style={{ background: seg.color }} />
                 <span className="text-[#64748B] dark:text-slate-400">{seg.label}:</span>
-                <span className="font-bold tabular-nums">{pct}%</span>
-              </div>
+                <span className="font-bold tabular-nums text-[#1D1D1F] dark:text-[#F5F5F7]">
+                  {seg.pct}%
+                </span>
+              </button>
             );
           })}
         </div>
       </div>
 
-      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-slate-200/70 p-0.5 dark:bg-white/[0.07]">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-200/70 p-0.5 dark:bg-white/[0.07]">
         {segments.map((seg) => {
-          const widthPct = Math.max(2, (seg.count / sum) * 100);
+          const isDimmed = Boolean(activeStatus && activeStatus !== seg.key);
           return (
-            <motion.div
+            <motion.button
               key={seg.key}
-              initial={{ width: 0 }}
-              animate={{ width: `${widthPct}%` }}
+              type="button"
+              onClick={() => onSelectStatus(seg.key)}
+              initial={false}
+              animate={{
+                width: `${seg.exactWidth}%`,
+                opacity: isDimmed ? 0.32 : 1,
+              }}
               transition={SPRING.liquid}
-              className="h-full first:rounded-l-full last:rounded-r-full"
+              className="h-full first:rounded-l-full last:rounded-r-full outline-none"
               style={{
                 background: seg.color,
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45)',
               }}
-              title={`${seg.label}: ${seg.count} (${Math.round(widthPct)}%)`}
+              title={`${seg.label}: ${seg.count} (${seg.pct}%)`}
+              aria-label={`${seg.label}: ${seg.pct}%`}
             />
           );
         })}
@@ -1051,6 +1204,10 @@ export function AttendancePage() {
   usePageTitle(t('attendance.title'));
   const { push, toastNode } = useToasts();
   const qc = useQueryClient();
+  const authState = useOptionalAuthState();
+  // The server only allows admins to void a record; teachers must not be shown
+  // an action that is guaranteed to fail with 403.
+  const canVoid = authState?.user ? VOID_ROLES.has(authState.user.role) : true;
   const sound = usePremiumSound();
   const soundRef = useRef(sound);
   useEffect(() => {
@@ -1072,9 +1229,17 @@ export function AttendancePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 200);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [cyclingId, setCyclingId] = useState<string | null>(null);
+
+  /* ── Concurrency-Safe Optimistic Status & Pending IDs ─────────────── */
+  const [pendingIds, setPendingIds] = useState<Record<string, boolean>>({});
+  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, AttendanceStatus>>(
+    {},
+  );
   const [isBatchUpdating, setIsBatchUpdating] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  /* ── Persistent Selection Cache across Search / Pages ─────────────── */
+  const selectedRecordsCacheRef = useRef<Map<string, Attendance>>(new Map());
 
   /* ── Modal state ──────────────────────────────────────────────────── */
   const [modalOpen, setModalOpen] = useState(false);
@@ -1105,9 +1270,19 @@ export function AttendancePage() {
       groupId: groupId || undefined,
       date: date || undefined,
       status: (status as AttendanceStatus) || undefined,
+      // Search/source/sort run server-side so they cover every page, not just
+      // the 20 records that happen to be loaded in the current page.
+      search: debouncedSearchQuery.trim() || undefined,
+      source: sourceFilter || undefined,
+      sort: sortBy === 'status-asc' ? 'status' : sortBy,
     }),
-    [page, groupId, date, status],
+    [page, groupId, date, status, debouncedSearchQuery, sourceFilter, sortBy],
   );
+
+  // Any change to a search/filter input invalidates the current page offset.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery, sourceFilter]);
 
   /* ── Queries ──────────────────────────────────────────────────────── */
   const attendance = useQuery({
@@ -1128,13 +1303,13 @@ export function AttendancePage() {
 
   const groups = useQuery({
     queryKey: queryKeys.groups.selectors(),
-    queryFn: () => groupsApi.list({ limit: 100 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     staleTime: 5 * 60 * 1000,
   });
 
   const students = useQuery({
     queryKey: queryKeys.students.selectors(),
-    queryFn: () => studentsApi.list({ limit: 100 }),
+    queryFn: () => studentsApi.list({ limit: 500 }),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -1192,37 +1367,59 @@ export function AttendancePage() {
     };
   }, [analyticsQuery.data]);
 
-  /* ── Client-side instant search, source filtering & sorting ───────── */
-  const rawItems = useMemo(() => data?.items || [], [data?.items]);
-  const itemsList = useMemo(() => {
-    let list = [...rawItems];
-    const q = debouncedSearchQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter((a) => {
-        const sName = fullStudentName(a).toLowerCase();
-        const gName = (a.group?.name || '').toLowerCase();
-        const note = (a.note || '').toLowerCase();
-        return sName.includes(q) || gName.includes(q) || note.includes(q);
-      });
+  /* ── Raw items merged with 0ms Optimistic Status overrides ────────── */
+  const rawItems = useMemo(() => {
+    const base = data?.items || [];
+    return base.map((item) => {
+      const opt = optimisticStatuses[item.id];
+      return opt && opt !== item.status ? { ...item, status: opt } : item;
+    });
+  }, [data?.items, optimisticStatuses]);
+
+  // Keep selection cache fresh with latest item snapshots
+  useEffect(() => {
+    rawItems.forEach((item) => {
+      if (selectedRecordsCacheRef.current.has(item.id)) {
+        selectedRecordsCacheRef.current.set(item.id, item);
+      }
+    });
+  }, [rawItems]);
+
+  /* ── Smart Telemetry Metrics (Punctuality, Biometrics, Unexcused) ──── */
+  const liveTelemetry = useMemo(() => {
+    const attended = statusCounts.present + statusCounts.late;
+    const punctualityPct =
+      attended > 0 ? Math.round((statusCounts.present / attended) * 100) : 100;
+
+    if (rawItems.length === 0) {
+      return { punctualityPct, biometricPct: 0, unexcusedCount: 0 };
     }
-    if (sourceFilter) {
-      list = list.filter((a) => {
-        const src = (a.source || 'SYSTEM').toUpperCase();
-        if (sourceFilter === 'BIOMETRIC') {
-          return src === 'FACE_ID' || src === 'FACE' || src === 'FACE_KIOSK' || src === 'TURNSTILE';
-        }
-        return src === sourceFilter;
-      });
-    }
-    if (sortBy === 'date-desc') {
-      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    } else if (sortBy === 'name-asc') {
-      list.sort((a, b) => fullStudentName(a).localeCompare(fullStudentName(b)));
-    } else if (sortBy === 'status-asc') {
-      list.sort((a, b) => a.status.localeCompare(b.status));
-    }
-    return list;
-  }, [rawItems, debouncedSearchQuery, sourceFilter, sortBy]);
+    let bioCount = 0;
+    let unexcusedCount = 0;
+    rawItems.forEach((r) => {
+      const src = (r.source || 'SYSTEM').toUpperCase();
+      if (
+        src === 'FACE_ID' ||
+        src === 'FACE' ||
+        src === 'FACE_KIOSK' ||
+        src === 'TURNSTILE' ||
+        src === 'QR'
+      ) {
+        bioCount += 1;
+      }
+      if ((r.status === 'ABSENT' || r.status === 'LATE') && !(r.note || '').trim()) {
+        unexcusedCount += 1;
+      }
+    });
+    return {
+      punctualityPct,
+      biometricPct: Math.round((bioCount / rawItems.length) * 100),
+      unexcusedCount,
+    };
+  }, [statusCounts.present, statusCounts.late, rawItems]);
+
+  /* ── Rows already filtered & sorted by the server ─────────────────── */
+  const itemsList = rawItems;
 
   /* ── Schedule-error helper ────────────────────────────────────────── */
   const pushScheduleAwareError = useCallback(
@@ -1233,7 +1430,7 @@ export function AttendancePage() {
     [push, t, locale],
   );
 
-  /* ── Cache invalidation helper ────────────────────────────────────── */
+  /* ── Single-Wave Cache Invalidation (Fixed Double-Refetch Bug) ────── */
   const invalidateAttendanceCaches = useCallback(
     (studentId?: string) => {
       void qc.invalidateQueries({ queryKey: queryKeys.attendance.all() });
@@ -1244,10 +1441,8 @@ export function AttendancePage() {
         void qc.invalidateQueries({ queryKey: queryKeys.students.detail(studentId) });
       }
       void qc.invalidateQueries({ queryKey: queryKeys.students.all() });
-      void attendance.refetch();
-      void analyticsQuery.refetch();
     },
-    [qc, attendance, analyticsQuery],
+    [qc],
   );
 
   /* ── Create mutation ──────────────────────────────────────────────── */
@@ -1255,7 +1450,7 @@ export function AttendancePage() {
     mutationFn: () =>
       attendanceApi.create({
         groupId: form.groupId,
-        date: form.date ? `${form.date}T12:00:00.000Z` : new Date().toISOString(),
+        date: form.date ? `${form.date}T12:00:00.000Z` : `${toLocalISOString()}T12:00:00.000Z`,
         records: [
           {
             studentId: form.studentId,
@@ -1276,26 +1471,59 @@ export function AttendancePage() {
     onError: pushScheduleAwareError,
   });
 
-  /* ── Update mutation ──────────────────────────────────────────────── */
+  /* ── Concurrency-Safe Optimistic Update Mutation ──────────────────── */
   const updateRecord = useMutation({
     mutationFn: (vars: { id: string; status: AttendanceStatus; note: string }) =>
       attendanceApi.update(vars.id, { status: vars.status, note: vars.note }),
-    onSuccess: () => {
+    onMutate: (vars) => {
+      setPendingIds((prev) => ({ ...prev, [vars.id]: true }));
+      setOptimisticStatuses((prev) => ({ ...prev, [vars.id]: vars.status }));
+    },
+    onSuccess: (_data, vars) => {
       push('success', t('attendance.recordUpdated'));
-      setEditTarget(null);
-      setCyclingId(null);
+      setEditTarget((cur) => (cur?.id === vars.id ? null : cur));
       invalidateAttendanceCaches();
     },
-    onError: (err: Error) => {
-      setCyclingId(null);
+    onError: (err: Error, vars) => {
+      setOptimisticStatuses((prev) => {
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
       pushScheduleAwareError(err);
     },
+    onSettled: (_data, _err, vars) => {
+      setPendingIds((prev) => {
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+    },
   });
+
+  // Clear optimistic override once server data catches up
+  useEffect(() => {
+    const serverItems = data?.items;
+    if (!serverItems) return;
+    setOptimisticStatuses((prev) => {
+      if (Object.keys(prev).length === 0) return prev;
+      let changed = false;
+      const next = { ...prev };
+      serverItems.forEach((item) => {
+        if (next[item.id] === item.status && !pendingIds[item.id]) {
+          delete next[item.id];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [data?.items, pendingIds]);
 
   /* ── Void mutation ────────────────────────────────────────────────── */
   const voidRecord = useMutation({
     mutationFn: (id: string) => attendanceApi.remove(id),
-    onSuccess: () => {
+    onSuccess: (_res, id) => {
+      selectedRecordsCacheRef.current.delete(id);
       push('success', t('attendance.recordVoided'));
       setVoidTarget(null);
       invalidateAttendanceCaches();
@@ -1303,21 +1531,27 @@ export function AttendancePage() {
     onError: pushScheduleAwareError,
   });
 
-  /* ── Quick 1-Click Inline Status Cycle ────────────────────────────── */
+  /* ── Quick 1-Click Inline Status Cycle & Direct Status Setter ─────── */
   const mutateUpdate = updateRecord.mutate;
-  const handleQuickCycleStatus = useCallback(
-    (record: Attendance) => {
-      if (updateRecord.isPending && cyclingId === record.id) return;
+  const handleSetDirectStatus = useCallback(
+    (record: Attendance, nextStatus: AttendanceStatus) => {
+      if (pendingIds[record.id] || record.status === nextStatus) return;
       soundRef.current?.playPop?.();
-      const nextStatus = STATUS_CYCLE_ORDER[record.status] ?? 'PRESENT';
-      setCyclingId(record.id);
       mutateUpdate({
         id: record.id,
         status: nextStatus,
         note: record.note || '',
       });
     },
-    [mutateUpdate, updateRecord.isPending, cyclingId],
+    [mutateUpdate, pendingIds],
+  );
+
+  const handleQuickCycleStatus = useCallback(
+    (record: Attendance) => {
+      const nextStatus = STATUS_CYCLE_ORDER[record.status] ?? 'PRESENT';
+      handleSetDirectStatus(record, nextStatus);
+    },
+    [handleSetDirectStatus],
   );
 
   /* ── Handlers ─────────────────────────────────────────────────────── */
@@ -1327,6 +1561,15 @@ export function AttendancePage() {
         setter(e.target.value);
         setPage(1);
       },
+    [],
+  );
+
+  const handleStepDate = useCallback(
+    (deltaDays: number) => {
+      soundRef.current?.playPop?.();
+      setDate((prev) => shiftLocalISO(prev || toLocalISOString(), deltaDays));
+      setPage(1);
+    },
     [],
   );
 
@@ -1406,8 +1649,8 @@ export function AttendancePage() {
     void analyticsQuery.refetch();
   }, [refetchAttendance, analyticsQuery]);
 
-  const todayISO = useMemo(() => toLocalISOString(), []);
-  const yesterdayISO = useMemo(() => getYesterdayISO(), []);
+  const todayISO = toLocalISOString();
+  const yesterdayISO = getYesterdayISO();
 
   const hasActiveFilters = Boolean(
     groupId || date || status || sourceFilter || sortBy !== 'date-desc' || searchQuery.trim(),
@@ -1484,8 +1727,8 @@ export function AttendancePage() {
     selectedIds,
     selectedCount,
     isSelected,
-    toggleSelection,
-    clearSelection,
+    toggleSelection: rawToggleSelection,
+    clearSelection: rawClearSelection,
   } = useListKeyboardNavigation<Attendance>({
     items: itemsList,
     getItemId: (a) => a.id,
@@ -1494,6 +1737,23 @@ export function AttendancePage() {
     onQuickLook: (a) => handleOpenAttendanceSidecar(a),
     onEdit: (a) => openEdit(a),
   });
+
+  const toggleSelection = useCallback(
+    (record: Attendance) => {
+      if (selectedRecordsCacheRef.current.has(record.id)) {
+        selectedRecordsCacheRef.current.delete(record.id);
+      } else {
+        selectedRecordsCacheRef.current.set(record.id, record);
+      }
+      rawToggleSelection(record.id);
+    },
+    [rawToggleSelection],
+  );
+
+  const clearSelection = useCallback(() => {
+    selectedRecordsCacheRef.current.clear();
+    rawClearSelection();
+  }, [rawClearSelection]);
 
   const allVisibleSelected =
     itemsList.length > 0 && itemsList.every((item) => isSelected(item.id));
@@ -1504,10 +1764,13 @@ export function AttendancePage() {
       clearSelection();
     } else {
       itemsList.forEach((item) => {
-        if (!isSelected(item.id)) toggleSelection(item.id);
+        if (!isSelected(item.id)) {
+          selectedRecordsCacheRef.current.set(item.id, item);
+          rawToggleSelection(item.id);
+        }
       });
     }
-  }, [allVisibleSelected, clearSelection, itemsList, isSelected, toggleSelection]);
+  }, [allVisibleSelected, clearSelection, itemsList, isSelected, rawToggleSelection]);
 
   /* ── Non-Destructive Parallel Bulk Status Update ──────────────────── */
   const handleBatchMarkStatus = useCallback(
@@ -1519,11 +1782,21 @@ export function AttendancePage() {
       setIsBatchUpdating(true);
       soundRef.current?.playPop?.();
       try {
-        // Preserve each record's existing note and skip records already in targetStatus
-        const recordById = new Map(rawItems.map((r) => [r.id, r]));
+        const recordById = new Map<string, Attendance>(selectedRecordsCacheRef.current);
+        rawItems.forEach((r) => recordById.set(r.id, r));
+
         const actionableIds = ids.filter((id) => {
           const existing = recordById.get(id);
           return !existing || existing.status !== targetStatus;
+        });
+
+        // Optimistically update all selected rows immediately
+        setOptimisticStatuses((prev) => {
+          const next = { ...prev };
+          actionableIds.forEach((id) => {
+            next[id] = targetStatus;
+          });
+          return next;
         });
 
         const results = await Promise.allSettled(
@@ -1535,6 +1808,19 @@ export function AttendancePage() {
 
         const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
         const rejected = results.filter((r) => r.status === 'rejected').length;
+        // A failed PATCH must not leave the row stuck on the optimistic value
+        // forever — drop the override so the server snapshot wins again.
+        const rejectedIds = results.flatMap((result, index) => {
+          const id = actionableIds[index];
+          return result.status === 'rejected' && id ? [id] : [];
+        });
+        if (rejectedIds.length > 0) {
+          setOptimisticStatuses((prev) => {
+            const next = { ...prev };
+            for (const id of rejectedIds) delete next[id];
+            return next;
+          });
+        }
         clearSelection();
         invalidateAttendanceCaches();
 
@@ -1555,18 +1841,23 @@ export function AttendancePage() {
     (rowsToExport: Attendance[]) => {
       if (rowsToExport.length === 0) return;
       const headers = ['ID', 'Student', 'Group', 'Date', 'Status', 'Source', 'Note'];
+      const escapeCsvCell = (val: unknown) => {
+        let str = String(val ?? '');
+        if (/^[=+\-@\t\r]/.test(str)) {
+          str = "'" + str;
+        }
+        return '"' + str.replace(/"/g, '""') + '"';
+      };
       const rows = rowsToExport.map((a) =>
         [
-          a.id,
-          fullStudentName(a).replace(/"/g, '""'),
-          (a.group?.name || '').replace(/"/g, '""'),
-          a.date,
-          a.status,
-          a.source || '',
-          (a.note || '').replace(/"/g, '""'),
-        ]
-          .map((val) => `"${val}"`)
-          .join(','),
+          escapeCsvCell(a.id),
+          escapeCsvCell(fullStudentName(a)),
+          escapeCsvCell(a.group?.name || ''),
+          escapeCsvCell(a.date),
+          escapeCsvCell(a.status),
+          escapeCsvCell(a.source || ''),
+          escapeCsvCell(a.note || ''),
+        ].join(','),
       );
 
       const bom = '\uFEFF';
@@ -1575,7 +1866,8 @@ export function AttendancePage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `attendance_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      // Fixed UTC drift: use local ISO date
+      link.download = `attendance_export_${toLocalISOString()}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1586,12 +1878,18 @@ export function AttendancePage() {
   );
 
   const handleExportSelectedAttendanceCSV = useCallback(() => {
-    const selectedRows = itemsList.filter((a) => isSelected(a.id));
+    const recordById = new Map<string, Attendance>(selectedRecordsCacheRef.current);
+    rawItems.forEach((r) => {
+      if (isSelected(r.id)) recordById.set(r.id, r);
+    });
+    const selectedRows = Array.from(selectedIds)
+      .map((id) => recordById.get(id))
+      .filter((r): r is Attendance => Boolean(r));
     handleExportCSV(selectedRows);
     clearSelection();
-  }, [itemsList, isSelected, handleExportCSV, clearSelection]);
+  }, [rawItems, isSelected, selectedIds, handleExportCSV, clearSelection]);
 
-  /* ── Global Keyboard Shortcuts (`/`, `N`, `E`, `V`, `I`, `G`, `P`, `C`) ─ */
+  /* ── Global Keyboard Shortcuts (`/`, `N`, `E`, `V`, `I`, `G`, `P`, `C`, `1-4`) ─ */
   const hasAnyDialogOpen = Boolean(
     modalOpen || registerModalOpen || editTarget || voidTarget,
   );
@@ -1606,6 +1904,33 @@ export function AttendancePage() {
         target?.tagName === 'SELECT' ||
         Boolean(target?.isContentEditable);
       if (isInput) return;
+
+      // Fast 1-2-3-4 status hotkeys for focused row
+      if (focusedIndex !== null && focusedIndex >= 0 && focusedIndex < itemsList.length) {
+        const focusedRecord = itemsList[focusedIndex];
+        if (focusedRecord) {
+          if (e.key === '1') {
+            e.preventDefault();
+            handleSetDirectStatus(focusedRecord, 'PRESENT');
+            return;
+          }
+          if (e.key === '2') {
+            e.preventDefault();
+            handleSetDirectStatus(focusedRecord, 'LATE');
+            return;
+          }
+          if (e.key === '3') {
+            e.preventDefault();
+            handleSetDirectStatus(focusedRecord, 'ABSENT');
+            return;
+          }
+          if (e.key === '4') {
+            e.preventDefault();
+            handleSetDirectStatus(focusedRecord, 'EXCUSED');
+            return;
+          }
+        }
+      }
 
       const key = e.key.toLowerCase();
       if (e.key === '/') {
@@ -1650,7 +1975,10 @@ export function AttendancePage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     hasAnyDialogOpen,
+    focusedIndex,
+    itemsList,
     selectedCount,
+    handleSetDirectStatus,
     handleOpenRecordModal,
     handleBatchMarkStatus,
     handleExportSelectedAttendanceCSV,
@@ -1752,7 +2080,7 @@ export function AttendancePage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] sm:text-4xl dark:text-[#F5F5F7]">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] sm:text-4xl dark:text-[#F5F5F7]">
                 {t('attendance.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#64748B] dark:text-slate-400">
@@ -1761,40 +2089,84 @@ export function AttendancePage() {
             </div>
 
             {/* Action Cluster */}
-            <div className="flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
-              {/* Live Refresh Button */}
-              <motion.button
-                type="button"
-                onClick={handleRetry}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
-                transition={SPRING.gel}
-                title={t('attendance.refresh')}
-                aria-label={t('attendance.refresh')}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.08] bg-white/70 text-[#64748B] transition-colors hover:text-[#1D1D1F] dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:text-white"
-              >
-                <Icon
-                  paths={I.refresh}
-                  size={16}
-                  strokeWidth={2.1}
-                  className={attendance.isFetching ? 'animate-spin text-blue-500' : ''}
-                />
-              </motion.button>
-
-              {/* Export Visible CSV Button */}
-              {itemsList.length > 0 && (
+            <div className="flex w-full flex-wrap items-center justify-start gap-2.5 lg:w-auto lg:justify-end">
+              {/* Secondary Tools Pill Group */}
+              <div className="flex items-center gap-1 rounded-xl border border-black/[0.06] bg-black/[0.03] p-1 shadow-xs backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
+                {/* Live Refresh Button */}
                 <motion.button
                   type="button"
-                  onClick={() => handleExportCSV(itemsList)}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
-                  transition={SPRING.gel}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-black/[0.08] bg-white/70 px-3.5 text-[12.5px] font-semibold text-[#1D1D1F] transition-colors hover:bg-white dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-[#F5F5F7] dark:hover:bg-white/[0.08]"
+                  onClick={handleRetry}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={SPRING.snappy}
+                  title={t('attendance.refresh')}
+                  aria-label={t('attendance.refresh')}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
                 >
-                  <Icon paths={I.download} size={14} strokeWidth={2.2} />
-                  <span className="hidden sm:inline">CSV</span>
+                  <Icon
+                    paths={I.refresh}
+                    size={15}
+                    strokeWidth={2.1}
+                    className={attendance.isFetching ? 'animate-spin text-blue-500' : ''}
+                  />
                 </motion.button>
-              )}
+
+                {/* Export Visible CSV Button */}
+                {itemsList.length > 0 && (
+                  <motion.button
+                    type="button"
+                    onClick={() => handleExportCSV(itemsList)}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.96 }}
+                    transition={SPRING.snappy}
+                    title="CSV"
+                    aria-label="CSV export"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  >
+                    <Icon paths={I.download} size={13} strokeWidth={2.2} />
+                    <span className="hidden sm:inline">CSV</span>
+                  </motion.button>
+                )}
+
+                {/* Official A4 Attendance Register Sheet Button */}
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    soundRef.current?.playPop?.();
+                    setRegisterModalOpen(true);
+                  }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={SPRING.snappy}
+                  title={`${t('attendance.registerSheetTitle')} (V)`}
+                  aria-label="Vedomost A4"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                >
+                  <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                  <span className="hidden sm:inline">Vedomost</span>
+                </motion.button>
+
+                {/* AI Copilot Analysis */}
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('open-ai-copilot', {
+                        detail: { prompt: t('attendance.aiPrompt') },
+                      }),
+                    );
+                  }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={SPRING.snappy}
+                  title={`${t('attendance.aiAnalysis')} (I)`}
+                  aria-label={t('attendance.aiAnalysis')}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/15"
+                >
+                  <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                  <span className="hidden sm:inline">{t('attendance.aiAnalysis')}</span>
+                </motion.button>
+              </div>
 
               {/* Fast-Tap Express Attendance Mode */}
               <motion.button
@@ -1804,73 +2176,30 @@ export function AttendancePage() {
                   window.dispatchEvent(new CustomEvent('medu:open-quick-attendance'));
                 }}
                 whileHover={{ scale: 1.03 }}
-                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
-                transition={SPRING.gel}
+                whileTap={{ scale: 0.96 }}
+                transition={SPRING.snappy}
                 title={`${t('attendance.expressHint')} (E)`}
                 aria-label={t('attendance.express')}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-700 shadow-xs transition-colors hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 text-xs font-bold text-indigo-700 shadow-xs transition-colors hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300"
               >
                 <span className="text-sm">⚡</span>
-                <span className="hidden sm:inline">{t('attendance.express')}</span>
+                <span>{t('attendance.express')}</span>
               </motion.button>
-
-              {/* Official A4 Attendance Register Sheet Button */}
-              <motion.button
-                type="button"
-                onClick={() => {
-                  soundRef.current?.playPop?.();
-                  setRegisterModalOpen(true);
-                }}
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
-                transition={SPRING.gel}
-                title={`${t('attendance.registerSheetTitle')} (V)`}
-                aria-label="Vedomost A4"
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 text-xs font-bold text-violet-700 shadow-xs transition-colors hover:bg-violet-500/20 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300"
-              >
-                <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
-                <span className="hidden sm:inline">Vedomost</span>
-              </motion.button>
-
-              {/* AI Copilot Analysis */}
-              <motion.div
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scaleX: 1.05, scaleY: 0.92 }}
-                transition={SPRING.gel}
-              >
-                <GlassButton
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent('open-ai-copilot', {
-                        detail: { prompt: t('attendance.aiPrompt') },
-                      }),
-                    );
-                  }}
-                  title={`${t('attendance.aiAnalysis')} (I)`}
-                  aria-label={t('attendance.aiAnalysis')}
-                  className="h-10 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 shadow-xs hover:bg-purple-500/20"
-                >
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400">
-                    <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
-                    <span className="hidden sm:inline">{t('attendance.aiAnalysis')}</span>
-                  </span>
-                </GlassButton>
-              </motion.div>
 
               {/* Primary CTA: Record Attendance */}
               <motion.div
+                data-action="primary"
                 whileHover={{ scale: 1.02 }}
-                whileTap={{ scaleX: 1.04, scaleY: 0.94 }}
-                transition={SPRING.gel}
+                whileTap={{ scale: 0.97 }}
+                transition={SPRING.snappy}
               >
                 <GlassButton
                   type="button"
                   variant="primary"
                   onClick={handleOpenRecordModal}
                   aria-label={t('attendance.record')}
-                  className="h-10 rounded-2xl px-4 text-xs font-bold shadow-sm sm:text-sm"
+                  data-action="primary"
+                  className="h-10 min-h-10 rounded-xl px-4 text-xs font-semibold shadow-[var(--shadow-brand)] sm:text-sm"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
@@ -1896,7 +2225,7 @@ export function AttendancePage() {
         <div
           role="tablist"
           aria-label={t('attendance.title')}
-          className="flex items-center gap-1.5 overflow-x-auto rounded-2xl border border-white/65 bg-white/75 p-1.5 shadow-xs backdrop-blur-2xl dark:border-white/[0.09] dark:bg-white/[0.04]"
+          className="flex items-center gap-1 overflow-x-auto rounded-xl border border-white/65 bg-white/75 p-1 shadow-xs backdrop-blur-2xl dark:border-white/[0.09] dark:bg-white/[0.04]"
         >
           {(
             [
@@ -1918,7 +2247,7 @@ export function AttendancePage() {
                   setActiveTab(tab.id);
                 }}
                 className={cn(
-                  'relative flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-semibold transition-colors',
+                  'relative flex h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-xs font-semibold transition-colors',
                   selected
                     ? 'text-slate-900 dark:text-white'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
@@ -1929,7 +2258,7 @@ export function AttendancePage() {
                     layoutId="attendanceMainTabPill"
                     transition={SPRING.snappy}
                     aria-hidden="true"
-                    className="absolute inset-0 -z-10 rounded-xl border border-white/80 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_rgba(15,23,42,0.08)] dark:border-white/15 dark:bg-white/12"
+                    className="absolute inset-0 -z-10 rounded-lg border border-white/80 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_rgba(15,23,42,0.08)] dark:border-white/15 dark:bg-white/12"
                   />
                 )}
                 <span>{tab.emoji}</span>
@@ -2038,6 +2367,15 @@ export function AttendancePage() {
                 late={statusCounts.late}
                 excused={statusCounts.excused}
                 absent={statusCounts.absent}
+                activeStatus={status}
+                onSelectStatus={(st) => {
+                  soundRef.current?.playPop?.();
+                  setStatus((prev) => (prev === st ? '' : st));
+                  setPage(1);
+                }}
+                biometricPct={liveTelemetry.biometricPct}
+                punctualityPct={liveTelemetry.punctualityPct}
+                unexcusedCount={liveTelemetry.unexcusedCount}
                 t={t}
               />
             </div>
@@ -2051,9 +2389,9 @@ export function AttendancePage() {
               <TopSpecular inset="inset-x-8" />
 
               {/* Primary Filter Grid */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
                 {/* Instant Student / Note Search */}
-                <div className="relative lg:col-span-2">
+                <div className="relative sm:col-span-2 lg:col-span-4">
                   <FieldIcon icon={I.search} tone="cyan" />
                   <GlassInput
                     ref={searchInputRef}
@@ -2077,7 +2415,7 @@ export function AttendancePage() {
                 </div>
 
                 {/* Group Selector */}
-                <div className="relative">
+                <div className="relative lg:col-span-2">
                   <FieldIcon icon={I.usersRound} tone="purple" />
                   <GlassSelect
                     id="attendance-group-filter"
@@ -2097,7 +2435,7 @@ export function AttendancePage() {
                 </div>
 
                 {/* Date Input */}
-                <div className="relative">
+                <div className="relative lg:col-span-2">
                   <FieldIcon icon={I.calendar} tone="blue" />
                   <GlassInput
                     id="attendance-date-filter"
@@ -2111,7 +2449,7 @@ export function AttendancePage() {
                 </div>
 
                 {/* Status Selector */}
-                <div className="relative">
+                <div className="relative lg:col-span-2">
                   <FieldIcon icon={I.filter} tone="orange" />
                   <GlassSelect
                     id="attendance-status-filter"
@@ -2131,7 +2469,7 @@ export function AttendancePage() {
                 </div>
 
                 {/* Sort Selector */}
-                <div className="relative">
+                <div className="relative lg:col-span-2">
                   <FieldIcon icon={I.sort} tone="emerald" />
                   <GlassSelect
                     id="attendance-sort-by"
@@ -2148,7 +2486,7 @@ export function AttendancePage() {
                 </div>
               </div>
 
-              {/* Secondary Utility Sub-bar: Quick Date Pills + Biometric Source Filter + Layout Switcher */}
+              {/* Secondary Utility Sub-bar: Date Stepper + Quick Date Pills + Biometric Source Filter + Layout Switcher */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.04] pt-2.5 dark:border-white/[0.05]">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {/* Select All Checkbox Pill */}
@@ -2183,37 +2521,57 @@ export function AttendancePage() {
                     </button>
                   )}
 
-                  {/* Quick Date Presets */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDate(date === todayISO ? '' : todayISO);
-                      setPage(1);
-                    }}
-                    className={cn(
-                      'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
-                      date === todayISO
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
-                    )}
-                  >
-                    Bugun
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDate(date === yesterdayISO ? '' : yesterdayISO);
-                      setPage(1);
-                    }}
-                    className={cn(
-                      'rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all',
-                      date === yesterdayISO
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-black/[0.03] text-[#64748B] hover:bg-black/[0.06] dark:bg-white/[0.04] dark:text-slate-400',
-                    )}
-                  >
-                    Kecha
-                  </button>
+                  {/* Chronological Date Stepper + Quick Date Presets */}
+                  <div className="inline-flex items-center gap-0.5 rounded-lg bg-black/[0.03] p-0.5 dark:bg-white/[0.04]">
+                    <button
+                      type="button"
+                      onClick={() => handleStepDate(-1)}
+                      title="Oldingi kun"
+                      aria-label="Oldingi kun"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-[#64748B] transition-colors hover:bg-black/[0.06] hover:text-[#1D1D1F] dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                    >
+                      <Icon paths={I.chevronLeft} size={13} strokeWidth={2.4} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDate(date === todayISO ? '' : todayISO);
+                        setPage(1);
+                      }}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-[11px] font-bold transition-all',
+                        date === todayISO
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-[#64748B] hover:bg-black/[0.06] dark:text-slate-400',
+                      )}
+                    >
+                      Bugun
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDate(date === yesterdayISO ? '' : yesterdayISO);
+                        setPage(1);
+                      }}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-[11px] font-bold transition-all',
+                        date === yesterdayISO
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-[#64748B] hover:bg-black/[0.06] dark:text-slate-400',
+                      )}
+                    >
+                      Kecha
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStepDate(1)}
+                      title="Keyingi kun"
+                      aria-label="Keyingi kun"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-[#64748B] transition-colors hover:bg-black/[0.06] hover:text-[#1D1D1F] dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                    >
+                      <Icon paths={I.chevronRight} size={13} strokeWidth={2.4} />
+                    </button>
+                  </div>
 
                   {/* Quick Source / Biometric Filter Pills */}
                   {(
@@ -2361,17 +2719,19 @@ export function AttendancePage() {
                   const gradient = avatarGradient(name);
                   const selected = isSelected(a.id);
                   const focused = focusedIndex === idx;
+                  const isRowPending = Boolean(pendingIds[a.id]);
 
                   return (
                     <motion.div
                       key={a.id}
+                      layout="position"
                       id={`attendance-row-${a.id}`}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.02, 0.3) }}
+                      transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.018, 0.25) }}
                       onClick={() => handleOpenAttendanceSidecar(a)}
                       className={cn(
-                        'group flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-all sm:flex-row sm:items-center sm:justify-between sm:px-5',
+                        'group flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-colors sm:flex-row sm:items-center sm:justify-between sm:px-5',
                         selected
                           ? 'bg-blue-500/[0.08] dark:bg-blue-500/[0.14]'
                           : focused
@@ -2385,7 +2745,7 @@ export function AttendancePage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggleSelection(a.id);
+                            toggleSelection(a);
                           }}
                           className="-m-2 inline-flex h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                           aria-label={t('attendance.selectRowAria', { name })}
@@ -2470,13 +2830,20 @@ export function AttendancePage() {
                         </div>
                       </div>
 
-                      {/* Right: Interactive 1-Click Status Badge + Action Buttons */}
-                      <div className="flex w-full shrink-0 items-center justify-between gap-3 border-t border-black/[0.04] pt-2 sm:w-auto sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.04]">
+                      {/* Right: Direct Status Micro-Dock + 1-Click Status Badge + Action Buttons */}
+                      <div className="flex w-full shrink-0 items-center justify-between gap-2.5 border-t border-black/[0.04] pt-2 sm:w-auto sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.04]">
+                        <QuickStatusDock
+                          currentStatus={a.status}
+                          onSelectStatus={(st) => handleSetDirectStatus(a, st)}
+                          disabled={isRowPending}
+                          t={t}
+                        />
+
                         <StatusBadge
                           status={a.status}
                           label={t(`attendance.${a.status.toLowerCase()}`)}
                           onCycle={() => handleQuickCycleStatus(a)}
-                          isUpdating={cyclingId === a.id && updateRecord.isPending}
+                          isUpdating={isRowPending}
                         />
 
                         <div
@@ -2521,25 +2888,27 @@ export function AttendancePage() {
                             <Icon paths={I.edit} size={14} strokeWidth={2.1} />
                           </motion.button>
 
-                          <motion.button
-                            type="button"
-                            onClick={() => setVoidTarget(a)}
-                            whileHover={{ scale: 1.08 }}
-                            whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
-                            transition={SPRING.gel}
-                            aria-label={t('attendance.voidAria', {
-                              name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
-                            })}
-                            title={t('attendance.void')}
-                            className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
-                            style={{
-                              background: TONES.red.bg,
-                              color: TONES.red.fg,
-                              border: `1px solid ${TONES.red.border}`,
-                            }}
-                          >
-                            <Icon paths={I.trash} size={14} strokeWidth={2.1} />
-                          </motion.button>
+                          {canVoid && (
+                            <motion.button
+                              type="button"
+                              onClick={() => setVoidTarget(a)}
+                              whileHover={{ scale: 1.08 }}
+                              whileTap={{ scaleX: 1.06, scaleY: 0.9 }}
+                              transition={SPRING.gel}
+                              aria-label={t('attendance.voidAria', {
+                                name: a.student?.user?.firstName ?? t('attendance.selectStudent'),
+                              })}
+                              title={t('attendance.void')}
+                              className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+                              style={{
+                                background: TONES.red.bg,
+                                color: TONES.red.fg,
+                                border: `1px solid ${TONES.red.border}`,
+                              }}
+                            >
+                              <Icon paths={I.trash} size={14} strokeWidth={2.1} />
+                            </motion.button>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -2555,15 +2924,17 @@ export function AttendancePage() {
                   const gradient = avatarGradient(name);
                   const selected = isSelected(a.id);
                   const focused = focusedIndex === idx;
+                  const isRowPending = Boolean(pendingIds[a.id]);
 
                   return (
                     <motion.div
                       key={a.id}
+                      layout="position"
                       id={`attendance-row-${a.id}`}
                       initial={{ opacity: 0, scale: 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
                       whileHover={{ y: -3 }}
-                      transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.025, 0.25) }}
+                      transition={{ ...SPRING.smooth, delay: Math.min(idx * 0.02, 0.22) }}
                       onClick={() => handleOpenAttendanceSidecar(a)}
                       className={cn(
                         'group relative flex cursor-pointer flex-col justify-between rounded-2xl border p-4 transition-all',
@@ -2580,7 +2951,7 @@ export function AttendancePage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleSelection(a.id);
+                              toggleSelection(a);
                             }}
                             className="-m-1.5 inline-flex h-9 w-9 items-center justify-center rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                             aria-label={t('attendance.selectRowAria', { name })}
@@ -2618,7 +2989,7 @@ export function AttendancePage() {
                           status={a.status}
                           label={t(`attendance.${a.status.toLowerCase()}`)}
                           onCycle={() => handleQuickCycleStatus(a)}
-                          isUpdating={cyclingId === a.id && updateRecord.isPending}
+                          isUpdating={isRowPending}
                         />
                       </div>
 
@@ -2659,15 +3030,17 @@ export function AttendancePage() {
                           >
                             <Icon paths={I.edit} size={14} strokeWidth={2} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setVoidTarget(a)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-500/10"
-                            title={t('attendance.void')}
-                            aria-label={t('attendance.void')}
-                          >
-                            <Icon paths={I.trash} size={14} strokeWidth={2} />
-                          </button>
+                          {canVoid && (
+                            <button
+                              type="button"
+                              onClick={() => setVoidTarget(a)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-500/10"
+                              title={t('attendance.void')}
+                              aria-label={t('attendance.void')}
+                            >
+                              <Icon paths={I.trash} size={14} strokeWidth={2} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -2693,10 +3066,11 @@ export function AttendancePage() {
       <OfficialAttendanceRegisterModal
         open={registerModalOpen}
         onClose={() => setRegisterModalOpen(false)}
+        groupId={groupId || undefined}
       />
 
       {/* ============================================================
-          RECORD ATTENDANCE MODAL (Group First -> Student + Note Presets)
+          RECORD ATTENDANCE MODAL (Group First -> Student + Smart Note Toggle)
       ============================================================ */}
       <GlassModal
         open={modalOpen}
@@ -2721,15 +3095,17 @@ export function AttendancePage() {
               label={t('attendance.selectGroup')}
               required
               error={formErrors.groupId}
+              htmlFor="attendance-group-select"
             >
               <div className="relative">
                 <FieldIcon icon={I.usersRound} tone="green" />
                 <GlassSelect
+                  id="attendance-group-select"
                   value={form.groupId}
                   onChange={handleFormChange('groupId')}
                   required
                   aria-invalid={Boolean(formErrors.groupId)}
-                  aria-describedby={formErrors.groupId ? 'group-error' : undefined}
+                  aria-describedby={formErrors.groupId ? 'attendance-group-select-err' : undefined}
                   className="pl-11"
                 >
                   <option value="">{t('attendance.groupPlaceholder')}</option>
@@ -2816,16 +3192,32 @@ export function AttendancePage() {
               />
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {QUICK_NOTE_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, note: preset }))}
-                  className="rounded-lg border border-black/[0.08] bg-white/60 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-600 transition hover:border-blue-500/40 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-                >
-                  + {preset}
-                </button>
-              ))}
+              {QUICK_NOTE_PRESETS.map((preset) => {
+                const isPresetActive = form.note
+                  .split('·')
+                  .map((s) => s.trim())
+                  .includes(preset);
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        note: toggleNotePreset(prev.note, preset),
+                      }))
+                    }
+                    className={cn(
+                      'rounded-lg border px-2.5 py-0.5 text-[10.5px] font-semibold transition',
+                      isPresetActive
+                        ? 'border-blue-500/40 bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                        : 'border-black/[0.08] bg-white/60 text-slate-600 hover:border-blue-500/40 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300',
+                    )}
+                  >
+                    {isPresetActive ? `✓ ${preset}` : `+ ${preset}`}
+                  </button>
+                );
+              })}
             </div>
           </GlassField>
 
@@ -2862,7 +3254,7 @@ export function AttendancePage() {
       </GlassModal>
 
       {/* ============================================================
-          EDIT RECORD MODAL (With Quick Note Presets)
+          EDIT RECORD MODAL (With Smart Multi-Preset Note Toggle)
       ============================================================ */}
       <GlassModal
         open={Boolean(editTarget)}
@@ -2912,16 +3304,27 @@ export function AttendancePage() {
               />
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {QUICK_NOTE_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setEditNote(preset)}
-                  className="rounded-lg border border-black/[0.08] bg-white/60 px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-600 transition hover:border-blue-500/40 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
-                >
-                  + {preset}
-                </button>
-              ))}
+              {QUICK_NOTE_PRESETS.map((preset) => {
+                const isPresetActive = editNote
+                  .split('·')
+                  .map((s) => s.trim())
+                  .includes(preset);
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setEditNote((prev) => toggleNotePreset(prev, preset))}
+                    className={cn(
+                      'rounded-lg border px-2.5 py-0.5 text-[10.5px] font-semibold transition',
+                      isPresetActive
+                        ? 'border-blue-500/40 bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                        : 'border-black/[0.08] bg-white/60 text-slate-600 hover:border-blue-500/40 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300',
+                    )}
+                  >
+                    {isPresetActive ? `✓ ${preset}` : `+ ${preset}`}
+                  </button>
+                );
+              })}
             </div>
           </GlassField>
 

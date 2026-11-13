@@ -219,6 +219,11 @@ export class TelegramLinkService {
         action: TelegramAuditActions.LINK_CONSUMED,
         resourceId: null,
       });
+    } else {
+      await this.prisma.telegramLinkToken.updateMany({
+        where: { id: row.id },
+        data: { usedAt: null },
+      });
     }
 
     return result;
@@ -272,8 +277,12 @@ export class TelegramLinkService {
         }
 
         const owner = byTelegramUser ?? byChat;
-        if (owner && !this.rowBelongsTo(owner, target)) {
-          // This Telegram account is already linked to a DIFFERENT principal.
+        if (
+          owner &&
+          owner.status === TelegramAccountStatus.ACTIVE &&
+          !this.rowBelongsTo(owner, target)
+        ) {
+          // This Telegram account is actively linked to a DIFFERENT principal.
           // Never reassign it — that is the account-takeover path.
           this.logger.warn(
             JSON.stringify({

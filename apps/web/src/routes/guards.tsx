@@ -112,22 +112,62 @@ function AuthLoading({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-      className="flex min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh w-full items-center justify-center bg-[var(--bg-app)] text-[var(--text-primary)]"
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      className="relative flex min-h-screen min-h-[calc(var(--app-vh,1vh)*100)] min-h-dvh w-full items-center justify-center overflow-hidden bg-[var(--bg-app)] text-[var(--text-primary)]"
       role="status"
       aria-live="polite"
       aria-label={label}
     >
-      <div className="flex flex-col items-center gap-4">
-        <motion.span
-          className="h-8 w-8 rounded-full border-[3px] border-[var(--border-medium)] border-t-[var(--primary)]"
-          animate={reduced ? undefined : { rotate: 360 }}
-          transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-          aria-hidden
-        />
-        <p className="text-[var(--text-sm)] font-medium text-[var(--text-tertiary)]">
-          {label}
-        </p>
+      {/* Ambient background soft glow orb */}
+      <div
+        className="pointer-events-none absolute h-96 w-96 rounded-full bg-indigo-500/10 blur-[64px] dark:bg-indigo-500/15"
+        aria-hidden
+      />
+
+      <div className="relative z-10 flex flex-col items-center gap-4">
+        {/* Breathing aura ring */}
+        <div className="relative flex items-center justify-center">
+          <motion.div
+            className="absolute -inset-2 rounded-[24px] bg-gradient-to-tr from-indigo-500/30 to-purple-500/30 blur-md dark:from-indigo-500/25 dark:to-purple-500/25"
+            animate={reduced ? undefined : { scale: [0.95, 1.15, 0.95], opacity: [0.45, 0.85, 0.45] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+            aria-hidden
+          />
+
+          {/* Squircle glass badge */}
+          <motion.div
+            className="relative flex h-14 w-14 items-center justify-center rounded-[18px] bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-white shadow-[0_12px_28px_-6px_rgba(79,70,229,0.5),inset_0_1px_1px_rgba(255,255,255,0.45)] ring-1 ring-white/20"
+            animate={reduced ? undefined : { y: [0, -3, 0] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <svg className="h-7 w-7 drop-shadow" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M6 24V8.5C6 7.67 6.67 7 7.5 7H9.2C9.8 7 10.35 7.35 10.6 7.9L16 16.8L21.4 7.9C21.65 7.35 22.2 7 22.8 7H24.5C25.33 7 26 7.67 26 8.5V24C26 24.55 25.55 25 25 25H22.8C22.25 25 21.8 24.55 21.8 24V14.5L17.4 21.4C17.1 21.9 16.58 22.2 16 22.2C15.42 22.2 14.9 21.9 14.6 21.4L10.2 14.5V24C10.2 24.55 9.75 25 9.2 25H7C6.45 25 6 24.55 6 24Z"
+                fill="currentColor"
+              />
+            </svg>
+          </motion.div>
+        </div>
+
+        {/* Brand title + micro tag */}
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[13px] font-black tracking-[0.24em] text-slate-900 indent-[0.24em] dark:text-white">
+            M-EDU
+          </span>
+          <p className="text-[11px] font-medium tracking-wide text-slate-500 dark:text-slate-400">
+            {label}
+          </p>
+        </div>
+
+        {/* Aurora progress bar capsule */}
+        <div className="relative h-1 w-32 overflow-hidden rounded-full bg-slate-200/70 shadow-inner dark:bg-white/10">
+          <motion.div
+            className="h-full w-1/2 rounded-full bg-gradient-to-r from-transparent via-indigo-500 to-purple-500 shadow-[0_0_10px_rgba(99,102,241,0.7)]"
+            animate={reduced ? undefined : { x: ['-100%', '240%'] }}
+            transition={{ duration: 1.3, repeat: Infinity, ease: [0.45, 0, 0.25, 1] }}
+          />
+        </div>
       </div>
     </motion.div>
   );
@@ -190,7 +230,6 @@ export function Protected({
           : hasAnyRole(...roles);
     } catch (err) {
       if (typeof console !== 'undefined') {
-        // eslint-disable-next-line no-console
         console.error('[Protected] role verification threw:', err);
       }
       allowed = false;

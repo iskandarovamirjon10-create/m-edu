@@ -191,17 +191,14 @@ function useViewportCssVar(): void {
  * Root-safe translation hook that never throws even if rendered ABOVE <I18nProvider>.
  */
 function useSafeTranslate() {
-  let ctx: ReturnType<typeof useSafeI18n> | null = null;
-  try {
-    ctx = useSafeI18n();
-  } catch {
-    ctx = null;
-  }
+  // `useSafeI18n` hech qachon throw qilmaydi (provider tashqarisida
+  // STATIC_FALLBACK qaytaradi), shuning uchun hook shartsiz chaqiriladi.
+  const ctx = useSafeI18n();
 
   return useCallback(
     (key: string, fallback: string) => {
       try {
-        const val = ctx?.t?.(key);
+        const val = ctx.t?.(key);
         return typeof val === 'string' && val.trim().length > 0 && val !== key
           ? val
           : fallback;

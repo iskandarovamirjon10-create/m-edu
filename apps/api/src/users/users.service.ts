@@ -109,6 +109,13 @@ export class UsersService {
       throw new BadRequestException('Organization context is required');
     }
 
+    // Role-based privilege check on the actor
+    const allowedCreators = [Role.SUPER_ADMIN, 'PLATFORM_OWNER', Role.ORG_ADMIN];
+    if (actorRole && !allowedCreators.includes(actorRole as any)) {
+      this.logger.warn(`Unauthorized attempt to create user by role ${actorRole}`);
+      throw new ForbiddenException('Insufficient permissions to provision user accounts');
+    }
+
     // Only a platform SUPER_ADMIN may mint another SUPER_ADMIN
     if (data.role === Role.SUPER_ADMIN && (actorRole as string) !== Role.SUPER_ADMIN && (actorRole as string) !== 'PLATFORM_OWNER') {
       this.logger.error(`Attempt to mint SUPER_ADMIN by role ${actorRole}`);

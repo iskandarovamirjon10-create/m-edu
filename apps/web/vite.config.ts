@@ -1,9 +1,39 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config';
+import { createLogger } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
+// Silence noisy ECONNREFUSED terminal logs while backend API is compiling or starting up
+const customLogger = createLogger();
+const originalError = customLogger.error.bind(customLogger);
+const originalWarn = customLogger.warn.bind(customLogger);
+
+customLogger.error = (msg, options) => {
+  if (
+    typeof msg === 'string' &&
+    (msg.includes('http proxy error') ||
+      msg.includes('ECONNREFUSED') ||
+      msg.includes('socket.io') ||
+      msg.includes('/api/'))
+  ) {
+    return;
+  }
+  originalError(msg, options);
+};
+
+customLogger.warn = (msg, options) => {
+  if (
+    typeof msg === 'string' &&
+    (msg.includes('http proxy error') || msg.includes('ECONNREFUSED'))
+  ) {
+    return;
+  }
+  originalWarn(msg, options);
+};
+
 export default defineConfig({
+  customLogger,
   plugins: [react()],
   resolve: {
     alias: {
@@ -19,12 +49,46 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if (res && 'writeHead' in res && !res.headersSent) {
+              (res as any).writeHead(503, {
+                'Content-Type': 'application/json',
+                'Retry-After': '2',
+              });
+              (res as any).end(
+                JSON.stringify({
+                  statusCode: 503,
+                  code: 'BACKEND_STARTING',
+                  message: 'Backend server is starting up or compiling. Retrying...',
+                }),
+              );
+            }
+          });
+        },
       },
       // Socket.IO (chat) handshake + websocket upgrade must reach the API in dev
       '/socket.io': {
         target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:3001',
         changeOrigin: true,
         ws: true,
+        configure: (proxy) => {
+          proxy.on('error', (_err, _req, res) => {
+            if (res && 'writeHead' in res && !res.headersSent) {
+              (res as any).writeHead(503, {
+                'Content-Type': 'application/json',
+                'Retry-After': '2',
+              });
+              (res as any).end(
+                JSON.stringify({
+                  statusCode: 503,
+                  code: 'BACKEND_STARTING',
+                  message: 'Backend WebSocket server is starting up...',
+                }),
+              );
+            }
+          });
+        },
       },
     },
   },

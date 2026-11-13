@@ -30,6 +30,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { setCommandPaletteOpen, toggleAiCopilot } from '@/stores/ui.store';
 import { acquireScrollLock } from '@/layouts/core/singletons';
 import { isRouteAllowedForRole } from '@/layouts/components/Sidebar';
+import type { SearchResponse } from '@/types/search-graph';
 import {
   CreditCard,
   ClipboardCheck,
@@ -130,6 +131,15 @@ const QUICK_ACTIONS: CommandItemWithRoles[] = [
       window.dispatchEvent(new CustomEvent('open-quick-attendance'));
       window.dispatchEvent(new CustomEvent('medu:open-quick-attendance'));
     },
+  },
+  {
+    id: 'nav-showcase',
+    label: " Apple Innovation Suite — Taqdimot Rejimi",
+    description: "7 ta flagman modul: Live Activity, 3D Xona, Z-Report, Voice Coach, Pass Studio",
+    category: "Tezkor Amallar (Spotlight Actions)",
+    keywords: ['apple', 'innovation', 'showcase', 'taqdimot', 'pitch', 'investor', 'demo', 'flagman', '7'],
+    href: '/showcase',
+    icon: <ActionBadge icon={Sparkles} className="bg-purple-500/15 border-purple-500/25 text-purple-500 dark:text-purple-400" />,
   },
   {
     id: 'quick-import',
@@ -397,9 +407,10 @@ export function CommandPalette() {
     const timer = setTimeout(() => {
       searchApi
         .search(q, ['STUDENT', 'TEACHER', 'GROUP', 'COURSE'], 8)
-        .then((res: any) => {
+        .then((raw: unknown) => {
           if (cancelled) return;
-          const mapped: CommandItem[] = (res.results || []).map((item: any) => {
+          const res = raw as SearchResponse;
+          const mapped: CommandItem[] = (res.results || []).map((item) => {
             let cat = 'Qidiruv Natijalari';
             let iconComponent: LucideIcon = Search;
             let iconClass = 'bg-sky-500/15 border-sky-500/25 text-sky-400';
@@ -495,7 +506,58 @@ export function CommandPalette() {
         .some((field) => normalize(field!).includes(value));
     });
 
-    return [...liveResults, ...matchedActions, ...matchedNav];
+    // Smart Math & Currency Engine
+    const calcMatch = query.trim();
+    const mathRegex = /^[\d\s+\-*/().,%^]+$/;
+    let calcItem: CommandItem | null = null;
+
+    if (calcMatch && mathRegex.test(calcMatch) && /[+\-*/%]/.test(calcMatch)) {
+      try {
+        const sanitized = calcMatch.replace(/,/g, '');
+        // eslint-disable-next-line no-new-func
+        const fn = new Function(`'use strict'; return (${sanitized})`);
+        const result = fn();
+        if (typeof result === 'number' && Number.isFinite(result)) {
+          const formatted = new Intl.NumberFormat('uz-UZ').format(result);
+          calcItem = {
+            id: 'calc-result',
+            label: `= ${formatted}`,
+            description: `${calcMatch} hisob-kitob natijasi (nusxa olish uchun bosing)`,
+            category: 'Kalkulyator',
+            icon: <ActionBadge icon={Sparkles} color="text-amber-500" />,
+            action: () => {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(String(result));
+              }
+            },
+          };
+        }
+      } catch {
+        // ignore incomplete expressions
+      }
+    } else if (/^(\d+)\s*(\$|usd|dollar)/i.test(calcMatch)) {
+      const match = calcMatch.match(/^(\d+)\s*(\$|usd|dollar)/i);
+      if (match) {
+        const usd = parseFloat(match[1]);
+        const rate = 12900;
+        const uzs = new Intl.NumberFormat('uz-UZ').format(usd * rate);
+        calcItem = {
+          id: 'currency-result',
+          label: `${usd} USD = ${uzs} UZS`,
+          description: `Markaziy Bank taxminiy kursi (1$ ≈ ${new Intl.NumberFormat('uz-UZ').format(rate)} UZS)`,
+          category: 'Valyuta',
+          icon: <ActionBadge icon={CreditCard} color="text-emerald-500" />,
+          action: () => {
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(`${usd * rate}`);
+            }
+          },
+        };
+      }
+    }
+
+    const baseResults = [...liveResults, ...matchedActions, ...matchedNav];
+    return calcItem ? [calcItem, ...baseResults] : baseResults;
   }, [query, roleFilteredActions, roleFilteredItems, liveResults]);
 
   const openPalette = useCallback(() => {
@@ -633,7 +695,7 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label={t('a11y.commandPalette', 'Spotlight Command Palette')}
-        className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/60 bg-white/85 shadow-[0_24px_64px_-16px_rgba(0,0,0,0.22),inset_0_1px_1px_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[200%] dark:border-white/[0.14] dark:bg-[#18181B]/85 dark:shadow-[0_28px_72px_-16px_rgba(0,0,0,0.75),inset_0_1px_1px_rgba(255,255,255,0.15)] animate-modal-in"
+        className="relative w-full max-w-4xl overflow-hidden rounded-[28px] border border-white/60 bg-white/90 shadow-[0_28px_80px_-16px_rgba(0,0,0,0.25),inset_0_1px_1px_rgba(255,255,255,0.95)] backdrop-blur-3xl backdrop-saturate-[210%] dark:border-white/[0.14] dark:bg-[#18181B]/90 dark:shadow-[0_32px_88px_-16px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.18)] animate-modal-in flex flex-col"
         onMouseDown={(event) => event.stopPropagation()}
       >
         {/* Specular inner top highlight rim */}
@@ -656,7 +718,7 @@ export function CommandPalette() {
             onKeyDown={handleKeyDown}
             placeholder={t(
               'a11y.searchPlaceholder',
-              "Buyruq, o'quvchi, guruh yoki sahifani qidiring...",
+              "Buyruq, o'quvchi, guruh, sahifa yoki hisob-kitob (150*12, 100$)...",
             )}
             aria-label={t('a11y.search', 'Qidiruv')}
             aria-autocomplete="list"
@@ -676,83 +738,144 @@ export function CommandPalette() {
           </kbd>
         </div>
 
-        {/* Results Listbox */}
-        <ul
-          id={listId}
-          role="listbox"
-          className="max-h-[min(28rem,60vh)] overflow-y-auto py-2.5 [scrollbar-width:thin]"
-        >
-          {!filtered.length && (
-            <li className="px-5 py-12 text-center text-sm font-medium text-[#8E8E93]">
-              Hech qanday natija topilmadi: “{query}”
-            </li>
-          )}
+        {/* Split Stage Body: Left (List) + Right (Live Preview Inspector) */}
+        <div className="flex min-h-[380px] max-h-[min(32rem,65vh)] w-full overflow-hidden">
+          {/* Results Listbox (Left) */}
+          <ul
+            id={listId}
+            role="listbox"
+            className="w-full md:w-[60%] overflow-y-auto py-2.5 [scrollbar-width:thin] border-r-0 md:border-r border-black/[0.06] dark:border-white/[0.08]"
+          >
+            {!filtered.length && (
+              <li className="px-5 py-14 text-center text-sm font-medium text-[#8E8E93]">
+                Hech qanday natija topilmadi: “{query}”
+              </li>
+            )}
 
-          {Object.entries(grouped).map(([category, items]) => (
-            <li key={category}>
-              <div className="px-5 pb-2 pt-3 text-[10.5px] font-bold uppercase tracking-[.14em] text-[#8E8E93]">
-                {category}
-              </div>
+            {Object.entries(grouped).map(([category, items]) => (
+              <li key={category}>
+                <div className="px-5 pb-1.5 pt-3 text-[10.5px] font-bold uppercase tracking-[.14em] text-[#8E8E93]">
+                  {category}
+                </div>
 
-              {items.map((item) => {
-                index += 1;
-                const itemIndex = index;
-                const active = itemIndex === selected;
+                {items.map((item) => {
+                  index += 1;
+                  const itemIndex = index;
+                  const active = itemIndex === selected;
 
-                return (
-                  <button
-                    key={item.id}
-                    id={`command-item-${item.id}`}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onMouseEnter={() => {
-                      if (selected !== itemIndex) {
-                        setSelected(itemIndex);
-                        playTick();
-                      }
-                    }}
-                    onClick={() => execute(item)}
-                    className={cn(
-                      'group mx-2.5 my-1 flex min-h-[44px] w-[calc(100%-1.25rem)] items-center gap-3.5 rounded-2xl px-3.5 py-2.5 text-left transition-all duration-150',
-                      active
-                        ? 'bg-[#2563EB]/10 ring-1 ring-[#2563EB]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] dark:bg-[#0A84FF]/18 dark:ring-[#0A84FF]/35'
-                        : 'hover:bg-black/[0.035] dark:hover:bg-white/[0.04]',
-                    )}
-                  >
-                    <span className="shrink-0">{item.icon}</span>
+                  return (
+                    <button
+                      key={item.id}
+                      id={`command-item-${item.id}`}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onMouseEnter={() => {
+                        if (selected !== itemIndex) {
+                          setSelected(itemIndex);
+                          playTick();
+                        }
+                      }}
+                      onClick={() => execute(item)}
+                      className={cn(
+                        'group mx-2.5 my-1 flex min-h-[44px] w-[calc(100%-1.25rem)] items-center gap-3.5 rounded-2xl px-3.5 py-2.5 text-left transition-all duration-150',
+                        active
+                          ? 'bg-[#2563EB]/10 ring-1 ring-[#2563EB]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] dark:bg-[#0A84FF]/18 dark:ring-[#0A84FF]/35'
+                          : 'hover:bg-black/[0.035] dark:hover:bg-white/[0.04]',
+                      )}
+                    >
+                      <span className="shrink-0">{item.icon}</span>
 
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={cn(
-                          'block truncate text-[14px] font-semibold tracking-tight',
-                          active
-                            ? 'text-[#2563EB] dark:text-[#0A84FF]'
-                            : 'text-[#1D1D1F] dark:text-[#F5F5F7]',
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={cn(
+                            'block truncate text-[14px] font-semibold tracking-tight',
+                            active
+                              ? 'text-[#2563EB] dark:text-[#0A84FF]'
+                              : 'text-[#1D1D1F] dark:text-[#F5F5F7]',
+                          )}
+                        >
+                          {item.label}
+                        </span>
+
+                        {item.description && (
+                          <span className="mt-0.5 block truncate text-[12px] font-normal text-[#8E8E93] dark:text-[#98989D]">
+                            {item.description}
+                          </span>
                         )}
-                      >
-                        {item.label}
                       </span>
 
-                      {item.description && (
-                        <span className="mt-0.5 block truncate text-[12px] font-normal text-[#8E8E93] dark:text-[#98989D]">
-                          {item.description}
+                      {active && (
+                        <span className="flex items-center gap-1 rounded-lg bg-[#2563EB]/15 px-2 py-1 text-[11px] font-semibold text-[#2563EB] dark:bg-[#0A84FF]/20 dark:text-[#0A84FF]">
+                          <CornerDownLeft className="h-3 w-3" />
                         </span>
                       )}
-                    </span>
+                    </button>
+                  );
+                })}
+              </li>
+            ))}
+          </ul>
 
-                    {active && (
-                      <span className="flex items-center gap-1 rounded-lg bg-[#2563EB]/15 px-2 py-1 text-[11px] font-semibold text-[#2563EB] dark:bg-[#0A84FF]/20 dark:text-[#0A84FF]">
-                        <span>Ochish</span>
-                        <CornerDownLeft className="h-3 w-3" />
-                      </span>
+          {/* Live Dynamic Preview Inspector (Right Pane) */}
+          <div className="hidden md:flex md:w-[40%] flex-col justify-between bg-black/[0.015] dark:bg-white/[0.015] p-6 select-none">
+            {filtered[selected] ? (
+              <div className="flex flex-col items-start space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[#2563EB] dark:text-[#0A84FF]">
+                    {filtered[selected].category || 'Amal'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-md dark:bg-white/10">
+                    {filtered[selected].icon}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-[16px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7]">
+                      {filtered[selected].label}
+                    </h3>
+                    {filtered[selected].href && (
+                      <p className="truncate font-mono text-[11px] text-[#8E8E93]">
+                        {filtered[selected].href}
+                      </p>
                     )}
-                  </button>
-                );
-              })}
-            </li>
-          ))}
-        </ul>
+                  </div>
+                </div>
+
+                {filtered[selected].description && (
+                  <div className="rounded-xl border border-black/[0.06] bg-white/60 p-3.5 text-[12.5px] text-[#48484A] shadow-sm backdrop-blur-md dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-[#AEAEB2]">
+                    {filtered[selected].description}
+                  </div>
+                )}
+
+                <div className="w-full space-y-2 border-t border-black/[0.06] pt-4 dark:border-white/[0.08]">
+                  <div className="flex items-center justify-between text-[11.5px] text-[#8E8E93]">
+                    <span>Tezkor tugma:</span>
+                    <kbd className="rounded-md border border-black/10 bg-black/5 px-2 py-0.5 text-[10px] font-bold dark:border-white/10 dark:bg-white/5">
+                      ↵ Enter
+                    </kbd>
+                  </div>
+                  <div className="flex items-center justify-between text-[11.5px] text-[#8E8E93]">
+                    <span>Spotlight holati:</span>
+                    <span className="font-semibold text-emerald-500">Tayyor</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center text-center text-[#8E8E93]">
+                <Sparkles className="h-8 w-8 text-[#8E8E93]/40 mb-2" />
+                <p className="text-xs">Biror amal yoki sahifani tanlang</p>
+              </div>
+            )}
+
+            <div className="border-t border-black/[0.06] pt-3 dark:border-white/[0.08]">
+              <p className="text-[10.5px] text-[#8E8E93] leading-relaxed">
+                💡 <span className="font-semibold">Maslahat:</span> Matematika (masalan: 12500*4) yoki valyutani (100$) to‘g‘ridan-to‘g‘ri yozing.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Footer Navigation Hints */}
         <div className="flex items-center justify-between border-t border-black/[0.06] bg-black/[0.02] px-5 py-3 text-[11px] font-medium text-[#8E8E93] dark:border-white/[0.08] dark:bg-white/[0.02]">

@@ -473,7 +473,7 @@ export function ForecastingPage() {
                   void seriesQuery.refetch();
                   void summaryQuery.refetch();
                 }}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border border-black/[0.08] bg-white/50 px-4 py-2 text-xs font-semibold text-neutral-700 shadow-sm transition-all hover:bg-white/80 active:scale-95 dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-neutral-300"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-2 text-xs font-semibold text-neutral-700 shadow-sm transition-all hover:bg-white/80 active:scale-95 dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-neutral-300"
               >
                 <Icon paths={ICONS.refresh} size={15} />
                 <span>{t('common.refresh') || 'Refresh'}</span>

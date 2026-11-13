@@ -132,7 +132,7 @@ export class RealEmbedder {
     const inputSize = this.config.inputSize;
     let alignedData: Uint8Array | Buffer;
 
-    if (input.face.landmarks && input.face.landmarks.length >= 3) {
+    if (input.face.landmarks && input.face.landmarks.length >= 5) {
       // 5-point facial landmark similarity transform alignment
       const { data: rawImgData, info: rawImgInfo } = await sharp(input.imageBuffer)
         .rotate()
@@ -146,7 +146,7 @@ export class RealEmbedder {
           ? CANONICAL_112_LANDMARKS
           : CANONICAL_112_LANDMARKS.map(([x, y]) => [x * scale, y * scale] as [number, number]);
 
-      const transform = computeSimilarityTransform(input.face.landmarks, dstPts);
+      const transform = computeSimilarityTransform(input.face.landmarks.slice(0, 5), dstPts);
       alignedData = warpAffineBilinear(
         rawImgData,
         rawImgInfo.width,

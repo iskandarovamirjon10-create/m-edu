@@ -132,10 +132,11 @@ export function LiveFaceCamera() {
   }, [status, startWebcam, stopWebcam]);
 
   useEffect(() => {
+    // Cleanup paytida ref o‘zgargan bo‘lishi mumkin — streamni effect ichida ushlab qolamiz.
+    const videoEl = videoRef.current;
     return () => {
-      if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach((track) => track.stop());
-      }
+      const stream = videoEl?.srcObject as MediaStream | null;
+      stream?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -188,7 +189,7 @@ export function LiveFaceCamera() {
             aria-label={status === 'STREAMING' ? 'Kamerani to\'xtatish' : 'Kamerani yoqish'}
             title={status === 'STREAMING' ? 'Kamerani to\'xtatish' : 'Kamerani yoqish'}
             className={cn(
-              'inline-flex h-8 w-8 items-center justify-center rounded-xl border transition-all duration-150 active:scale-95',
+              'inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border transition-all duration-150 active:scale-95',
               status === 'STREAMING'
                 ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400'
                 : 'border-black/[0.08] bg-white/70 text-slate-700 hover:bg-white hover:text-black dark:border-white/[0.12] dark:bg-white/[0.08] dark:text-slate-200 dark:hover:bg-white/[0.15]',
@@ -305,7 +306,7 @@ export function LiveFaceCamera() {
               <button
                 type="button"
                 onClick={startWebcam}
-                className="btn-glow-primary mt-3.5 inline-flex h-9 items-center gap-1.5 rounded-full bg-sky-500 px-4 text-xs font-bold text-white transition hover:bg-sky-400 active:scale-95 shadow-md"
+                className="btn-glow-primary mt-3.5 inline-flex min-h-[44px] items-center gap-2 rounded-full bg-sky-500 px-5 text-xs font-bold text-white transition hover:bg-sky-400 active:scale-95 shadow-md"
               >
                 <Video className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                 Kamerani yoqish
@@ -345,7 +346,7 @@ export function LiveFaceCamera() {
               <button
                 type="button"
                 onClick={startWebcam}
-                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3.5 text-xs font-bold text-white transition hover:bg-white/20 active:scale-95"
+                className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold text-white transition hover:bg-white/20 active:scale-95"
               >
                 <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                 Qayta urinish

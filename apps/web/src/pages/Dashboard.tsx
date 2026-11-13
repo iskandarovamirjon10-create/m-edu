@@ -4,10 +4,11 @@
  * multi-dimensional KPIs, operational risk radar, and live biometric Face ID kiosk.
  */
 
-import { useMemo, useEffect, useCallback, useState } from 'react';
+import { useMemo, useEffect, useCallback, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
+import { Moon, Wallet, Heart, Rocket, Activity, ShieldCheck, Palette } from 'lucide-react';
 import { dashboardApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -30,7 +31,6 @@ import { FollowUpsSection } from '@/components/dashboard/FollowUpsSection';
 import { DailyPulseStrip } from '@/components/dashboard/DailyPulseStrip';
 import { QuickActionsRail } from '@/components/dashboard/QuickActionsRail';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
-import { AiExecutiveBriefingCard } from '@/components/ai';
 import { TodayActionItemsSection } from '@/components/dashboard/TodayActionItemsSection';
 import { AttendanceRiskSection } from '@/components/dashboard/AttendanceRiskSection';
 import { RecentActivitiesFeed } from '@/components/dashboard/RecentActivitiesFeed';
@@ -302,6 +302,58 @@ const DEDICATED_PORTAL_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 /* ─────────────────────────────────────────────────────────────────────────
+ * 4b. Segmented Tab Descriptor (single source for the control + a11y wiring)
+ * ─────────────────────────────────────────────────────────────────────── */
+
+interface DashboardTabDef {
+  readonly id: DashboardTabId;
+  /** i18n key path used against the translation bundle. */
+  readonly i18nKey: string;
+  /** Matching key inside `DashboardTranslationBundle`. */
+  readonly dictKey: keyof DashboardTranslationBundle;
+  readonly icon: ReactNode;
+}
+
+const DASHBOARD_TABS: readonly DashboardTabDef[] = [
+  {
+    id: 'overview',
+    i18nKey: 'dashboard.tabOverview',
+    dictKey: 'tabOverview',
+    icon: <Icon name="barChart" size={14} strokeWidth={2.2} />,
+  },
+  {
+    id: 'operations',
+    i18nKey: 'dashboard.tabOperations',
+    dictKey: 'tabOperations',
+    icon: <Icon name="alert" size={14} strokeWidth={2.2} />,
+  },
+  {
+    id: 'kiosk',
+    i18nKey: 'dashboard.tabKiosk',
+    dictKey: 'tabKiosk',
+    icon: <Icon name="video" size={14} strokeWidth={2.2} />,
+  },
+  {
+    id: 'day_end',
+    i18nKey: 'dashboard.tabDayEnd',
+    dictKey: 'tabDayEnd',
+    icon: <Moon size={14} strokeWidth={2.2} aria-hidden="true" />,
+  },
+  {
+    id: 'cashflow',
+    i18nKey: 'dashboard.tabCashflow',
+    dictKey: 'tabCashflow',
+    icon: <Wallet size={14} strokeWidth={2.2} aria-hidden="true" />,
+  },
+  {
+    id: 'parent_nps',
+    i18nKey: 'dashboard.tabParentNps',
+    dictKey: 'tabParentNps',
+    icon: <Heart size={14} strokeWidth={2.2} aria-hidden="true" />,
+  },
+];
+
+/* ─────────────────────────────────────────────────────────────────────────
  * 4. Main Flagship Executive Command Center Component
  * ─────────────────────────────────────────────────────────────────────── */
 
@@ -487,6 +539,30 @@ export function DashboardPage() {
     });
   }, [dataUpdatedAt]);
 
+  const kioskLinks = useMemo(
+    () => [
+      {
+        href: '/face',
+        icon: 'user',
+        accent: '#0A84FF',
+        label: dict.linkFaceDatabase,
+      },
+      {
+        href: '/cameras',
+        icon: 'video',
+        accent: '#5E5CE6',
+        label: dict.linkIpCameras,
+      },
+      {
+        href: '/attendance',
+        icon: 'checkCircle',
+        accent: '#34C759',
+        label: dict.linkAttendanceJournal,
+      },
+    ] as const,
+    [dict],
+  );
+
   /* ── Loading & Error States ───────────────────────────────────── */
   if (isLoading && !stats) {
     return (
@@ -589,139 +665,85 @@ export function DashboardPage() {
         <div
           role="tablist"
           aria-label={t('dashboard.title', dict.pageTitle)}
-          className="vision-card flex items-center gap-1.5 p-1.5 rounded-2xl sm:rounded-full border border-white/60 bg-white/70 backdrop-blur-2xl shadow-sm dark:border-white/10 dark:bg-white/[0.05] overflow-x-auto w-full sm:w-auto max-w-full no-scrollbar"
+          className="vision-card no-scrollbar flex w-full max-w-full items-center gap-1 overflow-x-auto rounded-2xl border border-white/70 bg-white/70 p-1.5 shadow-[0_10px_30px_-14px_rgba(15,23,42,0.18),inset_0_1.5px_1.5px_rgba(255,255,255,0.92)] backdrop-blur-3xl backdrop-saturate-[200%] sm:w-auto dark:border-white/[0.12] dark:bg-white/[0.05]"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'overview'}
-            onClick={() => handleTabChange('overview')}
-            className={cn(
-              'inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold transition-all duration-200',
-              activeTab === 'overview'
-                ? 'jewel-pill jewel-blue shadow-md font-extrabold'
-                : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
-            )}
-          >
-            <Icon name="barChart" size={14} />
-            <span>{t('dashboard.tabOverview', dict.tabOverview)}</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'operations'}
-            onClick={() => handleTabChange('operations')}
-            className={cn(
-              'inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold transition-all duration-200',
-              activeTab === 'operations'
-                ? 'jewel-pill jewel-amber shadow-md font-extrabold'
-                : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
-            )}
-          >
-            <Icon name="alert" size={14} />
-            <span>{t('dashboard.tabOperations', dict.tabOperations)}</span>
-            {operationsAlertActive && (
-              <span className="relative flex h-2 w-2" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'kiosk'}
-            onClick={() => handleTabChange('kiosk')}
-            className={cn(
-              'inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold transition-all duration-200',
-              activeTab === 'kiosk'
-                ? 'jewel-pill jewel-emerald shadow-md font-extrabold'
-                : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
-            )}
-          >
-            <Icon name="video" size={14} />
-            <span>{t('dashboard.tabKiosk', dict.tabKiosk)}</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'day_end'}
-            onClick={() => handleTabChange('day_end')}
-            className={cn(
-              'inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold transition-all duration-200',
-              activeTab === 'day_end'
-                ? 'jewel-pill jewel-indigo shadow-md font-extrabold'
-                : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
-            )}
-          >
-            <span className="text-sm">🌙</span>
-            <span>{t('dashboard.tabDayEnd', dict.tabDayEnd)}</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'cashflow'}
-            onClick={() => handleTabChange('cashflow')}
-            className={cn(
-              'inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold transition-all duration-200',
-              activeTab === 'cashflow'
-                ? 'jewel-pill jewel-emerald shadow-md font-extrabold'
-                : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
-            )}
-          >
-            <span className="text-sm">💰</span>
-            <span>{t('dashboard.tabCashflow', dict.tabCashflow)}</span>
-          </button>
-
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'parent_nps'}
-            onClick={() => handleTabChange('parent_nps')}
-            className={cn(
-              'inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold transition-all duration-200',
-              activeTab === 'parent_nps'
-                ? 'jewel-pill jewel-rose shadow-md font-extrabold'
-                : 'text-[var(--text-secondary,#86868B)] hover:text-[var(--text-primary,#1D1D1F)] dark:hover:text-white',
-            )}
-          >
-            <span className="text-sm">❤️</span>
-            <span>{t('dashboard.tabParentNps', dict.tabParentNps)}</span>
-          </button>
+          {DASHBOARD_TABS.map((tabItem) => {
+            const isActive = activeTab === tabItem.id;
+            const showAlert = tabItem.id === 'operations' && operationsAlertActive;
+            return (
+              <button
+                key={tabItem.id}
+                type="button"
+                role="tab"
+                id={`dashboard-tab-${tabItem.id}`}
+                aria-selected={isActive}
+                aria-controls={`dashboard-panel-${tabItem.id}`}
+                onClick={() => handleTabChange(tabItem.id)}
+                className={cn(
+                  'group/tab relative inline-flex min-h-[40px] shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-3.5 text-[12.5px] font-semibold tracking-tight transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--border-focus)] sm:px-4',
+                  isActive
+                    ? 'text-[var(--text-on-brand)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--state-hover)] hover:text-[var(--text-primary)]',
+                )}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="dashboard-tab-indicator"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+                    className="absolute inset-0 -z-10 rounded-xl bg-[linear-gradient(135deg,var(--primary)_0%,color-mix(in_oklab,var(--primary)_70%,#5E5CE6)_100%)] shadow-[var(--shadow-brand)]"
+                  />
+                )}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'relative transition-transform duration-300 ease-out',
+                    isActive
+                      ? 'scale-105'
+                      : 'opacity-70 group-hover/tab:scale-105 group-hover/tab:opacity-100',
+                  )}
+                >
+                  {tabItem.icon}
+                </span>
+                <span className="relative">{t(tabItem.i18nKey, dict[tabItem.dictKey])}</span>
+                {showAlert && (
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Right Telemetry & Executive Keyboard Shortcut Pill */}
-        <div className="hidden sm:flex items-center gap-2">
+        <div className="hidden items-center gap-2 sm:flex">
           <button
             type="button"
             onClick={() => {
               sound.playTick();
               setIsLaunchWizardOpen(true);
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-all shadow-xs"
+            className="group/launch flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.8),0_4px_14px_-6px_rgba(16,185,129,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-emerald-500/20 hover:shadow-[0_10px_22px_-8px_rgba(16,185,129,0.5)] active:translate-y-0 active:scale-[0.96] dark:text-emerald-400 dark:shadow-none"
             title={`${t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')} (5 min)`}
             aria-label={t('dashboard.launchTelemetryBtn', 'Boshlang‘ich Sozlash')}
           >
-            <span className="text-sm">🚀</span>
+            <Rocket size={16} strokeWidth={2.2} aria-hidden="true" />
           </button>
 
           {/* Executive Diagnostic & Appearance Utility Pill Group */}
-          <div className="flex items-center gap-1 rounded-full border border-black/[0.06] bg-white/60 p-1 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04]">
+          <div className="flex items-center gap-1 rounded-xl border border-black/[0.06] bg-white/60 p-1 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.9),0_4px_16px_-6px_rgba(15,23,42,0.10)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04] dark:shadow-none">
             <button
               type="button"
               onClick={() => {
                 sound.playTick();
                 setIsTelemetryHudOpen(true);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-sky-600 hover:bg-sky-500/15 dark:text-sky-400 dark:hover:bg-sky-500/20 transition-all"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-sky-600 transition-all duration-200 hover:scale-105 hover:bg-sky-500/15 active:scale-95 dark:text-sky-400 dark:hover:bg-sky-500/20"
               title="Jonli Uskunalar va RTT Telemetriyasi"
               aria-label="Telemetriya"
             >
-              <Icon name="activity" size={14} />
+              <Activity size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -729,11 +751,11 @@ export function DashboardPage() {
                 sound.playTick();
                 setIsAuditSnapshotOpen(true);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400 dark:hover:bg-emerald-500/20 transition-all"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-emerald-600 transition-all duration-200 hover:scale-105 hover:bg-emerald-500/15 active:scale-95 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
               title="SHA-256 Auditorlik Snapshot"
               aria-label="Audit Snapshot"
             >
-              <Icon name="shieldCheck" size={14} />
+              <ShieldCheck size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -741,42 +763,42 @@ export function DashboardPage() {
                 sound.playTick();
                 setIsThemeStudioOpen(true);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-purple-600 hover:bg-purple-500/15 dark:text-purple-400 dark:hover:bg-purple-500/20 transition-all"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-purple-600 transition-all duration-200 hover:scale-105 hover:bg-purple-500/15 active:scale-95 dark:text-purple-400 dark:hover:bg-purple-500/20"
               title="Mavzu va Urg‘u Palitrasi"
               aria-label="Mavzu Palitrasi"
             >
-              <Icon name="sparkles" size={14} />
+              <Palette size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white/60 px-3 py-1 text-xs font-medium text-[var(--text-secondary,#86868B)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white/60 px-3 py-1.5 text-[11.5px] font-medium text-[var(--text-secondary)] shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.9),0_4px_16px_-6px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04] dark:shadow-none">
             <span
               className={cn(
-                'h-2 w-2 rounded-full',
+                'h-2 w-2 shrink-0 rounded-full',
                 isFetching
                   ? 'animate-pulse bg-amber-400'
-                  : 'bg-emerald-500',
+                  : 'bg-emerald-500 shadow-[0_0_8px_rgba(52,199,89,0.7)]',
               )}
               aria-hidden="true"
             />
             <span>
               {isFetching ? dict.syncingLabel : dict.lastUpdatedLabel}{' '}
-              <strong className="text-[var(--text-primary,#1D1D1F)] dark:text-white tabular-nums">
+              <strong className="text-[var(--text-primary)] tabular-nums">
                 {formattedUpdatedAt}
               </strong>
             </span>
           </div>
 
           <div
-            className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/50 px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary,#86868B)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.03]"
+            className="hidden items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/50 px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] backdrop-blur-xl lg:inline-flex dark:border-white/[0.08] dark:bg-white/[0.03]"
             title={`${dict.shortcutRefreshHint} · ${dict.shortcutNewStudentHint}`}
           >
-            <kbd className="rounded bg-black/[0.06] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--text-primary,#1D1D1F)] dark:bg-white/10 dark:text-white">
+            <kbd className="rounded bg-black/[0.06] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--text-primary)] dark:bg-white/10 dark:text-white">
               R
             </kbd>
             <span className="opacity-75">Sync</span>
             <span className="mx-0.5 opacity-30">·</span>
-            <kbd className="rounded bg-black/[0.06] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--text-primary,#1D1D1F)] dark:bg-white/10 dark:text-white">
+            <kbd className="rounded bg-black/[0.06] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--text-primary)] dark:bg-white/10 dark:text-white">
               N
             </kbd>
             <span className="opacity-75">+Student</span>
@@ -789,16 +811,15 @@ export function DashboardPage() {
         {activeTab === 'overview' && (
           <motion.div
             key="tab-overview"
+            id="dashboard-panel-overview"
+            role="tabpanel"
+            aria-labelledby="dashboard-tab-overview"
             variants={CONTAINER_VARIANTS}
             initial={reduced ? false : 'hidden'}
             animate="visible"
             exit={{ opacity: 0 }}
             className="space-y-5 sm:space-y-6"
           >
-            <motion.div variants={SECTION_VARIANTS}>
-              <AiExecutiveBriefingCard />
-            </motion.div>
-
             <motion.div variants={SECTION_VARIANTS}>
               <DailyPulseStrip stats={stats} updatedAt={dataUpdatedAt} />
             </motion.div>
@@ -841,7 +862,9 @@ export function DashboardPage() {
         {activeTab === 'operations' && (
           <motion.div
             key="tab-operations"
-            role="region"
+            id="dashboard-panel-operations"
+            role="tabpanel"
+            aria-labelledby="dashboard-tab-operations"
             aria-label={dict.operationsRegionLabel}
             variants={SECTION_VARIANTS}
             initial={reduced ? false : 'hidden'}
@@ -862,7 +885,9 @@ export function DashboardPage() {
         {activeTab === 'kiosk' && (
           <motion.div
             key="tab-kiosk"
-            role="region"
+            id="dashboard-panel-kiosk"
+            role="tabpanel"
+            aria-labelledby="dashboard-tab-kiosk"
             aria-label={dict.kioskRegionLabel}
             variants={SECTION_VARIANTS}
             initial={reduced ? false : 'hidden'}
@@ -965,58 +990,53 @@ export function DashboardPage() {
                 </div>
               </div>
 
-              {/* Quick Kiosk Navigation Links */}
-              <div className="mt-6 flex-1 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary,#86868B)]">
-                  {dict.quickLinksHeading}
-                </h4>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playTick();
-                      navigate('/face');
-                    }}
-                    className="w-full flex items-center justify-between p-3 rounded-xl border border-black/[0.06] bg-white/60 hover:bg-white hover:border-black/[0.1] transition-all text-xs font-bold text-[var(--text-primary,#1D1D1F)] dark:border-white/[0.08] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] dark:text-white"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Icon name="user" size={15} />
-                      <span>{dict.linkFaceDatabase}</span>
-                    </span>
-                    <Icon name="chevronRight" size={14} />
-                  </button>
+            <div className="vision-card relative isolate mt-6 flex flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/70 p-5 shadow-[0_12px_32px_-16px_rgba(15,23,42,0.16),inset_0_1.5px_1.5px_rgba(255,255,255,0.92)] backdrop-blur-2xl dark:border-white/[0.10] dark:bg-white/[0.04] dark:shadow-[0_16px_40px_-18px_rgba(0,0,0,0.7)]">
+              {/* Top specular meniscus */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/30"
+              />
 
+              <h4 className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
+                {dict.quickLinksHeading}
+              </h4>
+              <div className="mt-3 space-y-2">
+                {kioskLinks.map((link) => (
                   <button
+                    key={link.href}
                     type="button"
                     onClick={() => {
                       sound.playTick();
-                      navigate('/cameras');
+                      navigate(link.href);
                     }}
-                    className="w-full flex items-center justify-between p-3 rounded-xl border border-black/[0.06] bg-white/60 hover:bg-white hover:border-black/[0.1] transition-all text-xs font-bold text-[var(--text-primary,#1D1D1F)] dark:border-white/[0.08] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] dark:text-white"
+                    className="group/link flex w-full items-center justify-between gap-3 rounded-xl border border-black/[0.05] bg-white/60 p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-black/[0.1] hover:bg-white hover:shadow-[0_10px_24px_-12px_rgba(15,23,42,0.24)] active:translate-y-0 active:scale-[0.99] dark:border-white/[0.07] dark:bg-white/[0.04] dark:hover:border-white/[0.14] dark:hover:bg-white/[0.08] dark:hover:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.8)]"
                   >
-                    <span className="flex items-center gap-2">
-                      <Icon name="video" size={15} />
-                      <span>{dict.linkIpCameras}</span>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        aria-hidden="true"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border transition-transform duration-300 ease-out group-hover/link:scale-105"
+                        style={{
+                          background: `linear-gradient(135deg, ${link.accent}2E 0%, ${link.accent}0F 100%)`,
+                          borderColor: `${link.accent}3D`,
+                          color: link.accent,
+                          boxShadow: `inset 0 1.5px 1px rgba(255,255,255,0.78), 0 4px 10px -4px ${link.accent}55`,
+                        }}
+                      >
+                        <Icon name={link.icon} size={15} strokeWidth={2.1} />
+                      </span>
+                      <span className="truncate text-[12.5px] font-semibold text-[var(--text-primary)] dark:text-white">
+                        {link.label}
+                      </span>
                     </span>
-                    <Icon name="chevronRight" size={14} />
+                    <Icon
+                      name="chevronRight"
+                      size={15}
+                      className="shrink-0 text-[var(--text-tertiary)] transition-transform duration-200 group-hover/link:translate-x-0.5"
+                    />
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      sound.playTick();
-                      navigate('/attendance');
-                    }}
-                    className="w-full flex items-center justify-between p-3 rounded-xl border border-black/[0.06] bg-white/60 hover:bg-white hover:border-black/[0.1] transition-all text-xs font-bold text-[var(--text-primary,#1D1D1F)] dark:border-white/[0.08] dark:bg-white/[0.04] dark:hover:bg-white/[0.08] dark:text-white"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Icon name="checkCircle" size={15} />
-                      <span>{dict.linkAttendanceJournal}</span>
-                    </span>
-                    <Icon name="chevronRight" size={14} />
-                  </button>
-                </div>
+                ))}
               </div>
+            </div>
             </div>
           </motion.div>
         )}
@@ -1024,6 +1044,9 @@ export function DashboardPage() {
         {activeTab === 'day_end' && (
           <motion.div
             key="tab-day-end"
+            id="dashboard-panel-day_end"
+            role="tabpanel"
+            aria-labelledby="dashboard-tab-day_end"
             variants={CONTAINER_VARIANTS}
             initial={reduced ? false : 'hidden'}
             animate="visible"
@@ -1037,6 +1060,9 @@ export function DashboardPage() {
         {activeTab === 'cashflow' && (
           <motion.div
             key="tab-cashflow"
+            id="dashboard-panel-cashflow"
+            role="tabpanel"
+            aria-labelledby="dashboard-tab-cashflow"
             variants={CONTAINER_VARIANTS}
             initial={reduced ? false : 'hidden'}
             animate="visible"
@@ -1050,6 +1076,9 @@ export function DashboardPage() {
         {activeTab === 'parent_nps' && (
           <motion.div
             key="tab-parent-nps"
+            id="dashboard-panel-parent_nps"
+            role="tabpanel"
+            aria-labelledby="dashboard-tab-parent_nps"
             variants={CONTAINER_VARIANTS}
             initial={reduced ? false : 'hidden'}
             animate="visible"

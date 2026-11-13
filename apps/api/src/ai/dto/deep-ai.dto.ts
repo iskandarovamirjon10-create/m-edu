@@ -63,6 +63,11 @@ export class GenerateQuizDto {
   level?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  gradeLevel?: string;
+
+  @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(20)
@@ -93,6 +98,11 @@ export class GenerateLessonPlanDto {
   @IsString()
   @MaxLength(50)
   level?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  gradeLevel?: string;
 
   @IsOptional()
   @IsNumber()

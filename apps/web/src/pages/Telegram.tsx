@@ -690,7 +690,7 @@ function AdminStat({
           {label}
         </p>
       </div>
-      <p className="relative mt-3 text-[26px] font-bold leading-none tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7]">
+      <p className="relative mt-3 text-[26px] font-bold leading-none tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]">
         <CountUp value={value} />
       </p>
       {subtext && (
@@ -1085,7 +1085,7 @@ export function TelegramPage() {
                     )}
                   </div>
 
-                  <h1 className="mt-2 text-2xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-3xl">
+                  <h1 className="mt-2 text-2xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-3xl">
                     {t('nav.telegram', 'Telegram Integratsiya Markazi')}
                   </h1>
                   <p className="mt-1 max-w-2xl text-[13.5px] font-medium text-[#64748B]">

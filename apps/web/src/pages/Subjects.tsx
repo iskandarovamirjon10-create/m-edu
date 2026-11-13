@@ -640,7 +640,7 @@ export function RailDepartmentItem({
       type="button"
       onClick={onClick}
       className={[
-        'group flex w-full min-h-[40px] items-center gap-2.5 rounded-xl px-3 py-1.5 text-left outline-none transition-colors',
+        'group flex w-full min-h-10 items-center gap-2.5 rounded-xl px-3 py-1.5 text-left outline-none transition-colors',
         active ? 'bg-indigo-500/10 border border-indigo-500/20' : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
       ].join(' ')}
     >
@@ -836,7 +836,7 @@ export const EditorialRow = React.forwardRef<
     >
       {/* Ghost numeral */}
       <span
-        className="hidden sm:block text-2xl sm:text-3xl font-bold leading-none tabular-nums tracking-tighter text-slate-900/10 dark:text-white/10 select-none"
+        className="hidden sm:block text-2xl sm:text-3xl font-bold leading-none tabular-nums tracking-tight text-slate-900/10 dark:text-white/10 select-none"
         style={{ fontFeatureSettings: '"tnum"' }}
       >
         {String(index + 1).padStart(2, '0')}
@@ -936,7 +936,7 @@ export const BentoCard = React.forwardRef<
 
       {/* Corner ghost numeral */}
       <span
-        className="pointer-events-none absolute -top-1.5 right-3 select-none text-4xl font-bold leading-none tabular-nums tracking-tighter text-slate-900/10 dark:text-white/10"
+        className="pointer-events-none absolute -top-1.5 right-3 select-none text-4xl font-bold leading-none tabular-nums tracking-tight text-slate-900/10 dark:text-white/10"
         style={{ fontFeatureSettings: '"tnum"' }}
       >
         {String(index + 1).padStart(2, '0')}
@@ -1368,9 +1368,10 @@ export function SubjectsPage() {
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   /* ── Data Fetching ─────────────────────────────────────────────────── */
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ items?: Subject[] }>({
     queryKey: ['subjects', debouncedSearch],
-    queryFn: () => subjectsApi.list({ search: debouncedSearch || undefined }),
+    queryFn: () =>
+      subjectsApi.list({ search: debouncedSearch || undefined }) as Promise<{ items?: Subject[] }>,
     placeholderData: (prev) => prev,
   });
 
@@ -1678,7 +1679,7 @@ export function SubjectsPage() {
               />
 
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-1 ring-white/30">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 ring-1 ring-white/30">
                   <Icon paths={I.bookOpen} size={18} strokeWidth={2.2} />
                 </div>
 

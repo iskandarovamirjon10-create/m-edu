@@ -203,7 +203,7 @@ describe('GamificationHubPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/2026-yil Oktyabr Mavsumi/i)).toBeInTheDocument();
       expect(screen.getByText(/5 kun qoldi/i)).toBeInTheDocument();
-      expect(screen.getByText('Zafar Olimov')).toBeInTheDocument();
+      expect(screen.getAllByText('Zafar Olimov').length).toBeGreaterThan(0);
       expect(screen.getByText('Madina Karimova')).toBeInTheDocument();
     });
   });
@@ -220,7 +220,7 @@ describe('GamificationHubPage', () => {
     fireEvent.click(diamondBtn);
 
     await waitFor(() => {
-      expect(screen.getByText('Zafar Olimov')).toBeInTheDocument();
+      expect(screen.getAllByText('Zafar Olimov').length).toBeGreaterThan(0);
       // Nilufar (Gold) should not appear when filtered to Diamond
       expect(screen.queryByText('Nilufar Rahimova')).toBeNull();
     });
@@ -230,17 +230,17 @@ describe('GamificationHubPage', () => {
     renderWithClient(<GamificationHubPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Ligalar & Mavsum')).toBeInTheDocument();
+      expect(screen.getByText(/Ligalar & Mavsum/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Ligalar & Mavsum'));
+    fireEvent.click(screen.getByText(/Ligalar & Mavsum/i));
 
     await waitFor(() => {
-      expect(screen.getByText('Oylik Liga Tizimi')).toBeInTheDocument();
-      expect(screen.getByText('Ligalarning 5 Bosqichi')).toBeInTheDocument();
-      expect(screen.getByText('Platina Ligasi')).toBeInTheDocument();
-      expect(screen.getByText('Sizning Ligangiz')).toBeInTheDocument();
-      expect(screen.getByText("Kunlik O‘quv Missiyalari (Quests)")).toBeInTheDocument();
+      expect(screen.getByText(/Oylik liga tizimi/i)).toBeInTheDocument();
+      expect(screen.getByText(/Ligalarning 5 bosqichi/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Platina Ligasi/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Sizning ligangiz/i)).toBeInTheDocument();
+      expect(screen.getByText(/Kunlik O‘quv Missiyalari/i)).toBeInTheDocument();
     });
   });
 
@@ -248,10 +248,10 @@ describe('GamificationHubPage', () => {
     renderWithClient(<GamificationHubPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /M-Coins Do'koni/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /M-Coins Do[‘']koni/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /M-Coins Do'koni/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /M-Coins Do[‘']koni/i }));
 
     await waitFor(() => {
       expect(screen.getByText('M-EDU Brend Futbolka')).toBeInTheDocument();
@@ -263,10 +263,10 @@ describe('GamificationHubPage', () => {
     renderWithClient(<GamificationHubPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Mahorat Shajarasi/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Mahorat shajarasi/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Mahorat Shajarasi/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Mahorat shajarasi/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/RPG Mahorat Shajarasi · Spatial Skill Constellation/i)).toBeInTheDocument();

@@ -35,7 +35,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { coursesApi } from '@/lib/api';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, parseFinancialAmount } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Course, CourseLevel } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -921,7 +921,7 @@ export function CoursesPage() {
 
   const courses = useQuery({
     queryKey: queryKeys.courses.all(),
-    queryFn: () => coursesApi.list({ limit: 100 }),
+    queryFn: () => coursesApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -985,7 +985,7 @@ export function CoursesPage() {
       const payload = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
-        price: parseFloat(form.price) || 0,
+        price: parseFinancialAmount(form.price),
         duration: parseInt(form.duration, 10) || 1,
         level: (form.level as CourseLevel) || undefined,
       };
@@ -1017,7 +1017,8 @@ export function CoursesPage() {
   const validateForm = useCallback((): boolean => {
     const errors: Partial<Record<keyof CourseFormState, string>> = {};
     if (!form.name.trim()) errors.name = t('courses.validation.nameRequired');
-    if (!form.price || parseFloat(form.price) < 0) errors.price = t('courses.validation.priceInvalid');
+    const parsedPrice = parseFinancialAmount(form.price);
+    if (!form.price || isNaN(parsedPrice) || parsedPrice < 0) errors.price = t('courses.validation.priceInvalid');
     if (!form.duration || parseInt(form.duration, 10) < 1) errors.duration = t('courses.validation.durationMin');
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -1148,23 +1149,34 @@ export function CoursesPage() {
   /* ── Bulk Actions ─────────────────────────────────────────────────── */
   const handleExportSelectedCoursesCSV = () => {
     const selectedRows = filtered.filter((c) => selectedIds.has(c.id));
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      ['ID,Name,Price,Duration,Level,IsActive']
-        .concat(
-          selectedRows.map(
-            (c) =>
-              `"${c.id}","${(c.name || '').replace(/"/g, '""')}","${c.price}","${c.duration}","${c.level || ''}","${c.isActive ? 'Active' : 'Inactive'}"`
-          )
-        )
-        .join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'` + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const headers = ['ID', 'Name', 'Price', 'Duration', 'Level', 'IsActive'];
+    const rows = selectedRows.map((c) =>
+      [
+        escapeCsvCell(c.id),
+        escapeCsvCell(c.name || ''),
+        escapeCsvCell(c.price),
+        escapeCsvCell(c.duration),
+        escapeCsvCell(c.level || ''),
+        escapeCsvCell(c.isActive ? 'Active' : 'Inactive'),
+      ].join(',')
+    );
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.href = url;
     link.setAttribute('download', `courses_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     clearSelection();
     push('success', t('courses.batch.exportedCsv', { count: selectedRows.length }));
   };
@@ -1310,7 +1322,7 @@ export function CoursesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('courses.searchPlaceholder')}
-                className="input-base min-h-[44px] w-full pl-10 pr-10 text-[13px] rounded-2xl"
+                className="input-base min-h-[44px] w-full pl-10 pr-10 text-[13px] rounded-xl"
               />
               {search && (
                 <button

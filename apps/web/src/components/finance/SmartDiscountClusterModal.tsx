@@ -24,6 +24,43 @@ interface SmartDiscountClusterModalProps {
   initialStudentId?: string;
 }
 
+interface DiscountStudent {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  parentPhone?: string;
+}
+
+interface Sibling {
+  id: string;
+  name?: string;
+  groups?: string[];
+}
+
+interface FamilyNetwork {
+  primaryStudent?: { name?: string; phone?: string };
+  siblings?: Sibling[];
+}
+
+interface DiscountBreakdownItem {
+  description?: string;
+  rule?: string;
+  percent?: number;
+  amount?: number;
+}
+
+interface DiscountEvaluation {
+  breakdown?: DiscountBreakdownItem[];
+  totalDiscountPercent?: number;
+  totalDiscountAmount?: number;
+  finalTuitionAmount?: number;
+}
+
+interface FamilyApplyResult {
+  affectedStudentsCount?: number;
+}
+
 export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps> = ({
   isOpen,
   onClose,
@@ -39,9 +76,10 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
   const toast = useToast();
 
   // Search students if not selected
-  const { data: studentsData } = useQuery({
+  const { data: studentsData } = useQuery<{ items?: DiscountStudent[] }>({
     queryKey: ['students-quick-search', searchQuery],
-    queryFn: () => studentsApi.list({ search: searchQuery, limit: 8 }),
+    queryFn: () =>
+      studentsApi.list({ search: searchQuery, limit: 8 }) as Promise<{ items?: DiscountStudent[] }>,
     enabled: isOpen && !selectedStudentId && searchQuery.length >= 2,
   });
 
@@ -49,22 +87,23 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
   const {
     data: familyData,
     isLoading: isFamilyLoading,
-  } = useQuery({
+  } = useQuery<FamilyNetwork>({
     queryKey: ['family-network', selectedStudentId],
-    queryFn: () => smartDiscountApi.getFamilyNetwork(selectedStudentId!),
+    queryFn: () =>
+      smartDiscountApi.getFamilyNetwork(selectedStudentId!) as Promise<FamilyNetwork>,
     enabled: isOpen && !!selectedStudentId,
   });
 
   // Evaluate Discounts for this student
   const {
     data: evaluationData,
-  } = useQuery({
+  } = useQuery<DiscountEvaluation>({
     queryKey: ['discount-evaluation', selectedStudentId, sampleTuition],
     queryFn: () =>
       smartDiscountApi.evaluate({
         studentId: selectedStudentId!,
         tuitionAmount: Number(sampleTuition) || 600_000,
-      }),
+      }) as Promise<DiscountEvaluation>,
     enabled: isOpen && !!selectedStudentId,
   });
 
@@ -75,24 +114,24 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
         studentId: selectedStudentId!,
         discountPercentTier2: 10,
         discountPercentTier3: 20,
-      }),
-    onSuccess: (res: any) => {
+      }) as Promise<FamilyApplyResult>,
+    onSuccess: (res: FamilyApplyResult) => {
       playSuccess();
       toast.success(
-        `Oila klasteri tasdiqlandi! ${res.affectedStudentsCount} ta farzandga yangi chegirma qoidalari kiritildi.`
+        `Oila klasteri tasdiqlandi! ${res.affectedStudentsCount ?? 0} ta farzandga yangi chegirma qoidalari kiritildi.`
       );
       queryClient.invalidateQueries({ queryKey: ['family-network'] });
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || "Chegirmani qo'llashda xatolik yuz berdi");
     },
   });
 
-  const studentsList: any[] = ((studentsData as any)?.items || []) as any[];
-  const siblings = familyData?.siblings || [];
+  const studentsList: DiscountStudent[] = studentsData?.items ?? [];
+  const siblings: Sibling[] = familyData?.siblings ?? [];
 
   return (
     <GlassModal
@@ -136,7 +175,7 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
 
             {studentsList.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                {studentsList.map((st: any) => (
+                {studentsList.map((st) => (
                   <button
                     key={st.id}
                     type="button"
@@ -203,7 +242,7 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {siblings.map((sib: any, idx: number) => (
+                  {siblings.map((sib: Sibling, idx: number) => (
                     <div
                       key={sib.id}
                       className="p-3 rounded-xl border border-border/40 bg-card/40 flex items-center justify-between"
@@ -254,7 +293,7 @@ export const SmartDiscountClusterModal: React.FC<SmartDiscountClusterModalProps>
                 </div>
 
                 <div className="space-y-2">
-                  {evaluationData.breakdown?.map((item: any, idx: number) => (
+                  {evaluationData.breakdown?.map((item: DiscountBreakdownItem, idx: number) => (
                     <div
                       key={idx}
                       className="flex items-center justify-between text-xs py-1 border-b border-border/20 last:border-b-0"

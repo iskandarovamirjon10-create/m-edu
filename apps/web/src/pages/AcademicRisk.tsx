@@ -573,7 +573,7 @@ export function AcademicRiskPage() {
                   void studentsQuery.refetch();
                   void summaryQuery.refetch();
                 }}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border border-black/[0.08] bg-white/50 px-4 py-2 text-xs font-semibold text-neutral-700 shadow-sm transition-all hover:bg-white/80 active:scale-95 dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-neutral-300"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-black/[0.08] bg-white/50 px-4 py-2 text-xs font-semibold text-neutral-700 shadow-sm transition-all hover:bg-white/80 active:scale-95 dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-neutral-300"
               >
                 <Icon paths={ICONS.refresh} size={15} />
                 <span>{t('common.refresh') || 'Refresh'}</span>
@@ -805,12 +805,15 @@ export function AcademicRiskPage() {
               <Icon paths={ICONS.search} size={16} />
             </span>
             <input
+              id="academic-risk-search"
+              name="academic-risk-search"
               type="text"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setFocusedIndex(0);
               }}
+              aria-label={`${t('common.search') || 'Search students'}...`}
               placeholder={`${t('common.search') || 'Search students'}...`}
               className="min-h-[44px] w-full rounded-xl border border-black/[0.08] bg-white/60 pl-9 pr-3 text-xs font-medium text-neutral-900 outline-none transition-all placeholder:text-neutral-400 focus:border-rose-500/50 focus:ring-2 focus:ring-rose-500/20 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white"
             />

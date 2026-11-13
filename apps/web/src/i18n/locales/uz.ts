@@ -124,6 +124,7 @@ const uz = {
   'nav.securityCenter': 'Xavfsizlik markazi',
   'nav.aiCopilot': 'AI yordamchi',
   'nav.executiveDashboard': 'Ijrochi paneli',
+  'nav.showcase': ' Flagman Taqdimot',
   'nav.financialAnalytics': 'Moliyaviy tahlil',
   'nav.payrollAnalytics': 'Ish haqi tahlili',
   'nav.crmAnalytics': 'CRM tahlili',
@@ -142,7 +143,7 @@ const uz = {
   'nav.audit': 'Audit jurnali',
   'nav.administration': 'Boshqaruv',
   'nav.resultsFound': 'ta natija topildi',
-  'nav.searchPlaceholder': 'O‘quvchi, o‘qituvchi, guruhlarni qidirish…',
+  'nav.searchPlaceholder': 'Tezkor qidiruv…',
   'nav.signIn': 'Kirish',
   'nav.createAccount': 'Hisob yaratish',
   'nav.sectionManagement': 'Boshqaruv',
@@ -810,6 +811,17 @@ const uz = {
   'payroll.smartKpiApplied': 'Smart KPI maoshi va bonusi muvaffaqiyatli hisoblandi',
   'payroll.loadingKpi': 'O‘qituvchining jonli davomat, retention va test ko‘rsatkichlari tahlil qilinmoqda…',
   'payroll.kpiError': 'KPI ma’lumotlarini yuklashda xatolik yuz berdi',
+  'auth.username': 'Foydalanuvchi nomi',
+  'grades.batch.deleteFailed': 'Baholarni o‘chirib bo‘lmadi',
+  'homework.batch.deleteFailed': 'Topshiriqlarni o‘chirib bo‘lmadi',
+  'invoices.loadError': 'Hisoblarni yuklab bo‘lmadi',
+  'invoices.payLinks.copyFailed': 'To‘lov havolasini nusxalashda xatolik',
+  'invoices.prorate.short': 'Qayta hisoblash',
+  'payments.batchFailed': 'To‘lovlarni yangilab bo‘lmadi',
+  'payrollAnalytics.active': 'Faol',
+  'studentForm.firstNameRequired': 'Ismni kiritish shart',
+  'studentForm.lastNameRequired': 'Familiyani kiritish shart',
+  'teachers.bulk.messageUnavailable': 'Tanlangan o‘qituvchilarga xabar yuborish imkoni mavjud emas',
 };
 
 import { legacyUz } from './legacy-slices.uz';
@@ -821,7 +833,8 @@ import { groupsUz } from './groups-slices';
 import { teachersUz } from './teachers-slices';
 import { tgappUz } from './tgapp-slices';
 import { migrationUz } from './migration-slices';
+import { studyUz } from './study-slices.uz';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...aiUz, ...studentsUz, ...groupsUz, ...teachersUz, ...tgappUz, ...migrationUz, ...uz };
+export default { ...legacyUz, ...analyticsUz, ...pagesUz, ...aiUz, ...studentsUz, ...groupsUz, ...teachersUz, ...tgappUz, ...migrationUz, ...studyUz, ...uz };
 

@@ -1179,10 +1179,9 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     return this.issueToken(user, clientMeta);
   }
 
-  private async validateUserTwoFactorCode(
+  private async getTwoFactorState(
     userId: string,
-    code: string,
-  ): Promise<boolean> {
+  ): Promise<TwoFactorUserState | null> {
     let state = this.twoFactorRegistry?.get(userId);
     if (!state) {
       const redisRaw = await this.safeRedisGet(`auth:2fa:${userId}`);
@@ -1191,13 +1190,23 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
           const parsed: unknown = JSON.parse(redisRaw);
           if (isRecord(parsed) && parsed.enabled === true) {
             state = parsed as unknown as TwoFactorUserState;
+            if (this.twoFactorRegistry) {
+              this.setBoundedMapEntry(this.twoFactorRegistry, userId, state);
+            }
           }
         } catch {
-          return false;
+          return null;
         }
       }
     }
+    return state && state.enabled ? state : null;
+  }
 
+  private async validateUserTwoFactorCode(
+    userId: string,
+    code: string,
+  ): Promise<boolean> {
+    const state = await this.getTwoFactorState(userId);
     if (!state || !state.enabled) return false;
 
     const plainSecret = this.decryptTotpSecret(state.encryptedSecret);
@@ -1665,7 +1674,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Check if 2FA / TOTP is enabled for this user
-    const twoFactorState = this.twoFactorRegistry?.get(user.id);
+    const twoFactorState = await this.getTwoFactorState(user.id);
     if (twoFactorState?.enabled) {
       const challengeToken = this.jwtService.sign({
         sub: user.id,
@@ -1712,159 +1721,17 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   }
 
   public async register(
-    data: RegisterDto,
-    clientMeta?: ClientMetadata,
+    _data: RegisterDto,
+    _clientMeta?: ClientMetadata,
   ): Promise<{
     accessToken?: string;
     user: TokenUser;
     pendingApproval?: boolean;
     message?: string;
   }> {
-    const email = normalizeEmail(data.email);
-
-    // 1. Check existing user
-    const existing = await this.prisma.user.findUnique({
-      where: { email },
-    });
-    if (existing) {
-      throw new ConflictException('Email already registered');
-    }
-
-    // 2. Check access control configuration and whitelist
-    let redeemedInvite: any = null;
-    if (this.prisma.platformInvitation && (data as any).inviteCode) {
-      const codeHash = createHash('sha256').update((data as any).inviteCode).digest('hex');
-      const invite = await this.prisma.platformInvitation.findUnique({
-        where: { codeHash },
-      });
-
-      if (!invite) {
-        throw new ForbiddenException('Invalid platform invitation code');
-      }
-      if (invite.revokedAt) {
-        throw new ForbiddenException('Platform invitation has been revoked');
-      }
-      if (invite.expiresAt <= new Date()) {
-        throw new ForbiddenException('Platform invitation has expired');
-      }
-      if (invite.useCount >= invite.maxUses) {
-        throw new ForbiddenException('Platform invitation code has already been used');
-      }
-      redeemedInvite = invite;
-    } else {
-      const isWhitelisted = await this.isEmailWhitelisted(email);
-      if (!isWhitelisted && this.prisma.accessControlConfig) {
-        const config = await this.prisma.accessControlConfig.findUnique({
-          where: { id: 'global' },
-        });
-
-        if (config?.requireApproval) {
-          const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
-          const result = await this.prisma.$transaction(async (tx: any) => {
-            const organization = await tx.organization.create({
-              data: {
-                name: data.organizationName,
-                email,
-                phone: data.phone,
-              },
-            });
-            const user = await tx.user.create({
-              data: {
-                email,
-                passwordHash,
-                firstName: data.firstName,
-                lastName: data.lastName,
-                role: 'ORG_ADMIN',
-                status: 'PENDING',
-                isActive: true,
-                organizationId: organization.id,
-              },
-              include: { organization: true },
-            });
-            return { user, organization };
-          });
-
-          return {
-            user: {
-              id: result.user.id,
-              email: result.user.email,
-              firstName: result.user.firstName,
-              lastName: result.user.lastName,
-              role: result.user.role,
-              organizationId: result.user.organizationId,
-              organization: result.organization,
-            },
-            pendingApproval: true,
-            message: 'Account registered successfully. Pending administrator approval.',
-          };
-        }
-
-        if (config?.inviteOnly) {
-          throw new ForbiddenException('Registration is currently invite-only or requires whitelist approval.');
-        }
-      }
-    }
-
-    const passwordHash = await bcrypt.hash(data.password, this.BCRYPT_ROUNDS);
-    const result = await this.prisma.$transaction(async (tx: any) => {
-      if (redeemedInvite && tx.platformInvitation) {
-        const claim = await tx.platformInvitation.updateMany({
-          where: {
-            id: redeemedInvite.id,
-            useCount: { lt: redeemedInvite.maxUses },
-            revokedAt: null,
-            expiresAt: { gt: new Date() },
-          },
-          data: {
-            useCount: { increment: 1 },
-            usedAt: new Date(),
-          },
-        });
-        if (claim.count !== 1) {
-          throw new ForbiddenException('Platform invitation code has already been used');
-        }
-      }
-
-      const organization = await tx.organization.create({
-        data: {
-          name: data.organizationName,
-          email,
-          phone: data.phone,
-        },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          role: 'ORG_ADMIN',
-          status: 'ACTIVE',
-          isActive: true,
-          organizationId: organization.id,
-        },
-        include: { organization: true },
-      });
-
-      return { user, organization };
-    });
-
-    const tokenUser: TokenUser = {
-      id: result.user.id,
-      email: result.user.email,
-      firstName: result.user.firstName,
-      lastName: result.user.lastName,
-      role: result.user.role,
-      organizationId: result.user.organizationId,
-      organization: result.organization,
-    };
-
-    const token = await this.issueToken(tokenUser, clientMeta);
-    return {
-      accessToken: token.accessToken,
-      user: tokenUser,
-    };
+    throw new ForbiddenException(
+      'Public registration is disabled. Accounts can only be provisioned by the Platform Owner.',
+    );
   }
 
   /**

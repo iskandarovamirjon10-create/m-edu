@@ -41,6 +41,33 @@ const SIZE_MAP: Record<
   lg: { title: 'text-[32px]', desc: 'text-sm', gap: 'gap-4', pad: 'px-6 py-5' },
 };
 
+/**
+ * PageActions — the single canonical action lane for page headers and toolbars.
+ * Primary action last (right), secondaries first, one gap scale everywhere.
+ */
+export function PageActions({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Page actions"
+      data-page-actions
+      className={cn(
+        'action-bar action-bar--stack w-full min-w-0',
+        'sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end sm:gap-2.5',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function GlassPageHeader({
   title,
   description,
@@ -81,13 +108,13 @@ export function GlassPageHeader({
       data-component="glass-page-header"
       data-size={size}
       className={cn(
-        'mb-6',
+        'mb-5 sm:mb-6',
         glass && cn('bg-white/80 dark:bg-surface-900/80 backdrop-blur-xl backdrop-saturate-150 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl shadow-card shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]', sz.pad),
         className,
       )}
     >
-      <div className={cn('flex min-w-0 flex-col sm:flex-row sm:items-start justify-between', sz.gap)}>
-        <div className="flex min-w-0 flex-col gap-1">
+      <div className={cn('flex min-w-0 flex-col justify-between sm:flex-row sm:items-center', sz.gap)}>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {breadcrumb && (
             <nav
               aria-label="Breadcrumb"
@@ -100,7 +127,7 @@ export function GlassPageHeader({
           <h1
             id={titleId}
             className={cn(
-              'min-w-0 truncate font-semibold tracking-tight text-primary',
+              'min-w-0 text-balance font-semibold tracking-tight text-primary',
               sz.title,
             )}
           >
@@ -108,21 +135,13 @@ export function GlassPageHeader({
           </h1>
 
           {desc && (
-            <p className={cn('mt-0.5 leading-relaxed text-pretty text-secondary', sz.desc)}>
+            <p className={cn('mt-0.5 max-w-2xl leading-relaxed text-pretty text-secondary', sz.desc)}>
               {desc}
             </p>
           )}
         </div>
 
-        {actionNodes && (
-          <div
-            role="group"
-            aria-label="Page actions"
-            className="flex flex-wrap items-center gap-2 sm:gap-3"
-          >
-            {actionNodes}
-          </div>
-        )}
+        {actionNodes && <PageActions>{actionNodes}</PageActions>}
       </div>
     </div>
   );

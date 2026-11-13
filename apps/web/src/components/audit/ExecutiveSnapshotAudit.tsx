@@ -11,6 +11,8 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/design';
+import { api } from '@/lib/api';
+import { useAuth } from '@/auth/AuthContext';
 
 interface SnapshotData {
   timestamp: string;
@@ -42,10 +44,12 @@ interface ExecutiveSnapshotAuditProps {
 export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
   isOpen,
   onClose,
-  orgName = 'M-EDU Flagship Academy',
+  orgName: propOrgName,
 }: ExecutiveSnapshotAuditProps) {
   const { push } = useToasts();
   const { playTick, playSuccess } = usePremiumSound();
+  const { user } = useAuth();
+  const orgName = propOrgName || user?.organizationName || 'M-EDU Ta\'lim Markazi';
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [snapshot, setSnapshot] = useState<SnapshotData | null>(null);
@@ -60,24 +64,46 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
   const generateCryptographicSnapshot = useCallback(async () => {
     setIsGenerating(true);
     playTick();
-    push('info', "Tizim ko'rsatkichlari to'planmoqda va SHA-256 imzosi hisoblanmoqda...");
+    push('info', "Haqiqiy tizim ko'rsatkichlari to'planmoqda va SHA-256 imzosi hisoblanmoqda...");
 
     const timestamp = new Date().toISOString();
+
+    // Query real institutional data in parallel
+    const [overviewSettled, zReportSettled, camerasSettled] = await Promise.allSettled([
+      api.get('/analytics/overview'),
+      api.get('/payments/cashier/z-report/summary'),
+      api.get('/cameras'),
+    ]);
+
+    const overviewData = overviewSettled.status === 'fulfilled' ? overviewSettled.value?.data || overviewSettled.value : null;
+    const zReportData = zReportSettled.status === 'fulfilled' ? zReportSettled.value?.data || zReportSettled.value : null;
+    const camerasData = camerasSettled.status === 'fulfilled' ? (Array.isArray(camerasSettled.value?.data) ? camerasSettled.value.data : Array.isArray(camerasSettled.value) ? camerasSettled.value : []) : [];
+
+    const totalEnrolled = Number(overviewData?.totalStudents || overviewData?.activeStudents) || 0;
+    const presentToday = Number(overviewData?.presentToday || overviewData?.todayAttendance?.present) || 0;
+    const ratePercent = totalEnrolled > 0 ? +(Math.min(100, (presentToday / totalEnrolled) * 100)).toFixed(1) : 0;
+
+    const cashInDrawer = Number(zReportData?.byMethod?.CASH?.amount) || 0;
+    const cardCollected = Number(zReportData?.byMethod?.TERMINAL?.amount) || 0;
+    const totalRevenueToday = Number(zReportData?.totalCollected || (cashInDrawer + cardCollected)) || 0;
+
+    const camerasOnline = camerasData.filter((c: any) => c.status === 'ONLINE' || c.isActive).length;
+
     const rawData = {
       timestamp,
       organization: orgName,
       attendance: {
-        totalEnrolled: 348,
-        presentToday: 326,
-        ratePercent: 93.7,
+        totalEnrolled,
+        presentToday,
+        ratePercent,
       },
       finance: {
-        totalRevenueToday: 18450000,
-        cashInDrawer: 6200000,
-        cardCollected: 12250000,
+        totalRevenueToday,
+        cashInDrawer,
+        cardCollected,
       },
       infrastructure: {
-        camerasOnline: 6,
+        camerasOnline,
         turnstileState: 'NORMAL_ARMED',
         offlineQueueRemaining: 0,
       },
@@ -91,7 +117,9 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
         const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-      } catch (_) {}
+      } catch {
+        /* SubtleCrypto mavjud emas — hash bo‘sh qoladi */
+      }
     }
 
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -103,7 +131,7 @@ export const ExecutiveSnapshotAudit = memo(function ExecutiveSnapshotAudit({
       });
       playSuccess();
       push('success', "Kriptografik auditorlik snapshot muvaffaqiyatli yaratildi!");
-    }, 800);
+    }, 600);
   }, [orgName, playTick, playSuccess, push]);
 
   const downloadJson = () => {

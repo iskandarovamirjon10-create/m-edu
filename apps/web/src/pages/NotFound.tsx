@@ -165,7 +165,7 @@ export function NotFoundPage() {
                 key={dest.path}
                 to={dest.path}
                 onClick={() => sound.playPop?.()}
-                className="group flex min-h-[44px] flex-col items-center justify-center rounded-2xl border border-black/[0.05] bg-white/40 p-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-black/[0.1] hover:bg-white/80 hover:shadow-sm active:scale-95 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:border-white/[0.12] dark:hover:bg-white/[0.06]"
+                className="group flex min-h-[44px] flex-col items-center justify-center rounded-xl border border-black/[0.05] bg-white/40 p-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-black/[0.1] hover:bg-white/80 hover:shadow-sm active:scale-95 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:border-white/[0.12] dark:hover:bg-white/[0.06]"
               >
                 <svg
                   className="h-4 w-4 text-[var(--text-secondary)] transition-colors group-hover:text-brand-500"

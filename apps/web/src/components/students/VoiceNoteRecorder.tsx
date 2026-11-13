@@ -10,6 +10,54 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useToasts } from '@/components/ui';
 import { cn } from '@/lib/design';
 
+/* ── Web Speech API (brauzerlar orasida nomi farq qiladi) ─────────────── */
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  readonly length: number;
+  [index: number]: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorLike {
+  error?: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+/** Auto-tagging lug‘ati — komponent renderida qayta yaratilmaydi. */
+const DETECTED_TAGS: ReadonlyArray<{ word: string; tag: string }> = [
+  { word: 'faol', tag: '🌟 Faol qatnashdi' },
+  { word: 'kechikdi', tag: '⏰ Darsga kechikdi' },
+  { word: 'vazifa', tag: '📚 Uy vazifasi a\'lo' },
+  { word: 'intizom', tag: '🎯 Yaxshi intizom' },
+  { word: 'qiyin', tag: '💡 Qo\'shimcha yordam kerak' },
+];
+
 interface VoiceNoteRecorderProps {
   studentName: string;
   onSaveNote: (note: {
@@ -34,21 +82,16 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
   const [elapsedSec, setElapsedSec] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const timerRef = useRef<number | null>(null);
-  const recognitionRef = useRef<any>(null);
-
-  // Supported keywords for auto-tagging
-  const detectedTags = [
-    { word: 'faol', tag: '🌟 Faol qatnashdi' },
-    { word: 'kechikdi', tag: '⏰ Darsga kechikdi' },
-    { word: 'vazifa', tag: '📚 Uy vazifasi a\'lo' },
-    { word: 'intizom', tag: '🎯 Yaxshi intizom' },
-    { word: 'qiyin', tag: '💡 Qo\'shimcha yordam kerak' },
-  ];
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // `push` identity o‘zgarsa ham recognition qayta yaratilmasligi uchun ref.
+  const pushRef = useRef(push);
+  useEffect(() => {
+    pushRef.current = push;
+  }, [push]);
 
   // Initialize SpeechRecognition if available
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = getSpeechRecognitionCtor();
 
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
@@ -56,7 +99,7 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
       recognition.interimResults = true;
       recognition.lang = 'uz-UZ';
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
         let current = '';
         for (let i = 0; i < event.results.length; i++) {
           current += event.results[i][0].transcript + ' ';
@@ -65,14 +108,14 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
 
         // Check for auto-tags
         const lower = current.toLowerCase();
-        detectedTags.forEach(({ word, tag }) => {
+        DETECTED_TAGS.forEach(({ word, tag }) => {
           if (lower.includes(word)) {
             setSelectedTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
           }
         });
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionErrorLike) => {
         setIsRecording(false);
         const errMsg =
           event?.error === 'not-allowed'
@@ -80,7 +123,7 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
             : event?.error === 'no-speech'
             ? 'Ovoz eshitilmadi'
             : "Ovozni tanishda xatolik yuz berdi";
-        push('error', errMsg);
+        pushRef.current('error', errMsg);
       };
 
       recognitionRef.current = recognition;
@@ -89,7 +132,9 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
     return () => {
       try {
         recognitionRef.current?.stop();
-      } catch (_) {}
+      } catch {
+        /* recognition allaqachon to‘xtagan */
+      }
     };
   }, []);
 
@@ -114,7 +159,9 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
       setIsRecording(false);
       try {
         recognitionRef.current?.stop();
-      } catch (_) {}
+      } catch {
+        /* recognition allaqachon to‘xtagan */
+      }
       playLaserScan();
     } else {
       // Start
@@ -123,7 +170,7 @@ export const VoiceNoteRecorder = memo(function VoiceNoteRecorder({
       playSuccess();
       try {
         recognitionRef.current?.start();
-      } catch (_) {
+      } catch {
         // Fallback demo text if speech recognition not permitted in browser
         setTranscript(
           `${studentName} bugungi darsda faol qatnashdi, barcha topshiriqlarni mustaqil bajardi.`,

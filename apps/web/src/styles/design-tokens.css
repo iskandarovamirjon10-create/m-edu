@@ -623,6 +623,11 @@
     --apple-red: var(--c-red);
     --apple-purple: var(--c-purple);
     --apple-indigo: var(--c-indigo);
+    /* Indigo shkalasi: Tailwind `accent-600/700` shu tokenlarga bog‘langan.
+       Ilgari `--c-indigo-hover` hech qayerda aniqlanmagan edi — `accent-600`
+       utility’si hisoblanmagan qiymat bilan shaffof bo‘lib qolardi. */
+    --c-indigo-hover: color-mix(in oklab, var(--c-indigo) 90%, var(--mix-hover));
+    --c-indigo-active: color-mix(in oklab, var(--c-indigo) 80%, black);
     --accent-cyan: var(--c-teal);
     --accent-indigo: var(--c-indigo);
     --accent-violet: var(--c-purple);

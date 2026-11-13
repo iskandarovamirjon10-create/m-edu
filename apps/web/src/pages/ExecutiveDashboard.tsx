@@ -24,6 +24,7 @@ import { formatCurrency } from '@/lib/format';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
+import { AppleInnovationShowcaseHub } from '@/components/showcase/AppleInnovationShowcaseHub';
 
 /* ============================================================================
  * MOTION TOKENS
@@ -689,6 +690,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 export function ExecutiveDashboardPage() {
   const { t } = useSafeI18n();
   usePageTitle(t('executive.title'));
+  const [viewMode, setViewMode] = useState<'standard' | 'innovations'>('innovations');
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<ExecutiveSummary>({
     queryKey: ['executive-summary'],
@@ -814,7 +816,7 @@ export function ExecutiveDashboardPage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('executive.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
@@ -830,7 +832,7 @@ export function ExecutiveDashboardPage() {
               whileTap={{ scale: 0.95 }}
               transition={SPRING.snappy}
               aria-label={t('common.refresh')}
-              title="Refresh"
+              title={t('common.refresh')}
               className="flex h-10 w-10 items-center justify-center rounded-xl outline-none disabled:opacity-60"
               style={{
                 background: 'rgba(37,99,235,0.10)',
@@ -839,7 +841,7 @@ export function ExecutiveDashboardPage() {
               }}
               role="button"
               tabIndex={0}
-              onKeyDown={(e: any) => {
+              onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   e.currentTarget.click();
@@ -856,6 +858,53 @@ export function ExecutiveDashboardPage() {
         </div>
       </motion.div>
 
+      {/* ============================================================
+          EXECUTIVE SUITE MODE SWITCHER
+      ============================================================ */}
+      <motion.div variants={cardVariants} className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08]">
+          <button
+            type="button"
+            onClick={() => setViewMode('innovations')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewMode === 'innovations'
+                ? 'bg-white dark:bg-white/20 text-black dark:text-white shadow-md'
+                : 'text-zinc-500 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <span className="text-sm"></span>
+            <span>Apple Innovation Suite (7 Breakthroughs)</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-emerald-500/20 text-emerald-500 dark:text-emerald-300 font-black">
+              LIVE
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('standard')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewMode === 'standard'
+                ? 'bg-white dark:bg-white/20 text-black dark:text-white shadow-md'
+                : 'text-zinc-500 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <span>📊</span>
+            <span>Moliyaviy KPI & Filiallar</span>
+          </button>
+        </div>
+
+        <div className="text-xs text-zinc-400 font-medium">
+          {viewMode === 'innovations'
+            ? "O'quv markazni boshqarishning eksklyuziv 7 ta texnologik moduli"
+            : 'Asosiy moliyaviy va operatsion ko\'rsatkichlar'}
+        </div>
+      </motion.div>
+
+      {viewMode === 'innovations' ? (
+        <motion.div variants={cardVariants}>
+          <AppleInnovationShowcaseHub />
+        </motion.div>
+      ) : (
+        <>
       {/* ============================================================
           KPI ROW
       ============================================================ */}
@@ -1067,6 +1116,8 @@ export function ExecutiveDashboardPage() {
             </div>
           </div>
         </motion.div>
+      )}
+        </>
       )}
     </motion.div>
   );

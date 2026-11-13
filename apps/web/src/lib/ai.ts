@@ -16,6 +16,7 @@ import type {
   AiWireMessage,
   AiWireToolResult,
 } from '@/types/ai';
+import type { AiDraftMessageResponse, AiStudentDiagnostic } from './api';
 
 /* ── Tool vocabulary ───────────────────────────────────────────────────── */
 
@@ -41,10 +42,35 @@ const TOOL_META: Record<string, ToolMeta> = {
   'teachers.list': { subject: "O'qituvchilar ro'yxati" },
   'groups.list': { subject: "Guruhlar ro'yxati" },
   'courses.list': { subject: "Kurslar ro'yxati" },
+  'finance.simulate_scenario': { subject: 'Moliyaviy ssenariy simulyatori' },
+  'teachers.performance_review': { subject: 'O‘qituvchilar samaradorlik reytingi' },
+  'students.academic_risk_radar': { subject: 'Akademik va moliyaviy xavf radari' },
+  'finance.overview': { subject: 'Moliyaviy tushum va foyda' },
   'finance.debtors': { subject: "Qarzdorlar ro'yxati" },
   'finance.overdue_debtors': { subject: "Muddati o'tgan qarzdorlar ro'yxati" },
   'finance.summary': { subject: 'Moliyaviy hisobot' },
+  'finance.record_expense': {
+    subject: 'Yangi xarajat',
+    proposal: 'Yangi xarajat kiritish',
+  },
   'reports.summary': { subject: 'Kunlik hisobot' },
+  'biometrics.status': { subject: 'Face ID va kamera holati' },
+  'biometrics.recent_events': { subject: 'Face ID so‘nggi davomat voqealari' },
+  'inventory.overview': { subject: 'Ombor va tovar qoldiqlari' },
+  'inventory.search': { subject: 'Ombor tovarlari qidiruvi' },
+  'exams.overview': { subject: 'Imtihonlar va o‘rtacha ballar' },
+  'exams.list': { subject: 'Imtihonlar ro‘yxati' },
+  'leads.status_summary': { subject: 'Lidlar va voronka tahlili' },
+  'leads.pipeline': { subject: 'Lidlar bosqichlari' },
+  'leads.summary': { subject: 'Lidlar va voronka tahlili' },
+  'leads.search': { subject: 'Lidlar qidiruvi' },
+  'leads.create': {
+    subject: 'Yangi lid',
+    proposal: 'Yangi lid yaratish',
+  },
+  'grades.distribution': { subject: 'Baholar taqsimoti va o‘zlashtirish' },
+  'grades.summary': { subject: 'Baholar hisoboti' },
+  'grades.analytics': { subject: 'Baholar tahlili va o‘zlashtirish' },
   'notifications.broadcast': {
     subject: 'Xabarnoma',
     proposal: 'Xabarnoma yuborish',
@@ -85,10 +111,29 @@ const TOOL_SUCCESS: Record<string, string> = {
   'teachers.list': "O'qituvchilar ro'yxati olindi",
   'groups.list': "Guruhlar ro'yxati olindi",
   'courses.list': "Kurslar ro'yxati olindi",
+  'finance.simulate_scenario': 'Moliyaviy prognoz va ssenariy hisoblandi',
+  'teachers.performance_review': 'O‘qituvchilar reytingi tahlil qilindi',
+  'students.academic_risk_radar': 'Xavf ostidagi o‘quvchilar aniqlandi',
+  'finance.overview': "Moliyaviy ko‘rsatkichlar hisoblandi",
   'finance.debtors': "Qarzdorlar ro'yxati olindi",
   'finance.overdue_debtors': "Qarzdorlar ro'yxati olindi",
   'finance.summary': 'Moliyaviy hisobot olindi',
+  'finance.record_expense': 'Yangi xarajat tasdiqlash uchun tayyorlandi',
   'reports.summary': 'Hisobot tayyorlandi',
+  'biometrics.status': 'Face ID tizim holati olindi',
+  'biometrics.recent_events': 'So‘nggi biometrik voqealar olindi',
+  'inventory.overview': 'Ombor tovar qoldiqlari olindi',
+  'inventory.search': 'Ombor tovarlari qidirildi',
+  'exams.overview': 'Imtihonlar statistikasi olindi',
+  'exams.list': 'Imtihonlar ro‘yxati olindi',
+  'leads.status_summary': 'Lidlar statistikasi olindi',
+  'leads.pipeline': 'Lidlar voronkasi olindi',
+  'leads.summary': 'Lidlar statistikasi va tahlili olindi',
+  'leads.search': 'Lidlar qidiruvi yakunlandi',
+  'leads.create': 'Yangi lid yaratish tayyorlandi',
+  'grades.distribution': 'Baholar taqsimoti olindi',
+  'grades.summary': 'Baholar hisoboti olindi',
+  'grades.analytics': 'Baholar tahlili olindi',
   'notifications.broadcast': 'Xabarnoma yuborish tayyorlandi',
   'telegram.prepareMessage': 'Telegram xabari tayyorlandi',
   'students.create': "Yangi o'quvchi qo'shish tayyorlandi",
@@ -120,11 +165,29 @@ const PARAMETER_LABELS: Record<string, string> = {
   email: 'Elektron pochta',
   phone: 'Telefon',
   amount: 'Summa',
+  category: 'Kategoriya',
+  paymentMethod: 'To‘lov usuli',
+  description: 'Tavsif',
+  expenseDate: 'Xarajat sanasi',
+  location: 'Joylashuv',
+  unit: 'O‘lchov birligi',
+  minQuantity: 'Minimal qoldiq',
+  currentQuantity: 'Joriy miqdor',
   date: 'Sana',
   time: 'Vaqt',
   channel: 'Kanal',
   subject: 'Mavzu',
   reason: 'Sabab',
+  dateFrom: 'Boshlanish sanasi',
+  dateTo: 'Tugash sanasi',
+  days: 'Kunlar soni',
+  limit: 'Limit',
+  search: 'Qidiruv',
+  studentDeltaPercent: 'O‘quvchilar soni o‘zgarishi (%)',
+  priceDeltaPercent: 'Narxlar o‘zgarishi (%)',
+  expenseDeltaPercent: 'Xarajatlar o‘zgarishi (%)',
+  churnReductionPercent: 'Chiqib ketishni kamaytirish (%)',
+  minRiskScore: 'Minimal xavf ko‘rsatkichi',
 };
 
 const RESULT_LABELS: Record<string, string> = {
@@ -537,8 +600,21 @@ export async function aiChatStream(
       done = readerDone;
     }
     flushFrames(true);
+  } catch (err) {
+    if (options.signal?.aborted) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* ignore abort cancellation errors */
+      }
+    }
+    throw err;
   } finally {
-    reader?.releaseLock?.();
+    try {
+      reader?.releaseLock?.();
+    } catch {
+      /* ignore releaseLock errors */
+    }
   }
 
   if (streamError && !fullContent.trim()) throw streamError;
@@ -669,6 +745,11 @@ export const aiBriefingApi = {
   get: () => request<AiExecutiveBriefing>('/ai/executive-briefing'),
 };
 
+export interface AiActionListResponse {
+  actions: Array<Record<string, unknown>>;
+  total?: number;
+}
+
 export const aiActionsApi = {
   list: (query?: { status?: string; page?: number; limit?: number }) => {
     const params = new URLSearchParams();
@@ -676,15 +757,70 @@ export const aiActionsApi = {
     if (query?.page) params.set('page', String(query.page));
     if (query?.limit) params.set('limit', String(query.limit));
     const qs = params.toString();
-    return request<any>(`/workspace/ai/actions${qs ? `?${qs}` : ''}`);
+    return request<AiActionListResponse>(`/workspace/ai/actions${qs ? `?${qs}` : ''}`);
   },
   confirm: (actionId: string) => confirmAiAction(actionId),
   reject: (actionId: string, reason?: string) => rejectAiAction(actionId, reason),
 };
 
+export interface AiQuizQuestion {
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation?: string;
+}
+
+export interface AiGeneratedQuiz {
+  topic: string;
+  subject?: string;
+  level?: string;
+  bloomsTaxonomyLevel?: string;
+  difficulty?: string;
+  questions?: AiQuizQuestion[];
+  rubricCriteria?: string[];
+}
+
+export interface AiLessonStep {
+  minuteRange: string;
+  phase: string;
+  teacherAction: string;
+  studentAction: string;
+  checkpoint: string;
+}
+
+export interface AiGeneratedLessonPlan {
+  title: string;
+  subject?: string;
+  level?: string;
+  durationMinutes?: number;
+  bloomsTaxonomyLevel?: string;
+  learningObjectives?: string[];
+  steps?: AiLessonStep[];
+  differentiatedTasks?: {
+    support?: string;
+    core?: string;
+    extension?: string;
+  };
+  materialsNeeded?: string[];
+  homework?: string;
+}
+
+export interface AiGeneratedReportResponse {
+  title: string;
+  summary: string;
+  sections: Array<{ heading: string; body: string }>;
+  generatedAt?: string;
+}
+
+export interface AiDocumentAnalysisResponse {
+  summary: string;
+  keyFindings?: string[];
+  recommendations?: string[];
+}
+
 export const aiStudioApi = {
   diagnoseStudent: (studentId: string) =>
-    request<any>(`/ai/diagnose/student/${encodeURIComponent(studentId)}`),
+    request<AiStudentDiagnostic>(`/ai/diagnose/student/${encodeURIComponent(studentId)}`),
   draftParentMessage: (body: {
     studentId?: string;
     studentName: string;
@@ -692,35 +828,67 @@ export const aiStudioApi = {
     topic?: 'attendance' | 'debt' | 'praise' | 'exam' | 'custom';
     details?: string;
     balanceDue?: number;
-  }) => request<any>('/ai/draft-parent-message', { method: 'POST', body: JSON.stringify(body) }),
+  }) =>
+    request<AiDraftMessageResponse>('/ai/draft-parent-message', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   generateQuiz: (body: {
     topic: string;
     subject?: string;
     level?: string;
+    gradeLevel?: string;
     questionCount?: number;
     bloomsTaxonomyLevel?: string;
     difficulty?: string;
-  }) => request<any>('/ai/generate-quiz', { method: 'POST', body: JSON.stringify(body) }),
+  }) => {
+    const { gradeLevel, level, ...rest } = body;
+    return request<AiGeneratedQuiz>('/ai/generate-quiz', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...rest,
+        level: level ?? gradeLevel,
+      }),
+    });
+  },
   generateLessonPlan: (body: {
     topic: string;
     subject?: string;
     level?: string;
+    gradeLevel?: string;
     durationMinutes?: number;
     learningObjectives?: string[];
     bloomsTaxonomyLevel?: string;
-  }) => request<any>('/ai/generate-lesson-plan', { method: 'POST', body: JSON.stringify(body) }),
+  }) => {
+    const { gradeLevel, level, ...rest } = body;
+    return request<AiGeneratedLessonPlan>('/ai/generate-lesson-plan', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...rest,
+        level: level ?? gradeLevel,
+      }),
+    });
+  },
   generateReport: (body: {
     reportType: 'ATTENDANCE_WEEKLY' | 'ENROLLMENT_TRENDS' | 'TEACHER_WORKLOAD' | 'FINANCIAL_SUMMARY' | 'CUSTOM';
     timeRange?: '7d' | '30d' | '90d' | 'all';
     query?: string;
-  }) => request<any>('/ai/reports', { method: 'POST', body: JSON.stringify(body) }),
+  }) =>
+    request<AiGeneratedReportResponse>('/ai/reports', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   analyzeDocument: (body: {
     base64: string;
     mimeType: string;
     fileName?: string;
     instruction?: string;
     analysisType?: 'curriculum' | 'policy' | 'quiz_extraction' | 'summary';
-  }) => request<any>('/ai/analyze-document', { method: 'POST', body: JSON.stringify(body) }),
+  }) =>
+    request<AiDocumentAnalysisResponse>('/ai/analyze-document', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };
 
 export const aiSuggestionsApi = {

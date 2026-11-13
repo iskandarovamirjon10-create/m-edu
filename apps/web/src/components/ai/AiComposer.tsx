@@ -714,7 +714,7 @@ export function AiComposer({
                 aria-label={
                   t('ai.composer.cancelVoice') || 'Ovoz yozishni bekor qilish'
                 }
-                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full outline-none transition-colors hover:bg-[color:var(--cp-danger)]/15 focus-visible:ring-2 focus-visible:ring-[color:var(--cp-danger)]/50"
+                className="ml-0.5 inline-flex h-5 w-5 min-h-[36px] min-w-[36px] tap-extend items-center justify-center rounded-full outline-none transition-colors hover:bg-[color:var(--cp-danger)]/15 focus-visible:ring-2 focus-visible:ring-[color:var(--cp-danger)]/50"
               >
                 <IconClose size={11} />
               </button>
@@ -743,7 +743,7 @@ export function AiComposer({
                 <button
                   type="button"
                   onClick={retryLast}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold outline-none hover:bg-rose-500/15 focus-visible:ring-2 focus-visible:ring-rose-500/40"
+                  className="inline-flex shrink-0 min-h-[36px] tap-extend items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold outline-none hover:bg-rose-500/15 focus-visible:ring-2 focus-visible:ring-rose-500/40"
                 >
                   <IconRefresh size={11} />
                   {t('common.retry') || 'Qayta'}
@@ -789,7 +789,7 @@ export function AiComposer({
                   <button
                     type="button"
                     onClick={() => removeAttachment(att.id)}
-                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-[color:var(--cp-text-secondary)] transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                    className="ml-1 flex h-5 w-5 min-h-[36px] min-w-[36px] tap-extend items-center justify-center rounded-full text-[color:var(--cp-text-secondary)] transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                     aria-label="Rasmni o‘chirish"
                   >
                     <LucideX size={12} />
@@ -899,7 +899,7 @@ export function AiComposer({
               title="Rasm biriktirish (screenshot yoki fayl)"
               onClick={() => fileInputRef.current?.click()}
               disabled={locked || attachments.length >= MAX_ATTACHMENTS}
-              className="cp-icon-btn mb-0.5 shrink-0 rounded-[13px] text-[color:var(--cp-text-secondary)] transition-colors hover:text-[color:var(--cp-text)] disabled:opacity-40"
+              className="cp-icon-btn tap-extend mb-0.5 shrink-0 min-h-[44px] min-w-[44px] rounded-[13px] text-[color:var(--cp-text-secondary)] transition-colors hover:text-[color:var(--cp-text)] disabled:opacity-40"
             >
               <Paperclip size={16} />
             </motion.button>
@@ -920,7 +920,7 @@ export function AiComposer({
                   toggleVoice();
                 }}
                 className={cn(
-                  'cp-icon-btn mb-0.5 shrink-0 rounded-[13px] transition-all duration-200',
+                  'cp-icon-btn tap-extend mb-0.5 shrink-0 min-h-[44px] min-w-[44px] rounded-[13px] transition-all duration-200',
                   isListening
                     ? 'border-[color:var(--cp-danger)]/35 bg-[color:var(--cp-danger)]/15 text-[color:var(--cp-danger)] shadow-[0_0_12px_rgba(255,59,48,0.25)]'
                     : '',

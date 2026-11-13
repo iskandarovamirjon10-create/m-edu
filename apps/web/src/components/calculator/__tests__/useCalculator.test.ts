@@ -57,4 +57,46 @@ describe('useCalculator', () => {
 
     expect(result.current.currentValue).toBe('5.55');
   });
+
+  it('should handle educational prorate calculation', () => {
+    const { result } = renderHook(() => useCalculator());
+
+    // 1 200 000 tuition for 12 lessons, attended 6
+    act(() => {
+      '1200000'.split('').forEach((d) => result.current.inputDigit(d));
+    });
+    act(() => {
+      result.current.calculateProrate(6, 12);
+    });
+
+    expect(result.current.currentValue).toBe('600000');
+  });
+
+  it('should handle teacher revenue split calculation', () => {
+    const { result } = renderHook(() => useCalculator());
+
+    // 1 000 000 with 45% teacher split
+    act(() => {
+      '1000000'.split('').forEach((d) => result.current.inputDigit(d));
+    });
+    act(() => {
+      result.current.calculateTeacherShare(45);
+    });
+
+    expect(result.current.currentValue).toBe('450000');
+  });
+
+  it('should handle discount calculation', () => {
+    const { result } = renderHook(() => useCalculator());
+
+    // 1 000 000 with 15% discount
+    act(() => {
+      '1000000'.split('').forEach((d) => result.current.inputDigit(d));
+    });
+    act(() => {
+      result.current.calculateDiscount(15);
+    });
+
+    expect(result.current.currentValue).toBe('850000');
+  });
 });

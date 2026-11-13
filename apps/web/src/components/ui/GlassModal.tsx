@@ -139,7 +139,7 @@ export function GlassModal({
       document.removeEventListener('keydown', handleKey);
       prevFocus.current?.focus();
     };
-  }, [open, persistent]);
+  }, [open, persistent, t]);
 
   if (!open || typeof document === 'undefined') return null;
 

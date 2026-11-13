@@ -33,7 +33,7 @@ import {
   FloatingActionIsland,
   useToast,
 } from '@/components/ui';
-import { formatDate } from '@/lib/format';
+import { formatDate, parseFinancialAmount } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Homework, Group } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -353,7 +353,7 @@ function KpiTile({
       className="liquid-glass-card group relative flex items-center gap-3.5 p-4 rounded-2xl"
     >
       <div
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
         style={{
           background: c.bg,
           color: c.fg,
@@ -638,14 +638,14 @@ export function HomeworkPage() {
   /* ── Queries ──────────────────────────────────────────────────────── */
   const homework = useQuery({
     queryKey: ['homework'],
-    queryFn: () => homeworkApi.list({ limit: 100 }),
+    queryFn: () => homeworkApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
     staleTime: 30 * 1000,
   });
 
   const groups = useQuery({
     queryKey: queryKeys.groups.homework(),
-    queryFn: () => groupsApi.list({ limit: 100 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000,
   });
@@ -799,19 +799,26 @@ export function HomeworkPage() {
 
     if (listToExport.length === 0) return;
 
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+      }
+      return '"' + str.replace(/"/g, '""') + '"';
+    };
     const headers = ['ID', 'Title', 'Group', 'Max Score', 'Deadline', 'Status', 'Description'];
     const rows = listToExport.map((h) => {
       const isPast = isDeadlinePast(h.deadline);
       const isSoon = isDeadlineSoon(h.deadline);
       const status = isPast ? 'Past Due' : isSoon ? 'Due Soon' : 'Open';
       return [
-        `"${h.id}"`,
-        `"${h.title}"`,
-        `"${h.group?.name ?? '—'}"`,
-        h.maxScore ?? '',
-        `"${h.deadline ?? ''}"`,
-        `"${status}"`,
-        `"${(h.description ?? '').replace(/"/g, '""')}"`,
+        escapeCsvCell(h.id),
+        escapeCsvCell(h.title),
+        escapeCsvCell(h.group?.name ?? '—'),
+        escapeCsvCell(h.maxScore ?? ''),
+        escapeCsvCell(h.deadline ?? ''),
+        escapeCsvCell(status),
+        escapeCsvCell(h.description ?? ''),
       ].join(',');
     });
 
@@ -840,11 +847,21 @@ export function HomeworkPage() {
     if (selectedIds.size === 0) return;
     try {
       const ids = Array.from(selectedIds);
-      await Promise.all(ids.map((id) => homeworkApi.remove(id)));
+      let successCount = 0;
+      const CHUNK_SIZE = 5;
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const results = await Promise.allSettled(chunk.map((id) => homeworkApi.remove(id)));
+        successCount += results.filter((r) => r.status === 'fulfilled').length;
+      }
       qc.invalidateQueries({ queryKey: queryKeys.homework.all() });
-      push('success', t('homework.batch.deleteSuccess', { count: ids.length }));
       clearSelection();
-      playSuccess();
+      if (successCount > 0) {
+        push('success', t('homework.batch.deleteSuccess', { count: successCount }));
+        playSuccess();
+      } else {
+        push('error', t('homework.batch.deleteFailed', 'Topshiriqlarni o‘chirib bo‘lmadi'));
+      }
     } catch (err) {
       push('error', getErrorMessage(err));
     } finally {
@@ -874,7 +891,7 @@ export function HomeworkPage() {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         deadline: form.deadline ? new Date(form.deadline).toISOString() : undefined,
-        maxScore: form.maxScore ? parseFloat(form.maxScore) : undefined,
+        maxScore: form.maxScore ? parseFinancialAmount(form.maxScore) : undefined,
       };
       return editingId ? homeworkApi.update(editingId, payload) : homeworkApi.create(payload);
     },
@@ -895,7 +912,7 @@ export function HomeworkPage() {
     const errors: Partial<Record<keyof HomeworkFormState, string>> = {};
     if (!form.title.trim()) errors.title = t('homework.titleRequired');
     if (!form.groupId) errors.groupId = t('common.validation.selectGroup');
-    if (form.maxScore && parseFloat(form.maxScore) < 0) {
+    if (form.maxScore && parseFinancialAmount(form.maxScore) < 0) {
       errors.maxScore = t('homework.maxScorePositive');
     }
     setFormErrors(errors);

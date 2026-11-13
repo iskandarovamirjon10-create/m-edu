@@ -727,7 +727,6 @@ export function AuthProvider({
     const ac = new AbortController();
     abortRef.current = ac;
 
-    let promise: Promise<User | null>;
     const execute = async (): Promise<User | null> => {
       try {
         const me = await runMiddleware('verify', () =>
@@ -758,7 +757,7 @@ export function AuthProvider({
       }
     };
 
-    promise = execute();
+    const promise = execute();
     inflightRef.current = promise;
     return promise;
   }, [persist, signOutLocally, broadcast, stateRef, runMiddleware, retryRef]);

@@ -101,7 +101,7 @@ const LiveClock = memo(function LiveClock() {
   return (
     <div
       className={cn(
-        'inline-flex h-11 shrink-0 items-center gap-1.5 sm:gap-2 rounded-2xl px-2.5 sm:px-3.5',
+        'order-2 inline-flex h-10 flex-1 shrink-0 items-center gap-1.5 rounded-xl px-2.5 sm:order-1 sm:flex-none sm:gap-2 sm:px-3',
         'border border-white/60 bg-white/70 backdrop-blur-3xl backdrop-saturate-[210%]',
         'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.9),0_8px_24px_-8px_rgba(0,0,0,0.08)]',
         'dark:border-white/[0.15] dark:bg-[#1C1C1E]/70 dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]'
@@ -281,7 +281,7 @@ export const DashboardHeader = memo(function DashboardHeader({
 
         {/* ══ Right Column: Action Bar ══════════════════════════════ */}
         <div
-          className="motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] flex flex-wrap w-full items-center gap-2 sm:gap-3 lg:w-auto lg:shrink-0"
+          className="action-bar motion-safe:animate-[headerFadeUp_420ms_cubic-bezier(0.22,1,0.36,1)_both] w-full gap-2 lg:w-auto lg:flex-nowrap lg:shrink-0"
           style={{ animationDelay: '200ms' }}
         >
           <LiveClock />
@@ -293,13 +293,14 @@ export const DashboardHeader = memo(function DashboardHeader({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.96 }}
             aria-keyshortcuts="Meta+K Control+K"
+            data-action="primary"
             className={cn(
-              'group relative inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 sm:gap-2 overflow-hidden rounded-2xl px-3 sm:px-4.5 lg:flex-initial',
-              'text-[12.5px] sm:text-[13.5px] font-bold text-white',
-              'bg-gradient-to-r from-[#007AFF] to-[#5E5CE6]',
-              'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.4),0_4px_18px_-4px_rgba(0,122,255,0.55)]',
+              'group relative order-1 inline-flex h-10 min-w-0 basis-full flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-xl px-3 sm:order-2 sm:basis-auto sm:px-4 lg:flex-initial',
+              'text-[13px] font-semibold text-white',
+              'bg-[var(--primary)]',
+              'shadow-[var(--shadow-brand)]',
               'transition-[background-color,box-shadow] duration-200 ease-out',
-              'hover:from-[#0062CC] hover:to-[#4E4AE2]',
+              'hover:bg-[var(--primary-hover)] active:bg-[var(--primary-active)]',
               'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[rgba(10,132,255,0.5)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1C1C1E]'
             )}
           >
@@ -336,8 +337,9 @@ export const DashboardHeader = memo(function DashboardHeader({
               aria-label={refreshLabel}
               aria-busy={isRefreshing}
               title={refreshLabel}
+              data-action="utility"
               className={cn(
-                'group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl',
+                'group order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
                 'border border-white/60 bg-white/75 text-[var(--text-secondary,#515154)]',
                 'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.9),0_4px_16px_-4px_rgba(0,0,0,0.06)]',
                 'hover:bg-white hover:text-[var(--text-primary,#1D1D1F)]',
@@ -350,7 +352,7 @@ export const DashboardHeader = memo(function DashboardHeader({
             >
               <RefreshCw
                 className={cn(
-                  'h-[18px] w-[18px] transition-transform duration-300 motion-reduce:transition-none',
+                  'h-4 w-4 transition-transform duration-300 motion-reduce:transition-none',
                   isRefreshing
                     ? 'animate-spin text-[var(--primary,#007AFF)]'
                     : 'group-hover:rotate-90'

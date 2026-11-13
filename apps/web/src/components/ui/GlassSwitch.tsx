@@ -53,7 +53,7 @@ export const GlassSwitch = forwardRef<HTMLInputElement, GlassSwitchProps>(functi
   const { playSwitch } = usePremiumSound();
 
   return (
-    <div className="flex w-full items-start gap-3">
+    <div className={cn('flex w-full items-start gap-3', className)}>
       <label
         htmlFor={id}
         className={cn(

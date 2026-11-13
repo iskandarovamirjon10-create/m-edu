@@ -479,7 +479,7 @@ export function MindArenaPage() {
           <div className="space-y-2.5 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-                <span className="inline-flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25 text-xl sm:text-2xl">
+                <span className="inline-flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25 text-xl sm:text-2xl">
                   ⚡
                 </span>
                 <span>Mind Arena</span>

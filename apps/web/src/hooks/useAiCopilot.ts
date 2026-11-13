@@ -140,6 +140,8 @@ function readPersistedConversation(): { messages: AiUiMessage[]; history: AiWire
   }
 }
 
+const MAX_PERSISTED_MESSAGES = 40;
+
 function persistConversation(messages: AiUiMessage[], history: AiWireMessage[]): void {
   if (typeof window === 'undefined') return;
   try {
@@ -147,14 +149,49 @@ function persistConversation(messages: AiUiMessage[], history: AiWireMessage[]):
       window.localStorage.removeItem(STORAGE_KEY);
       return;
     }
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        version: STORAGE_VERSION,
-        messages,
-        history,
-      }),
-    );
+    // Retain only the latest messages to strictly prevent browser localStorage quota exhaustion
+    const boundedMessages = messages.length > MAX_PERSISTED_MESSAGES
+      ? messages.slice(messages.length - MAX_PERSISTED_MESSAGES)
+      : messages;
+
+    const boundedHistory = history.length > MAX_PERSISTED_MESSAGES
+      ? history.slice(history.length - MAX_PERSISTED_MESSAGES)
+      : history;
+
+    // Cleanse oversized binary/base64 strings from attachments before storing in localStorage
+    // to strictly preserve browser 5MB origin quota and avoid silent data loss
+    const safeMessages = boundedMessages.map((msg) => {
+      if (!msg.attachments || msg.attachments.length === 0) return msg;
+      return {
+        ...msg,
+        attachments: msg.attachments.map((att) => ({
+          ...att,
+          base64: '', // Cleared in persistent local cache, thumbnail URL retained
+        })),
+      };
+    });
+
+    const payload = JSON.stringify({
+      version: STORAGE_VERSION,
+      messages: safeMessages,
+      history: boundedHistory,
+    });
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, payload);
+    } catch {
+      // If still exceeding quota, perform emergency compaction to latest 10 messages
+      const emergencyMessages = safeMessages.slice(-10);
+      const emergencyHistory = boundedHistory.slice(-10);
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          version: STORAGE_VERSION,
+          messages: emergencyMessages,
+          history: emergencyHistory,
+        }),
+      );
+    }
   } catch {
     // quota exceeded or storage disabled — fail safely
   }
@@ -284,11 +321,18 @@ export function useAiCopilot(options: AiCopilotOptions = {}) {
     }
   }, [persistence]);
 
-  // Persist conversation updates
+  // Persist conversation updates (debounced to avoid main-thread localStorage thrashing during token streaming)
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (persistence === 'local') {
-      persistConversation(state.messages, historyRef.current);
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(() => {
+        persistConversation(state.messages, historyRef.current);
+      }, 350);
     }
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    };
   }, [state.messages, persistence]);
 
   // Synchronize conversationId changes from parent

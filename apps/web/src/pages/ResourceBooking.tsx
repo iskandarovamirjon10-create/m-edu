@@ -430,7 +430,7 @@ export function ResourceBookingPage() {
               bookingsQuery.refetch();
               resourcesQuery.refetch();
             }}
-            className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold bg-white/70 dark:bg-surface-900/70 text-slate-700 dark:text-slate-200 border border-black/[0.08] dark:border-white/[0.12] hover:bg-white dark:hover:bg-surface-800 transition-all shadow-sm active:scale-95"
+            className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/70 dark:bg-surface-900/70 text-slate-700 dark:text-slate-200 border border-black/[0.08] dark:border-white/[0.12] hover:bg-white dark:hover:bg-surface-800 transition-all shadow-sm active:scale-95"
             title="Refresh reservations (R)"
           >
             <span>↺</span>

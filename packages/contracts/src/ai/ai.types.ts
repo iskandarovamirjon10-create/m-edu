@@ -95,6 +95,7 @@ export interface AiMessage {
   createdAt: string;
   toolCalls?: AiToolCall[];
   toolResult?: AiToolResult;
+  actionId?: string;
   action?: AiActionSummary;
   error?: AiErrorPayload;
 }

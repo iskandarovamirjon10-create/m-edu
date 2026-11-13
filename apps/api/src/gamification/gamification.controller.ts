@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -23,7 +24,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { AllowAnyRole } from '../auth/roles.decorator';
 import type { RequestUser } from '../auth/types';
 
-/** GET /gamification/leaderboard?groupId=&limit= query params. */
+/** GET /gamification/leaderboard?groupId=&limit=&period= query params. */
 export class LeaderboardQueryDto {
   @ApiPropertyOptional({ description: 'Filter by specific group UUID' })
   @IsOptional()
@@ -37,6 +38,11 @@ export class LeaderboardQueryDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  @ApiPropertyOptional({ description: 'Period filter (week, month, all)', default: 'all' })
+  @IsOptional()
+  @IsString()
+  period?: string;
 }
 
 export class GamificationEventsQueryDto {
@@ -194,6 +200,34 @@ export class GamificationController {
       return null;
     }
     return this.gamification.getMyStats(studentId, organizationId);
+  }
+
+  /**
+   * POST /api/gamification/check-in
+   *
+   * Daily streak check-in: awards XP/Coins, updates streak counter,
+   * and prevents duplicate check-ins on the same calendar day.
+   */
+  @AllowAnyRole()
+  @Post('check-in')
+  @Roles(
+    Role.SUPER_ADMIN,
+    Role.ORG_ADMIN,
+    Role.MANAGER,
+    Role.TEACHER,
+    Role.ASSISTANT,
+    Role.STUDENT,
+  )
+  @ApiOperation({ summary: 'Daily student streak check-in' })
+  async checkIn(
+    @CurrentUser('organizationId') organizationId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    const studentId = await this.resolveStudentId(organizationId, userId);
+    if (!studentId) {
+      throw new BadRequestException('Faqat talabalar kunlik check-in qila oladi');
+    }
+    return this.gamification.checkIn(studentId, organizationId);
   }
 
   /** GET /api/gamification/me/events — recent XP activity feed. */

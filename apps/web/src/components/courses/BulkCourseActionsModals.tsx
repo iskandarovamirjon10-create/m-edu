@@ -14,6 +14,7 @@ import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
 import { getErrorMessage } from '@/lib/errorMessages';
+import { parseFinancialAmount } from '@/lib/format';
 
 interface BulkCourseActionsModalsProps {
   selectedIds: string[];
@@ -73,7 +74,7 @@ export const BulkCourseActionsModals = memo(function BulkCourseActionsModals({
 
   const priceMutation = useMutation({
     mutationFn: () => {
-      const val = parseFloat(priceValue);
+      const val = priceMode === 'set' ? parseFinancialAmount(priceValue) : parseFloat(priceValue);
       if (isNaN(val) || val < 0) {
         throw new Error('Narx qiymatini to\'g\'ri kiriting');
       }

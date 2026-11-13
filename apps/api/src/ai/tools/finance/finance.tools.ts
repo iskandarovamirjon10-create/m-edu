@@ -7,12 +7,28 @@ import {
 import type { ExpensesService } from '../../../expenses/expenses.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
 
+const simulateScenarioSchema = z.object({
+  studentDeltaPercent: z.number().min(-90).max(300).optional().describe("O'quvchilar sonining o'zgarishi foizda (masalan, +15 yoki -10)"),
+  priceDeltaPercent: z.number().min(-50).max(200).optional().describe("Kurslar narxining o'zgarishi foizda (masalan, +10 yoki -5)"),
+  expenseDeltaPercent: z.number().min(-50).max(200).optional().describe("Xarajatlarning o'zgarishi foizda (ijara, oyliklar, marketing)"),
+  churnReductionPercent: z.number().min(0).max(100).optional().describe("O'quvchilar chiqib ketishini kamaytirish foizda"),
+});
+
 const recordExpenseSchema = z.object({
   category: z.string().min(2).max(100),
   amount: z.number().positive(),
   description: z.string().min(2).max(500),
   paymentMethod: z.enum(['CASH', 'BANK_TRANSFER', 'CARD', 'OTHER']).optional(),
 });
+
+function getTashkentStartOfMonth(): Date {
+  const now = new Date();
+  const tashkentOffsetMs = 5 * 60 * 60 * 1000;
+  const tashkentTime = new Date(now.getTime() + tashkentOffsetMs);
+  const year = tashkentTime.getUTCFullYear();
+  const month = tashkentTime.getUTCMonth();
+  return new Date(Date.UTC(year, month, 1, -5, 0, 0));
+}
 
 export function createFinanceTools(
   expenses: ExpensesService,
@@ -29,7 +45,7 @@ export function createFinanceTools(
       permission: AiPermission.FINANCE_READ,
       execute: async (_input, context) => {
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfMonth = getTashkentStartOfMonth();
 
         const [paymentsSum, expensesSummary, debtorsResult] = await Promise.all([
           prisma.payment.aggregate({
@@ -143,5 +159,81 @@ export function createFinanceTools(
         };
       },
     },
+    {
+      name: 'finance.simulate_scenario',
+      description:
+        "O'quv markazining moliyaviy 'What-If' ssenariy simulyatori: o'quvchilar soni, narxlar va xarajatlar o'zgarishining oylik va yillik sof foydaga ta'sirini modellashtirish.",
+      inputSchema: simulateScenarioSchema,
+      riskLevel: AiToolRiskLevel.LOW,
+      requiresConfirmation: false,
+      permission: AiPermission.FINANCE_READ,
+      execute: async (input: z.infer<typeof simulateScenarioSchema>, context) => {
+        const now = new Date();
+        const startOfMonth = getTashkentStartOfMonth();
+
+        const [paymentsSum, expensesSummary, activeStudentsCount] = await Promise.all([
+          prisma.payment.aggregate({
+            where: {
+              organizationId: context.organizationId,
+              status: 'PAID',
+              paidAt: { gte: startOfMonth },
+            },
+            _sum: { amount: true },
+          }),
+          expenses.getSummary(context.organizationId, {}).catch(() => ({ total: 0, categoryStats: [] })),
+          prisma.student.count({
+            where: { organizationId: context.organizationId, status: 'ACTIVE' },
+          }),
+        ]);
+
+        const currentRevenue = Number(paymentsSum._sum?.amount || 0);
+        const currentExpenses = Number(expensesSummary.total || 0);
+        const currentNetProfit = currentRevenue - currentExpenses;
+
+        const studentFactor = 1 + (input.studentDeltaPercent ?? 0) / 100;
+        const priceFactor = 1 + (input.priceDeltaPercent ?? 0) / 100;
+        const churnRetentionBonus = 1 + ((input.churnReductionPercent ?? 0) * 0.4) / 100;
+        const expenseFactor = 1 + (input.expenseDeltaPercent ?? 0) / 100;
+
+        const projectedRevenue = Math.round(currentRevenue * studentFactor * priceFactor * churnRetentionBonus);
+        const projectedExpenses = Math.round(currentExpenses * expenseFactor);
+        const projectedNetProfit = projectedRevenue - projectedExpenses;
+        const netProfitDelta = projectedNetProfit - currentNetProfit;
+        const profitGrowthPercent = currentNetProfit !== 0
+          ? Number(((netProfitDelta / Math.abs(currentNetProfit)) * 100).toFixed(1))
+          : 0;
+
+        const projectedAnnualProfit = projectedNetProfit * 12;
+        const currentAnnualProfit = currentNetProfit * 12;
+
+        return {
+          baseline: {
+            activeStudents: activeStudentsCount,
+            monthlyRevenueUzs: currentRevenue,
+            monthlyExpensesUzs: currentExpenses,
+            monthlyNetProfitUzs: currentNetProfit,
+            annualProfitUzs: currentAnnualProfit,
+          },
+          scenarioApplied: {
+            studentDeltaPercent: input.studentDeltaPercent ?? 0,
+            priceDeltaPercent: input.priceDeltaPercent ?? 0,
+            expenseDeltaPercent: input.expenseDeltaPercent ?? 0,
+            churnReductionPercent: input.churnReductionPercent ?? 0,
+          },
+          projection: {
+            projectedMonthlyRevenueUzs: projectedRevenue,
+            projectedMonthlyExpensesUzs: projectedExpenses,
+            projectedMonthlyNetProfitUzs: projectedNetProfit,
+            monthlyProfitDeltaUzs: netProfitDelta,
+            profitGrowthPercent,
+            projectedAnnualProfitUzs: projectedAnnualProfit,
+            marginPercent: projectedRevenue > 0
+              ? Number(((projectedNetProfit / projectedRevenue) * 100).toFixed(1))
+              : 0,
+          },
+        };
+      },
+    },
   ];
+
 }

@@ -435,7 +435,7 @@ function KpiTile({
       </div>
 
       <div
-        className="relative mt-3 text-[26px] font-bold tracking-tighter leading-none"
+        className="relative mt-3 text-[26px] font-bold tracking-tight leading-none"
         style={{ color: currency ? c.fg : undefined }}
       >
         <span className={currency ? '' : 'text-[#1D1D1F] dark:text-[#F5F5F7]'}>
@@ -865,7 +865,7 @@ export function PayrollPage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('payroll.title')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">
@@ -1230,7 +1230,7 @@ export function PayrollPage() {
                               transition={SPRING.snappy}
                               aria-label={t('common.cancel')}
                               title={t('common.cancel')}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg outline-none"
+                              className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl outline-none"
                               style={{
                                 background: 'rgba(255,59,48,0.10)',
                                 color: '#FF3B30',
@@ -1634,7 +1634,7 @@ function WorkflowButton({
       whileHover={{ scale: 1.04, y: -1 }}
       whileTap={{ scale: 0.96 }}
       transition={SPRING.snappy}
-      className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11.5px] font-bold tracking-tight outline-none disabled:opacity-50"
+      className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-bold tracking-tight outline-none disabled:opacity-50"
       style={{
         background: primary ? c.fg : c.bg,
         color: primary ? '#fff' : c.fg,

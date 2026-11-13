@@ -708,20 +708,20 @@ export function GroupsPage() {
   /* ── Queries ──────────────────────────────────────────────────────── */
   const groups = useQuery({
     queryKey: queryKeys.groups.all(),
-    queryFn: () => groupsApi.list({ limit: 100 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
   const courses = useQuery({
     queryKey: queryKeys.courses.selectors(),
-    queryFn: () => coursesApi.list({ limit: 100 }),
+    queryFn: () => coursesApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000,
   });
 
   const teachers = useQuery({
     queryKey: queryKeys.teachers.selectors(),
-    queryFn: () => teachersApi.list({ limit: 100 }),
+    queryFn: () => teachersApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000,
   });
@@ -769,7 +769,7 @@ export function GroupsPage() {
       return groupsApi.graduate(graduateTarget.id, {
         targetGroupId: graduateForm.targetGroupId || undefined,
         completionNote: graduateForm.completionNote,
-      });
+      }) as Promise<{ graduatedCount?: number } | undefined>;
     },
     onSuccess: (res: { graduatedCount?: number } | undefined) => {
       sound.playSuccess();
@@ -1037,8 +1037,9 @@ export function GroupsPage() {
       if (rowsToExport.length === 0) return;
 
       const escapeCsvCell = (val: unknown): string => {
-        const str = String(val ?? '').replace(/"/g, '""');
-        return `"${str}"`;
+        let str = String(val ?? '');
+        if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+        return `"${str.replace(/"/g, '""')}"`;
       };
 
       const headers = [
@@ -1100,10 +1101,14 @@ export function GroupsPage() {
     if (selectedIds.size === 0) return;
     setIsBatchDeleting(true);
 
-    const results = await Promise.allSettled(
-      Array.from(selectedIds).map((id) => groupsApi.remove(id)),
-    );
-    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const ids = Array.from(selectedIds);
+    let succeeded = 0;
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const results = await Promise.allSettled(chunk.map((id) => groupsApi.remove(id)));
+      succeeded += results.filter((r) => r.status === 'fulfilled').length;
+    }
 
     setIsBatchDeleting(false);
     setBatchDeleteConfirmOpen(false);
@@ -1380,7 +1385,7 @@ export function GroupsPage() {
                       sound.playTick();
                       setStatusFilter(tab.key);
                     }}
-                    className={`relative px-3 py-1.5 text-[12px] font-semibold rounded-lg transition-colors ${
+                    className={`relative min-h-[38px] px-3.5 py-1.5 text-[12.5px] font-semibold rounded-lg transition-colors ${
                       active
                         ? tab.key === 'ACTIVE'
                           ? 'text-[#28A745] dark:text-[#34C759]'
@@ -1416,13 +1421,13 @@ export function GroupsPage() {
                 }}
                 aria-label="Ro'yxat ko'rinishi"
                 title="Ro'yxat ko'rinishi (1)"
-                className={`p-1.5 rounded-lg transition-all ${
+                className={`min-h-[38px] min-w-[38px] p-2 rounded-lg flex items-center justify-center transition-all ${
                   viewMode === 'list'
                     ? 'bg-white text-[#007AFF] shadow-xs dark:bg-surface-800'
                     : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                <Icon paths={I.list} size={15} strokeWidth={2.2} />
+                <Icon paths={I.list} size={16} strokeWidth={2.2} />
               </button>
               <button
                 type="button"
@@ -1433,13 +1438,13 @@ export function GroupsPage() {
                 }}
                 aria-label="Kataklar (Grid) ko'rinishi"
                 title="Kataklar ko'rinishi (2)"
-                className={`p-1.5 rounded-lg transition-all ${
+                className={`min-h-[38px] min-w-[38px] p-2 rounded-lg flex items-center justify-center transition-all ${
                   viewMode === 'grid'
                     ? 'bg-white text-[#007AFF] shadow-xs dark:bg-surface-800'
                     : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                <Icon paths={I.grid} size={15} strokeWidth={2.2} />
+                <Icon paths={I.grid} size={16} strokeWidth={2.2} />
               </button>
               <button
                 type="button"
@@ -1450,21 +1455,21 @@ export function GroupsPage() {
                 }}
                 aria-label="Xonalar kesimida ko'rish"
                 title="Xonalar matritsasi (3)"
-                className={`p-1.5 rounded-lg transition-all ${
+                className={`min-h-[38px] min-w-[38px] p-2 rounded-lg flex items-center justify-center transition-all ${
                   viewMode === 'rooms'
                     ? 'bg-white text-[#007AFF] shadow-xs dark:bg-surface-800'
                     : 'text-[var(--text-tertiary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                <Icon paths={I.door} size={15} strokeWidth={2.2} />
+                <Icon paths={I.door} size={16} strokeWidth={2.2} />
               </button>
             </div>
           </div>
         </div>
 
         {/* Secondary Precision Filter Bar: Course, Teacher, Capacity, Sort */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-black/[0.04] dark:border-white/[0.05] pt-2.5">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-black/[0.04] dark:border-white/[0.05] pt-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Course dropdown */}
             {courseList.length > 0 && (
               <select
@@ -1472,7 +1477,7 @@ export function GroupsPage() {
                 name="groups-course-filter"
                 value={courseFilter}
                 onChange={(e) => setCourseFilter(e.target.value)}
-                className="h-8.5 px-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
+                className="min-h-[44px] px-3.5 text-[12.5px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
                 aria-label="Kurs bo'yicha saralash"
               >
                 <option value="ALL">Barcha kurslar</option>
@@ -1491,7 +1496,7 @@ export function GroupsPage() {
                 name="groups-teacher-filter"
                 value={teacherFilter}
                 onChange={(e) => setTeacherFilter(e.target.value)}
-                className="h-8.5 px-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
+                className="min-h-[44px] px-3.5 text-[12.5px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
                 aria-label="O'qituvchi bo'yicha saralash"
               >
                 <option value="ALL">Barcha o&apos;qituvchilar</option>
@@ -1509,7 +1514,7 @@ export function GroupsPage() {
               name="groups-capacity-filter"
               value={capacityFilter}
               onChange={(e) => setCapacityFilter(e.target.value as CapacityFilter)}
-              className="h-8.5 px-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
+              className="min-h-[44px] px-3.5 text-[12.5px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
               aria-label="Sig'im holati bo'yicha saralash"
             >
               <option value="ALL">Sig&apos;im: Barchasi</option>
@@ -1522,16 +1527,16 @@ export function GroupsPage() {
               <button
                 type="button"
                 onClick={resetAllFilters}
-                className="inline-flex h-8.5 items-center gap-1 rounded-xl bg-[#FF3B30]/10 px-2.5 text-[11.5px] font-semibold text-[#FF3B30] hover:bg-[#FF3B30]/15 transition-colors"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-[#FF3B30]/10 px-3.5 text-[12px] font-semibold text-[#FF3B30] hover:bg-[#FF3B30]/15 transition-colors"
               >
-                <Icon paths={I.x} size={12} strokeWidth={2.5} />
+                <Icon paths={I.x} size={13} strokeWidth={2.5} />
                 <span>Tozalash</span>
               </button>
             )}
           </div>
 
           {/* Right: Sort Selector & Result Count */}
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2.5 ml-auto">
             <span className="hidden sm:inline text-[11.5px] font-medium text-[var(--text-tertiary)] tabular-nums">
               Ko&apos;rsatilmoqda: <strong className="text-[var(--text-primary)]">{filteredGroups.length}</strong> ta
             </span>
@@ -1541,7 +1546,7 @@ export function GroupsPage() {
                 paths={I.sort}
                 size={13}
                 strokeWidth={2.2}
-                className="pointer-events-none absolute left-2.5 text-[var(--text-tertiary)]"
+                className="pointer-events-none absolute left-3 text-[var(--text-tertiary)]"
               />
               <select
                 id="groups-sort-by"
@@ -1549,7 +1554,7 @@ export function GroupsPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortMode)}
                 aria-label="Tartiblash turi"
-                className="h-8.5 pl-7 pr-2.5 text-[12px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
+                className="min-h-[44px] pl-8 pr-3.5 text-[12.5px] font-semibold rounded-xl border border-black/[0.06] bg-white/80 dark:bg-surface-800/80 dark:border-white/[0.08] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/40 cursor-pointer transition-all"
               >
                 <option value="NAME_ASC">Tartib: A → Z</option>
                 <option value="ENROLLED_DESC">O&apos;quvchi soni (ko&apos;p)</option>
@@ -1810,9 +1815,9 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label="Guruh dosyesi & Talabalar ro'yxati"
                       title="Guruh dosyesi & Talabalar ro'yxati"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition-colors"
                     >
-                      <Icon paths={I.users} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.users} size={14} strokeWidth={2.2} />
                     </motion.button>
                     {/* Group AI Advisor */}
                     <motion.button
@@ -1823,9 +1828,9 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label="AI Maslahatchi"
                       title="AI Maslahatchi"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 transition-colors"
                     >
-                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                     </motion.button>
                     {/* Sidecar Split-View trigger */}
                     <motion.button
@@ -1835,7 +1840,7 @@ export function GroupsPage() {
                       whileTap={{ scale: 0.92 }}
                       aria-label="Sidecar tafsilotlarini ochish"
                       title="Sidecar tafsilotlari (Split-View)"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-brand-500/40 transition-colors"
                     >
                       <span className="text-[13px] leading-none">◨</span>
                     </motion.button>
@@ -1849,9 +1854,9 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label="Quick Look (Space)"
                       title="Tezkor ko'rish (Space)"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#007AFF]/20 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-[#007AFF]/20 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/15 transition-colors"
                     >
-                      <Icon paths={I.eye} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.eye} size={14} strokeWidth={2.2} />
                     </motion.button>
 
                     {/* Graduate */}
@@ -1870,9 +1875,9 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label="Bosqichdan o'tkazish (Graduate & Promote)"
                       title="Guruhni bitirish & Talabalarni keyingi bosqichga o'tkazish"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#34C759]/20 bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] hover:bg-[#34C759]/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-[#34C759]/20 bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] hover:bg-[#34C759]/15 transition-colors"
                     >
-                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                     </motion.button>
 
                     {/* Edit */}
@@ -1885,9 +1890,9 @@ export function GroupsPage() {
                         to={`/groups/${group.id}/edit`}
                         aria-label={t('common.edit')}
                         title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
+                        className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] hover:border-[#007AFF]/30 transition-colors"
                       >
-                        <Icon paths={I.edit} size={13} strokeWidth={2} />
+                        <Icon paths={I.edit} size={14} strokeWidth={2} />
                       </Link>
                     </motion.div>
 
@@ -1901,7 +1906,7 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label={t('common.delete')}
                       title={t('common.delete')}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
                     >
                       {isDeleting ? (
                         <motion.span
@@ -2076,9 +2081,9 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label="Guruh dosyesi & Talabalar ro'yxati"
                       title="Guruh dosyesi & Talabalar ro'yxati"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 transition-colors"
                     >
-                      <Icon paths={I.users} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.users} size={14} strokeWidth={2.2} />
                     </motion.button>
                     <motion.button
                       type="button"
@@ -2088,9 +2093,9 @@ export function GroupsPage() {
                       transition={SPRING.snappy}
                       aria-label="AI Maslahatchi"
                       title="AI Maslahatchi"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/15 transition-colors"
                     >
-                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                     </motion.button>
                     <motion.button
                       type="button"
@@ -2098,7 +2103,7 @@ export function GroupsPage() {
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
                       title="Sidecar tafsilotlari (Split-View)"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <span className="text-[13px] leading-none">◨</span>
                     </motion.button>
@@ -2109,9 +2114,9 @@ export function GroupsPage() {
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
                       title="Tezkor ko'rish (Space)"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#007AFF]/20 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-[#007AFF]/20 bg-[#007AFF]/10 text-[#007AFF] hover:bg-[#007AFF]/15 transition-colors"
                     >
-                      <Icon paths={I.eye} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.eye} size={14} strokeWidth={2.2} />
                     </motion.button>
 
                     <motion.button
@@ -2127,18 +2132,18 @@ export function GroupsPage() {
                       whileHover={{ scale: 1.08 }}
                       whileTap={{ scale: 0.92 }}
                       title="Guruhni bitirish & Talabalarni keyingi bosqichga o'tkazish"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#34C759]/20 bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] hover:bg-[#34C759]/15 transition-colors"
+                      className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-[#34C759]/20 bg-[#34C759]/10 text-[#28A745] dark:text-[#34C759] hover:bg-[#34C759]/15 transition-colors"
                     >
-                      <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
+                      <Icon paths={I.sparkles} size={14} strokeWidth={2.2} />
                     </motion.button>
 
                     <motion.div whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }}>
                       <Link
                         to={`/groups/${group.id}/edit`}
                         title={t('common.edit')}
-                        className="flex h-8 w-8 items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] transition-colors"
+                        className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.06] text-[var(--text-secondary)] hover:text-[#007AFF] transition-colors"
                       >
-                        <Icon paths={I.edit} size={13} strokeWidth={2} />
+                        <Icon paths={I.edit} size={14} strokeWidth={2} />
                       </Link>
                     </motion.div>
                   </div>
@@ -2150,7 +2155,7 @@ export function GroupsPage() {
                     whileHover={{ scale: 1.08 }}
                     whileTap={{ scale: 0.92 }}
                     title={t('common.delete')}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
+                    className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-[#FF3B30]/20 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15 disabled:opacity-50 transition-colors"
                   >
                     {isDeleting ? (
                       <motion.span

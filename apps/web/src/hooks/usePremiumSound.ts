@@ -931,7 +931,7 @@ export function usePremiumSound() {
 
   /** Safe universal play helper for any preset or named sound */
   const play = useCallback(
-    (presetOrName?: string) => {
+    (presetOrName?: string, _volume?: number) => {
       if (!presetOrName) return;
       try {
         switch (presetOrName) {
@@ -1013,6 +1013,7 @@ export function usePremiumSound() {
 
   return {
     play,
+    playSound: play,
     playPop,
     playSuccess,
     playError,

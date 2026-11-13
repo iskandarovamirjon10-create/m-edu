@@ -667,7 +667,7 @@ const AttendanceHeatmapStrip = memo(function AttendanceHeatmapStrip({
   records,
   locale,
 }: {
-  records: any[];
+  records: ReadonlyArray<{ id?: string; status?: string; date?: string }>;
   locale: string;
 }) {
   if (!records.length) return null;
@@ -872,7 +872,7 @@ export function StudentDetailPage() {
 
   const groups = useQuery({
     queryKey: queryKeys.groups.selectors(),
-    queryFn: () => groupsApi.list({ limit: 100 }),
+    queryFn: () => groupsApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
     staleTime: 5 * 60 * 1000,
   });
@@ -1088,7 +1088,7 @@ export function StudentDetailPage() {
       ? Math.round((presentCount / studentAttendance.length) * 100)
       : 100;
     const activeGroupsCount = studentGroups.filter(
-      (g: any) => g.isActive !== false,
+      (g) => g.isActive !== false,
     ).length;
     const totalPaid = studentPayments
       .filter((p) => p.status === 'PAID')
@@ -1506,9 +1506,12 @@ export function StudentDetailPage() {
             </div>
 
             {/* Right Tactile Action Cluster (Apple Pro Glass Utility Bar) */}
-            <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-[var(--border-subtle)] pt-4 sm:justify-start xl:justify-end xl:border-t-0 xl:pt-0">
+            <div className="action-bar action-bar--stack shrink-0 justify-center border-t border-[var(--border-subtle)] pt-4 sm:justify-start xl:justify-end xl:border-t-0 xl:pt-0">
               {/* Pro Utilities Segmented Glass Bar */}
-              <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/10 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/10 backdrop-blur-xl shadow-xs">
+              <div
+                data-action="secondary"
+                className="flex items-center gap-0.5 rounded-xl border border-black/[0.06] bg-black/10 p-0.5 shadow-xs backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]"
+              >
                 {/* 360° Pass */}
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <GlassButton
@@ -1520,7 +1523,7 @@ export function StudentDetailPage() {
                     }}
                     title="360° Shaffof Karta (C)"
                     aria-label="360° Karta"
-                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 shadow-xs"
+                    className="h-10 min-h-10 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-emerald-600 shadow-xs hover:bg-emerald-500/20 dark:text-emerald-400"
                   >
                     <span className="inline-flex items-center gap-1.5 font-bold text-xs">
                       <Icon paths={I.idCard} size={15} strokeWidth={2.2} />
@@ -1544,7 +1547,7 @@ export function StudentDetailPage() {
                     }}
                     title="Talaba Shartnomasi (K)"
                     aria-label="Shartnoma"
-                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 shadow-xs"
+                    className="min-h-10 px-2.5 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 shadow-xs"
                   >
                     <span className="inline-flex items-center gap-1.5 font-bold text-xs">
                       <Icon paths={I.contract} size={15} strokeWidth={2.2} />
@@ -1564,7 +1567,7 @@ export function StudentDetailPage() {
                     onClick={handleOpenStudentSidecar}
                     title="Yon Panel — Sidecar (S)"
                     aria-label="Sidecar"
-                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-[#0066FF] dark:text-[#52ADFF] hover:bg-blue-500/20 shadow-xs"
+                    className="min-h-10 px-2.5 py-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-[#0066FF] dark:text-[#52ADFF] hover:bg-blue-500/20 shadow-xs"
                   >
                     <span className="inline-flex items-center gap-1.5 font-bold text-xs">
                       <Icon paths={I.sidebar} size={15} strokeWidth={2.2} />
@@ -1584,7 +1587,7 @@ export function StudentDetailPage() {
                     onClick={handleAiAnalyze}
                     title="AI Chuqur Tahlili (I)"
                     aria-label="AI Tahlil"
-                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-500/20 shadow-xs"
+                    className="min-h-10 px-2.5 py-1.5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-500/20 shadow-xs"
                   >
                     <span className="inline-flex items-center gap-1.5 font-bold text-xs">
                       <Icon paths={I.sparkles} size={15} strokeWidth={2.2} />
@@ -1605,7 +1608,7 @@ export function StudentDetailPage() {
                     onClick={handleEdit}
                     title={`${t('common.edit')} (E)`}
                     aria-label={t('common.edit')}
-                    className="min-h-[40px] px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-white/10 shadow-xs"
+                    className="min-h-10 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-white/10 shadow-xs"
                   >
                     <span className="inline-flex items-center gap-1.5 font-medium text-xs">
                       <Icon paths={I.edit} size={15} strokeWidth={2} />
@@ -1624,7 +1627,7 @@ export function StudentDetailPage() {
                   type="button"
                   variant="primary"
                   onClick={handleOpenAssign}
-                  className="min-h-[42px] px-4 rounded-2xl shadow-sm font-bold text-xs sm:text-sm"
+                  className="min-h-10 px-4 rounded-xl shadow-sm font-bold text-xs sm:text-sm"
                 >
                   <span className="inline-flex items-center gap-2">
                     <Icon paths={I.plus} size={15} strokeWidth={2.5} />
@@ -2250,7 +2253,7 @@ export function StudentDetailPage() {
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   transition={SPRING.snappy}
-                  className="flex min-h-[40px] items-center gap-1.5 rounded-xl px-3.5 text-[12px] font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+                  className="flex min-h-10 items-center gap-1.5 rounded-xl px-3.5 text-[12px] font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                   style={{
                     background: TONE_STYLES.blue.bg,
                     color: TONE_STYLES.blue.fg,
@@ -2271,11 +2274,11 @@ export function StudentDetailPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-[var(--border-subtle)]">
-                  {studentGroups.map((ge: any, idx) => {
+                  {studentGroups.map((ge, idx) => {
                     const gObj = ge?.group || ge;
                     const gId = gObj?.id || ge?.groupId || ge?.id;
                     const gName = gObj?.name || 'Group';
-                    const gRoom = gObj?.room;
+                    const gRoom = gObj && 'room' in gObj ? gObj.room : undefined;
                     const isActive = ge?.isActive !== false;
                     const gStatus = formatGroupStatus(isActive);
                     const isRemoving =
@@ -2324,7 +2327,9 @@ export function StudentDetailPage() {
                         {isActive && (
                           <motion.button
                             type="button"
-                            onClick={() => handleRemoveFromGroup(gId)}
+                            onClick={() => {
+                              if (gId) handleRemoveFromGroup(gId);
+                            }}
                             disabled={isRemoving}
                             whileHover={{ scale: 1.06 }}
                             whileTap={{ scale: 0.94 }}
@@ -2416,7 +2421,7 @@ export function StudentDetailPage() {
                 <div className="divide-y divide-[var(--border-subtle)]">
                   {studentAttendance
                     .slice(0, activeTab === 'academic' ? 12 : 6)
-                    .map((att: any, idx: number) => (
+                    .map((att, idx: number) => (
                       <motion.div
                         key={att.id}
                         initial={{ opacity: 0, x: -8 }}
@@ -2500,7 +2505,7 @@ export function StudentDetailPage() {
                 <div className="divide-y divide-[var(--border-subtle)]">
                   {studentPayments
                     .slice(0, activeTab === 'finance' ? 12 : 5)
-                    .map((p: any, idx: number) => (
+                    .map((p, idx: number) => (
                       <motion.div
                         key={p.id}
                         initial={{ opacity: 0, x: -8 }}
@@ -3131,7 +3136,25 @@ export function StudentDetailPage() {
         <OfficialStudentContractModal
           open={contractModalOpen}
           onClose={() => setContractModalOpen(false)}
-          student={studentData as any}
+          student={{
+            id: studentData.id,
+            balance: studentData.balance,
+            user: studentData.user
+              ? {
+                  firstName: studentData.user.firstName,
+                  lastName: studentData.user.lastName,
+                  phone: studentData.user.phone ?? undefined,
+                  email: studentData.user.email ?? undefined,
+                }
+              : undefined,
+            parentName: studentData.parentName ?? undefined,
+            parentPhone: studentData.parentPhone ?? undefined,
+            birthDate: studentData.dateOfBirth ?? undefined,
+            address: studentData.address ?? undefined,
+            groupEnrollments: (studentData.groups ?? []).map((g) => ({
+              group: g.group ? { id: g.group.id, name: g.group.name } : undefined,
+            })),
+          }}
         />
       )}
 

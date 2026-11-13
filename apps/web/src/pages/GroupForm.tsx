@@ -462,13 +462,13 @@ export function GroupFormPage() {
 
   const courses = useQuery({
     queryKey: queryKeys.courses.selectors(),
-    queryFn: () => coursesApi.list({ limit: 100, isActive: true }),
+    queryFn: () => coursesApi.list({ limit: 500, isActive: true }),
     staleTime: 5 * 60 * 1000,
   });
 
   const teachers = useQuery({
     queryKey: queryKeys.teachers.selectors(),
-    queryFn: () => teachersApi.list({ limit: 100 }),
+    queryFn: () => teachersApi.list({ limit: 500 }),
     staleTime: 5 * 60 * 1000,
   });
 

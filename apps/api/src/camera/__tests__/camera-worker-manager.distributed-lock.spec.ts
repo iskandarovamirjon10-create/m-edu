@@ -157,6 +157,7 @@ describe('CameraWorkerManagerService — distributed camera lock', () => {
   beforeEach(async () => {
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('BIOMETRIC_ENCRYPTION_KEY', 'x'.repeat(40));
+    vi.stubEnv('REDIS_ENABLED', 'true');
 
     redisMock.MockRedisClient.instances.length = 0;
 

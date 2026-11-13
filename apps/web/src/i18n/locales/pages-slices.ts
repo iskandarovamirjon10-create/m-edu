@@ -1559,7 +1559,7 @@ export const pagesEn = {
   'students.emptyFiltered': 'No matching students',
   'students.emptyFilteredHint': 'Try adjusting your filters to see more results.',
   'students.pageSubtitle': 'Manage students, enrollments and attendance',
-  'students.searchPlaceholderEmail': 'Search by name or email…',
+  'students.searchPlaceholderEmail': 'Name or email…',
   'students.viewStudentAria': 'View student {name}',
   'systemHealth.approachTitle': 'Monitoring approach',
   'systemHealth.avgResponse': 'Avg response',

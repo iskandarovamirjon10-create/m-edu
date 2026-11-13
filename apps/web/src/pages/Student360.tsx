@@ -765,7 +765,7 @@ export function StatTile({
       </div>
 
       <div className="relative z-10">
-        <div className="text-[28px] font-bold leading-none tracking-tighter text-[#1D1D1F] tabular-nums dark:text-[#F5F5F7]">
+        <div className="text-[28px] font-bold leading-none tracking-tight text-[#1D1D1F] tabular-nums dark:text-[#F5F5F7]">
           <CountUp value={value} suffix={suffix} />
         </div>
         {footNote && (
@@ -1397,7 +1397,7 @@ export function Student360Page() {
     refetch,
   } = useQuery<Student360Profile>({
     queryKey: ['student360', id],
-    queryFn: () => progressApi.student360(id!),
+    queryFn: () => progressApi.student360(id!) as Promise<Student360Profile>,
     enabled: Boolean(id),
   });
 
@@ -1602,10 +1602,17 @@ export function Student360Page() {
         `${sm.masteredObjectives}/${sm.totalObjectives}`,
       ]),
     ];
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'` + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
     const csv =
       '\uFEFF' +
       rows
-        .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+        .map((r) => r.map(escapeCsvCell).join(','))
         .join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1860,7 +1867,7 @@ export function Student360Page() {
                     </span>
                   </div>
 
-                  <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+                  <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                     {student.name}
                   </h1>
                   <p className="mt-1 text-[13.5px] font-medium text-[#86868B]">{t('student360.subtitle')}</p>
@@ -1880,14 +1887,14 @@ export function Student360Page() {
               <div className="s360-no-print flex flex-col items-center gap-3 lg:items-end lg:self-start">
                 <RiskGauge score={risk.score} tone={riskTone} />
 
-                <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="action-bar action-bar--stack justify-center">
                   <motion.button
                     type="button"
                     onClick={() => setPaletteOpen(true)}
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="s360-btn inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                    className="s360-btn inline-flex h-10 min-h-10 items-center gap-1.5 rounded-xl px-2.5 text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="Command palette (⌘K)"
                   >
                     <Icon paths={I.command} size={12} strokeWidth={2.2} />
@@ -1900,7 +1907,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="s360-btn inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                    className="s360-btn inline-flex h-10 min-h-10 w-10 items-center justify-center rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="CSV eksport [E]"
                   >
                     <Icon paths={I.download} size={13} strokeWidth={2.2} />
@@ -1912,7 +1919,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="s360-btn inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                    className="s360-btn inline-flex h-10 min-h-10 w-10 items-center justify-center rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="Chop etish"
                   >
                     <Icon paths={I.printer} size={13} strokeWidth={2.2} />
@@ -1924,21 +1931,21 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="s360-btn inline-flex min-h-[40px] min-w-[40px] items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[11px] font-bold text-slate-600 dark:text-slate-300"
+                    className="s360-btn inline-flex h-10 min-h-10 w-10 items-center justify-center rounded-xl text-[11px] font-bold text-slate-600 dark:text-slate-300"
                     title="Yangilash [R]"
                   >
                     <Icon paths={I.refresh} size={13} strokeWidth={2.2} />
                   </motion.button>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="action-bar action-bar--stack justify-center">
                   <motion.button
                     type="button"
                     onClick={() => setShow360Card((p) => !p)}
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-600 shadow-sm backdrop-blur-md transition-all hover:bg-emerald-500/20 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400"
+                    className="inline-flex h-10 min-h-10 items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 text-xs font-semibold text-emerald-600 shadow-sm backdrop-blur-md transition-colors hover:bg-emerald-500/20 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-emerald-500/20 dark:bg-emerald-500/15 dark:text-emerald-400"
                     title="360° Shaffof Karta [C]"
                   >
                     <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
@@ -1959,7 +1966,7 @@ export function Student360Page() {
                     whileHover={reduced ? undefined : { scale: 1.02 }}
                     whileTap={reduced ? undefined : { scale: 0.98 }}
                     transition={SPRING.snappy}
-                    className="s360-btn inline-flex min-h-[42px] items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold text-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-zinc-100"
+                    className="s360-btn inline-flex min-h-10 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold text-zinc-800 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-zinc-100"
                     title="Split View Profil Sidecar [S]"
                   >
                     <span className="text-[13px] leading-none">◨</span>
@@ -2371,7 +2378,7 @@ export function Student360Page() {
                               whileHover={reduced ? undefined : { scale: 1.05 }}
                               whileTap={reduced ? undefined : { scale: 0.95 }}
                               transition={SPRING.snappy}
-                              className="s360-btn s360-no-print inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-xl px-3 py-2 text-[12px] font-semibold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-200"
+                              className="s360-btn s360-no-print inline-flex min-h-10 min-w-[42px] items-center justify-center rounded-xl px-3 py-2 text-[12px] font-semibold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-slate-200"
                               title="Split View Sidecar"
                             >
                               <span>◨</span>

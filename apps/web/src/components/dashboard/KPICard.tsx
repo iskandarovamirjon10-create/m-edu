@@ -12,7 +12,7 @@
  *  - 100% API, a11y, sound effects, and reduced-motion compatibility preserved
  */
 
-import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef } from 'react';
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn, CountUp, TONES, resolveTone, usePrefersReducedMotion } from '@/lib/design';
@@ -67,8 +67,8 @@ const LIQUID_TREND_PALETTE: Record<
     dotClass: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]',
   },
   neutral: {
-    stroke: '#3B82F6', // Electric Sapphire
-    beacon: '#2563EB',
+    stroke: '#94A3B8', // Titanium (matches the slate chip + text classes)
+    beacon: '#64748B',
     chipStyle: {
       background:
         'linear-gradient(135deg, rgba(100,116,139,0.14) 0%, rgba(148,163,184,0.05) 100%)',
@@ -198,6 +198,9 @@ export function KPICard({
   const reduced = usePrefersReducedMotion();
   const uid = useId();
   const lastHoverRef = useRef(0);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [spotlight, setSpotlight] = useState({ x: -100, y: -100, opacity: 0 });
   const interactive = Boolean(href || onClick);
 
   const activate = () => {
@@ -215,12 +218,35 @@ export function KPICard({
   };
 
   const handleMouseEnter = () => {
+    setSpotlight((prev) => ({ ...prev, opacity: 1 }));
     if (!interactive) return;
     const now = Date.now();
     if (now - lastHoverRef.current > 800) {
       lastHoverRef.current = now;
       sound.playTick();
     }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setSpotlight({ x, y, opacity: 1 });
+
+    if (interactive && !reduced) {
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const rotateX = ((y - centerY) / centerY) * -3.2;
+      const rotateY = ((x - centerX) / centerX) * 3.2;
+      setTilt({ x: rotateX, y: rotateY });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setSpotlight((prev) => ({ ...prev, opacity: 0 }));
+    setTilt({ x: 0, y: 0 });
   };
 
   const { prefix, suffix, numeric } = splitValue(formattedValue);
@@ -233,7 +259,7 @@ export function KPICard({
 
   const isHexAccent = /^#([0-9a-f]{3,8})$/i.test(accentColor);
   const tone = isHexAccent ? 'blue' : resolveTone(accentColor);
-  const gradientId = `kpi-spark-${uid}`;
+  const gradientId = `kpi-spark-${uid.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   const styleVars = {
     '--kpi-caustic': withAlpha(accentColor, 0.28),
@@ -243,12 +269,15 @@ export function KPICard({
 
   return (
     <motion.div
+      ref={cardRef}
       role={interactive ? 'button' : 'group'}
       tabIndex={interactive ? 0 : undefined}
       aria-label={`${title}: ${formattedValue ?? value}${interactive ? ' — ochish uchun bosing' : ''}`}
       onClick={interactive ? activate : undefined}
       onKeyDown={handleKeyDown}
       onMouseEnter={handleMouseEnter}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       initial={reduced ? false : { opacity: 0, y: 14, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
@@ -256,16 +285,21 @@ export function KPICard({
         delay: reduced ? 0 : delay,
         ease: [0.22, 1, 0.36, 1],
       }}
-      style={styleVars}
+      style={{
+        ...styleVars,
+        transform: interactive && (tilt.x !== 0 || tilt.y !== 0)
+          ? `perspective(900px) rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg)`
+          : undefined,
+      }}
       className={cn(
         'group relative flex h-full flex-col justify-between gap-3.5 overflow-hidden rounded-[26px]',
         // iOS 27 Multi-layered Liquid Glass Lens
         'border border-white/80 dark:border-white/[0.13]',
-        'bg-gradient-to-br from-white/[0.78] via-white/[0.54] to-white/[0.68]',
+        'bg-gradient-to-br from-white/[0.80] via-white/[0.56] to-white/[0.72]',
         'dark:from-white/[0.10] dark:via-white/[0.04] dark:to-white/[0.07]',
         'p-4 backdrop-blur-3xl backdrop-saturate-[200%] sm:p-5 lg:p-5.5',
         // Dual Specular Rim (Top 3D Lip + Bottom Inner Refraction + Ambient Elevation)
-        'shadow-[0_18px_42px_-12px_rgba(15,23,42,0.07),0_4px_14px_-4px_rgba(15,23,42,0.04),inset_0_1.5px_1px_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(255,255,255,0.45)]',
+        'shadow-[0_1px_0_rgba(255,255,255,0.9),0_18px_42px_-12px_rgba(15,23,42,0.07),0_4px_14px_-4px_rgba(15,23,42,0.04),inset_0_1.5px_1px_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(255,255,255,0.45)]',
         'dark:shadow-[0_20px_48px_-12px_rgba(0,0,0,0.62),inset_0_1.5px_1px_rgba(255,255,255,0.22),inset_0_-1px_0.5px_rgba(255,255,255,0.05)]',
         'transform-gpu transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,box-shadow]',
         interactive &&
@@ -296,6 +330,27 @@ export function KPICard({
         className="pointer-events-none absolute -bottom-8 -right-8 h-28 w-28 rounded-full opacity-55 blur-2xl transition-all duration-500 group-hover:scale-125 group-hover:opacity-90 dark:opacity-40"
         style={{ background: withAlpha(accentColor, 0.32) }}
       />
+
+      {/* 2b. Hairline top refraction (Apple glass lip) */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/50"
+      />
+
+      {/* Dynamic Cursor Spotlight Ray */}
+      {spotlight.opacity > 0 && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-px transition-opacity duration-300 z-0"
+          style={{
+            opacity: spotlight.opacity,
+            background: `radial-gradient(340px circle at ${spotlight.x}px ${spotlight.y}px, ${withAlpha(
+              accentColor,
+              0.16,
+            )}, transparent 70%)`,
+          }}
+        />
+      )}
 
       {/* 3. Holographic Sparkline */}
       <Sparkline tone={trendTone} gradientId={gradientId} />

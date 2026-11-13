@@ -9,6 +9,7 @@ const PASSWORD_FIELDS = new Set([
   'oldPassword',
 ]);
 
+// eslint-disable-next-line no-misleading-character-class
 const DANGEROUS_UNICODE_REGEX = /[\u0000\u200B\u200C\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/g;
 
 /**

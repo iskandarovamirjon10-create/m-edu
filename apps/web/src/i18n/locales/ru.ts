@@ -2406,6 +2406,9 @@ const ru: Record<string, string> = {
   "login.offline": "Похоже, вы офлайн. Проверьте подключение.",
   "login.or": "или",
   "login.parentContinue": "Войти в портал родителей",
+  "login.clearUsername": "Очистить имя пользователя",
+  "login.centralizedIam": "Централизованная система IAM",
+  "login.lowercaseNotice": "Преобразовано в нижний регистр",
   "login.parentSubtitle": "Войдите, чтобы увидеть учебные успехи и посещаемость вашего ребёнка",
   "login.privacy": "политикой конфиденциальности",
   "login.privateSystem": "M-EDU — закрытая образовательная платформа. Доступ только по предоставленным учетным записям.",
@@ -2442,6 +2445,7 @@ const ru: Record<string, string> = {
   "nav.earlyWarning": "Ученики в группе риска",
   "nav.exams": "Экзамены",
   "nav.executiveDashboard": "Панель руководителя",
+  "nav.showcase": " Флагманская Презентация",
   "nav.expand": "Развернуть боковую панель",
   "nav.expenses": "Расходы",
   "nav.faceRecognition": "Распознавание лиц",
@@ -2482,7 +2486,7 @@ const ru: Record<string, string> = {
   "nav.reports": "Отчёты",
   "nav.schedule": "Расписание",
   "schedule.noSchedule": "Расписание занятий пока не составлено",
-  "nav.searchPlaceholder": "Поиск учеников, учителей, групп…",
+  "nav.searchPlaceholder": "Быстрый поиск…",
   "nav.searchResults": "Результаты поиска",
   "nav.searchScope": "Область поиска",
   "nav.sectionAcademics": "Академический блок",
@@ -3422,7 +3426,7 @@ const ru: Record<string, string> = {
   "students.pageSubtitle": "Управление учениками, записями и посещаемостью",
   "students.searchLabel": "Поиск учеников",
   "students.searchPlaceholder": "Поиск по имени…",
-  "students.searchPlaceholderEmail": "Поиск по имени или email…",
+  "students.searchPlaceholderEmail": "Имя или email…",
   "students.subtitle": "Управление учениками",
   "students.title": "Ученики",
   "students.totalMany": "{count} учеников",
@@ -3766,12 +3770,14 @@ import { groupsRu } from './groups-slices';
 import { teachersRu } from './teachers-slices';
 import { tgappRu } from './tgapp-slices';
 import { migrationRu } from './migration-slices';
+import { studyRu } from './study-slices.ru';
 
 export default {
   ...legacyRu,
   ...analyticsRu,
   ...pagesRu,
   ...migrationRu,
+  ...studyRu,
   ...ru,
   'dashboard.attendancePending': 'Ожидание посещаемости',
   'dashboard.collectedShare': 'собрано',
@@ -3983,4 +3989,15 @@ export default {
   'faceRecognition.stateIdle': 'Ожидание',
   'faceRecognition.successRate': 'Показатель успеха',
   'faceRecognition.thisSession': 'Эта сессия',
+  'auth.username': 'Имя пользователя',
+  'grades.batch.deleteFailed': 'Не удалось удалить выбранные оценки',
+  'homework.batch.deleteFailed': 'Не удалось удалить выбранные задания',
+  'invoices.loadError': 'Не удалось загрузить счета',
+  'invoices.payLinks.copyFailed': 'Не удалось скопировать ссылку на оплату',
+  'invoices.prorate.short': 'Пересчет',
+  'payments.batchFailed': 'Не удалось обновить платежи',
+  'payrollAnalytics.active': 'Активный',
+  'studentForm.firstNameRequired': 'Имя обязательно для заполнения',
+  'studentForm.lastNameRequired': 'Фамилия обязательна для заполнения',
+  'teachers.bulk.messageUnavailable': 'Прямые сообщения в данный момент недоступны для выбранных преподавателей',
 };

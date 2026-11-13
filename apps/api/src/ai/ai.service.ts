@@ -21,6 +21,7 @@ import { ToolRegistryService } from './tools/registry/tool-registry.service';
 import { ToolOrchestratorService } from './application/tool-orchestrator.service';
 import { AiActionService } from './application/action.service';
 import { AiContextService } from './application/context.service';
+import { AiGatewayService } from './application/ai-gateway.service';
 import { AcademicRiskService } from '../academic-risk/academic-risk.service';
 import {
   AiLocale,
@@ -309,12 +310,14 @@ const UZ_WEEKDAY_MAP: Readonly<Record<string, (typeof DAY_NAMES)[number]>> = {
 
 /** Escapes double quotes and control characters before interpolating into JSON prompts. */
 function escapePromptText(input: unknown, maxLen = 500): string {
-  return String(input ?? '')
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
+  const truncated = String(input ?? '')
     .replace(/[\r\n\t]+/g, ' ')
     .trim()
     .slice(0, maxLen);
+
+  return truncated
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
 }
 
 /**
@@ -329,25 +332,36 @@ function extractBalancedJson<T>(rawText: string): T | null {
     .trim();
 
   try {
-    return JSON.parse(trimmed) as T;
+    const direct = JSON.parse(trimmed) as T;
+    if (direct !== null && typeof direct === 'object') {
+      return direct;
+    }
   } catch {
-    // Fallback: locate outermost balanced `{ ... }` or `[ ... ]`
-    const firstBrace = trimmed.indexOf('{');
-    const firstBracket = trimmed.indexOf('[');
-    const startIdx =
-      firstBrace === -1
-        ? firstBracket
-        : firstBracket === -1
-          ? firstBrace
-          : Math.min(firstBrace, firstBracket);
+    // Continue with balanced block extraction below
+  }
 
-    if (startIdx === -1) return null;
+  let searchIndex = 0;
+  while (searchIndex < trimmed.length) {
+    const nextBrace = trimmed.indexOf('{', searchIndex);
+    const nextBracket = trimmed.indexOf('[', searchIndex);
+
+    let startIdx = -1;
+    if (nextBrace !== -1 && nextBracket !== -1) {
+      startIdx = Math.min(nextBrace, nextBracket);
+    } else if (nextBrace !== -1) {
+      startIdx = nextBrace;
+    } else if (nextBracket !== -1) {
+      startIdx = nextBracket;
+    } else {
+      break;
+    }
 
     const openChar = trimmed[startIdx];
     const closeChar = openChar === '{' ? '}' : ']';
     let depth = 0;
     let inString = false;
     let escape = false;
+    let foundCandidate = false;
 
     for (let i = startIdx; i < trimmed.length; i++) {
       const ch = trimmed[i];
@@ -370,16 +384,27 @@ function extractBalancedJson<T>(rawText: string): T | null {
           if (depth === 0) {
             const candidate = trimmed.slice(startIdx, i + 1);
             try {
-              return JSON.parse(candidate) as T;
+              const parsed = JSON.parse(candidate) as T;
+              if (parsed !== null && typeof parsed === 'object') {
+                return parsed;
+              }
             } catch {
-              return null;
+              // Try next candidate
             }
+            foundCandidate = true;
+            searchIndex = i + 1;
+            break;
           }
         }
       }
     }
-    return null;
+
+    if (!foundCandidate) {
+      searchIndex = startIdx + 1;
+    }
   }
+
+  return null;
 }
 
 @Injectable()
@@ -449,6 +474,7 @@ export class AiService {
     @Optional() private readonly actionService?: AiActionService,
     @Optional() private readonly contextService?: AiContextService,
     @Optional() private readonly academicRisk?: AcademicRiskService,
+    @Optional() private readonly aiGateway?: AiGatewayService,
   ) {
     this.primaryModel =
       this.configService?.get<string>('GEMINI_MODEL') || 'gemini-3.8-flash';
@@ -859,6 +885,7 @@ export class AiService {
     organizationId: string,
     userId: string,
     conversationId: string,
+    limit?: number,
   ) {
     const conv = await this.prisma.aiConversation.findFirst({
       where: { id: conversationId, organizationId, createdBy: userId },
@@ -868,16 +895,36 @@ export class AiService {
       return [];
     }
 
-    return this.prisma.aiMessage.findMany({
+    const safeLimit = Math.min(Math.max(1, limit ?? 200), 1000);
+
+    const rows = await this.prisma.aiMessage.findMany({
       where: { conversationId, organizationId },
       orderBy: { createdAt: 'asc' },
+      take: safeLimit,
       select: {
         id: true,
         role: true,
         content: true,
+        status: true,
+        toolCalls: true,
+        toolResult: true,
+        actionId: true,
+        error: true,
         createdAt: true,
       },
     });
+
+    return rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      content: r.content,
+      status: r.status,
+      toolCalls: r.toolCalls,
+      toolResult: r.toolResult,
+      actionId: r.actionId,
+      error: r.error,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   async renameConversation(
@@ -984,10 +1031,20 @@ export class AiService {
     md += `*Sana: ${dateStr} | Xabarlar soni: ${conv.messages.length}*\n\n---\n\n`;
 
     for (const msg of conv.messages) {
-      const time =
-        msg.createdAt instanceof Date
-          ? msg.createdAt.toISOString().slice(11, 16)
-          : '';
+      let time = '';
+      if (msg.createdAt instanceof Date) {
+        try {
+          time = new Intl.DateTimeFormat('uz-UZ', {
+            timeZone: 'Asia/Tashkent',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).format(msg.createdAt);
+        } catch {
+          const shifted = new Date(msg.createdAt.getTime() + 5 * 3600_000);
+          time = shifted.toISOString().slice(11, 16);
+        }
+      }
       if (msg.role === 'user') {
         md += `### 👤 Siz (${time})\n\n${msg.content}\n\n`;
       } else if (msg.role === 'assistant' || msg.role === 'model') {
@@ -1141,6 +1198,8 @@ export class AiService {
     organizationId: string,
     conversationId: string,
     assistantContent: string,
+    actionId?: string,
+    toolCalls?: unknown[],
   ) {
     const [astMsg] = await this.prisma.$transaction([
       this.prisma.aiMessage.create({
@@ -1149,6 +1208,8 @@ export class AiService {
           conversationId,
           role: 'assistant',
           content: assistantContent,
+          actionId: actionId ?? null,
+          toolCalls: toolCalls ? (toolCalls as any) : undefined,
         },
       }),
       this.prisma.aiConversation.update({
@@ -1172,8 +1233,10 @@ export class AiService {
     userId: string,
     scope = 'global',
     pageContext = '/',
+    userRole?: string,
   ): Promise<AiInsight[]> {
-    const cacheKey = `ai:insights:${organizationId}:${scope}:${pageContext}`;
+    const roleKey = userRole ? userRole.toUpperCase() : 'STAFF';
+    const cacheKey = `ai:insights:${organizationId}:${scope}:${pageContext}:${roleKey}`;
 
     const memCached = this.insightsCache.get(cacheKey);
     if (
@@ -1201,42 +1264,39 @@ export class AiService {
 
     const insights: AiInsight[] = [];
     const today = this.getStartOfTodayLocal();
+    const tomorrow = new Date(today.getTime() + 24 * 3600_000);
     const isGlobal =
       scope === 'global' || pageContext.startsWith('/ai-copilot');
 
     try {
+      const canSeeFinance = this.canAccessFinancials(userRole, true);
       const wantsAttendance =
         isGlobal ||
         pageContext === '/' ||
         pageContext.includes('/attendance') ||
         pageContext.includes('/dashboard');
       const wantsFinance =
-        isGlobal ||
-        pageContext.includes('/payments') ||
-        pageContext.includes('/finance') ||
-        pageContext.includes('/invoices');
+        canSeeFinance &&
+        (isGlobal ||
+          pageContext.includes('/payments') ||
+          pageContext.includes('/finance') ||
+          pageContext.includes('/invoices'));
       const wantsRisk =
         isGlobal ||
         pageContext.includes('/students') ||
         pageContext.includes('/academic-risk') ||
         pageContext.includes('/early-warning');
 
-      const [present, absent, late, overdue, risk] = await Promise.all([
-        this.prisma.attendance
-          .count({
-            where: { organizationId, status: 'PRESENT', date: { gte: today } },
-          })
-          .catch(() => 0),
-        this.prisma.attendance
-          .count({
-            where: { organizationId, status: 'ABSENT', date: { gte: today } },
-          })
-          .catch(() => 0),
-        this.prisma.attendance
-          .count({
-            where: { organizationId, status: 'LATE', date: { gte: today } },
-          })
-          .catch(() => 0),
+      const [attendanceStats, overdue, risk] = await Promise.all([
+        wantsAttendance
+          ? this.prisma.attendance
+              .groupBy({
+                by: ['status'],
+                where: { organizationId, date: { gte: today, lt: tomorrow } },
+                _count: { _all: true },
+              })
+              .catch(() => [])
+          : Promise.resolve([]),
         wantsFinance
           ? this.prisma.invoice
               .aggregate({
@@ -1253,6 +1313,15 @@ export class AiService {
           ? this.computeRiskOverview(organizationId)
           : Promise.resolve(null),
       ]);
+
+      let present = 0;
+      let absent = 0;
+      let late = 0;
+      for (const stat of attendanceStats) {
+        if (stat.status === 'PRESENT') present = stat._count._all;
+        else if (stat.status === 'ABSENT') absent = stat._count._all;
+        else if (stat.status === 'LATE') late = stat._count._all;
+      }
 
       const totalMarks = present + absent + late;
       if (wantsAttendance && totalMarks > 0) {
@@ -1671,8 +1740,16 @@ Quyidagi JSON formatda o'quv markazi direktori uchun ertalabki qisqa brifing va 
       fallback,
     );
 
+    const safeActions =
+      Array.isArray(aiResult?.priorityActions) &&
+      aiResult.priorityActions.length > 0
+        ? aiResult.priorityActions
+        : fallback.priorityActions;
+
     return {
-      ...aiResult,
+      summary: aiResult?.summary || fallback.summary,
+      sentiment: aiResult?.sentiment || fallback.sentiment,
+      priorityActions: safeActions,
       metrics,
       generatedAt: new Date().toISOString(),
     };
@@ -1869,10 +1946,52 @@ Ushbu o'quvchi uchun pedagogik va xulq-atvor tahlili (Diagnostic) o'tkazib, quyi
       fallback,
     );
 
+    const safeInterventions =
+      Array.isArray(aiResult?.interventions) &&
+      aiResult.interventions.length > 0
+        ? aiResult.interventions
+        : fallback.interventions;
+
+    const safeMeetingPrep = {
+      teacherBrief:
+        aiResult?.meetingPrep?.teacherBrief || fallback.meetingPrep.teacherBrief,
+      parentAgenda:
+        Array.isArray(aiResult?.meetingPrep?.parentAgenda) &&
+        aiResult.meetingPrep.parentAgenda.length > 0
+          ? aiResult.meetingPrep.parentAgenda
+          : fallback.meetingPrep.parentAgenda,
+    };
+
     return {
-      ...aiResult,
-      interventions: aiResult.interventions || fallback.interventions,
-      meetingPrep: aiResult.meetingPrep || fallback.meetingPrep,
+      studentId,
+      studentName: fullName,
+      overallScore:
+        typeof aiResult?.overallScore === 'number'
+          ? Math.min(100, Math.max(0, aiResult.overallScore))
+          : fallback.overallScore,
+      riskLevel: calculatedRisk,
+      attendanceRate: attRate,
+      averageGrade: avgGrade,
+      balance,
+      groups: groupNames,
+      summary: aiResult?.summary || fallback.summary,
+      strengths:
+        Array.isArray(aiResult?.strengths) && aiResult.strengths.length > 0
+          ? aiResult.strengths
+          : fallback.strengths,
+      riskFactors:
+        Array.isArray(aiResult?.riskFactors) && aiResult.riskFactors.length > 0
+          ? aiResult.riskFactors
+          : fallback.riskFactors,
+      recommendations:
+        Array.isArray(aiResult?.recommendations) &&
+        aiResult.recommendations.length > 0
+          ? aiResult.recommendations
+          : fallback.recommendations,
+      suggestedParentMessage:
+        aiResult?.suggestedParentMessage || fallback.suggestedParentMessage,
+      interventions: safeInterventions,
+      meetingPrep: safeMeetingPrep,
       factualBasis,
     };
   }
@@ -1929,11 +2048,12 @@ Telegram yoki SMS orqali yuborish uchun o'zbek tilida professional, madaniyatli,
       { message: fallbackText, tone, topic },
     );
 
+    const finalMessage = result.message?.trim() || fallbackText;
     return {
-      message: result.message,
-      tone: result.tone,
-      topic: result.topic,
-      charCount: (result.message || fallbackText).length,
+      message: finalMessage,
+      tone: result.tone || tone,
+      topic: result.topic || topic,
+      charCount: finalMessage.length,
     };
   }
 
@@ -1942,7 +2062,7 @@ Telegram yoki SMS orqali yuborish uchun o'zbek tilida professional, madaniyatli,
     const safeTopic = escapePromptText(topic, 150);
     const subject = dto.subject || 'Umumiy';
     const safeSubject = escapePromptText(subject, 100);
-    const level = dto.level || "O'rta";
+    const level = dto.level || dto.gradeLevel || "O'rta";
     const safeLevel = escapePromptText(level, 60);
     const count = Math.min(Math.max(1, dto.questionCount || 5), 20);
     const blooms = escapePromptText(
@@ -2055,8 +2175,30 @@ O'qituvchi uchun 45 daqiqalik dars rejasi, baholash mezonlari (rubricCriteria) v
       fallback,
     );
 
+    const safeQuestions =
+      Array.isArray(result?.questions) && result.questions.length > 0
+        ? result.questions
+        : fallback.questions;
+
+    const safeRubric =
+      Array.isArray(result?.rubricCriteria) && result.rubricCriteria.length > 0
+        ? result.rubricCriteria
+        : fallback.rubricCriteria;
+
+    const safeLessonPlan =
+      result?.lessonPlan?.steps && Array.isArray(result.lessonPlan.steps)
+        ? result.lessonPlan
+        : fallback.lessonPlan;
+
     return {
-      ...result,
+      topic: result?.topic || topic,
+      subject: result?.subject || subject,
+      level: result?.level || level,
+      difficulty: result?.difficulty || difficulty,
+      bloomsTaxonomyLevel: result?.bloomsTaxonomyLevel || blooms,
+      lessonPlan: safeLessonPlan,
+      rubricCriteria: safeRubric,
+      questions: safeQuestions,
       draft: true,
       verifiedByTeacher: false,
     };
@@ -2067,7 +2209,7 @@ O'qituvchi uchun 45 daqiqalik dars rejasi, baholash mezonlari (rubricCriteria) v
     const safeTopic = escapePromptText(topic, 150);
     const subject = dto.subject || 'Umumiy fan';
     const safeSubject = escapePromptText(subject, 100);
-    const level = dto.level || "O'rta";
+    const level = dto.level || dto.gradeLevel || "O'rta";
     const safeLevel = escapePromptText(level, 60);
     const duration = dto.durationMinutes || 45;
     const blooms = escapePromptText(dto.bloomsTaxonomyLevel || 'apply', 40);
@@ -2987,11 +3129,22 @@ Quyidagi JSON formatida qaytar:
       totalOverdue,
     };
 
-    return this.generateStructuredJson(
+    const result = await this.generateStructuredJson(
       prompt,
       "Siz ta'lim markazi moliya boshqaruvi va mijozlar bilan muloqot bo'yicha mutaxassis AI agentsiz.",
       fallback,
     );
+
+    return {
+      campaignTitle: result?.campaignTitle || fallback.campaignTitle,
+      recommendedChannel:
+        result?.recommendedChannel || fallback.recommendedChannel,
+      templateMessage: result?.templateMessage || fallback.templateMessage,
+      callToAction: result?.callToAction || fallback.callToAction,
+      followUpStrategy: result?.followUpStrategy || fallback.followUpStrategy,
+      debtorsCount: debtors.length,
+      totalOverdue,
+    };
   }
 
   async generateAssessmentRubric(
@@ -3284,6 +3437,7 @@ Quyidagi JSON formatida to'liq qaytar:
     }
 
     const today = this.getStartOfTodayLocal();
+    const tomorrow = new Date(today.getTime() + 24 * 3600_000);
     const startOfMonth = this.getStartOfMonthLocal();
     const currentDayOfWeek = this.getCurrentTashkentDayOfWeek();
 
@@ -3295,9 +3449,7 @@ Quyidagi JSON formatida to'liq qaytar:
       coursesList,
       negativeBalanceCount,
       activeLeadsCount,
-      presentToday,
-      absentToday,
-      lateToday,
+      attendanceStats,
       recentAbsentees,
       todaySchedules,
     ] = await Promise.all([
@@ -3337,31 +3489,26 @@ Quyidagi JSON formatida to'liq qaytar:
             })
             .catch(() => 0)
         : Promise.resolve(0),
-      this.prisma.attendance?.count
+      this.prisma.attendance?.groupBy
         ? this.prisma.attendance
-            .count({
-              where: { organizationId, status: 'PRESENT', date: { gte: today } },
+            .groupBy({
+              by: ['status'],
+              where: {
+                organizationId,
+                date: { gte: today, lt: tomorrow },
+              },
+              _count: { _all: true },
             })
-            .catch(() => 0)
-        : Promise.resolve(0),
-      this.prisma.attendance?.count
-        ? this.prisma.attendance
-            .count({
-              where: { organizationId, status: 'ABSENT', date: { gte: today } },
-            })
-            .catch(() => 0)
-        : Promise.resolve(0),
-      this.prisma.attendance?.count
-        ? this.prisma.attendance
-            .count({
-              where: { organizationId, status: 'LATE', date: { gte: today } },
-            })
-            .catch(() => 0)
-        : Promise.resolve(0),
+            .catch(() => [])
+        : Promise.resolve([]),
       this.prisma.attendance?.findMany
         ? this.prisma.attendance
             .findMany({
-              where: { organizationId, status: 'ABSENT', date: { gte: today } },
+              where: {
+                organizationId,
+                status: 'ABSENT',
+                date: { gte: today, lt: tomorrow },
+              },
               take: 6,
               include: { student: { include: { user: true } } },
             })
@@ -3387,6 +3534,15 @@ Quyidagi JSON formatida to'liq qaytar:
             .catch(() => [])
         : Promise.resolve([]),
     ]);
+
+    let presentToday = 0;
+    let absentToday = 0;
+    let lateToday = 0;
+    for (const stat of (attendanceStats as Array<{ status: string; _count: { _all: number } }>)) {
+      if (stat.status === 'PRESENT') presentToday = stat._count._all;
+      else if (stat.status === 'ABSENT') absentToday = stat._count._all;
+      else if (stat.status === 'LATE') lateToday = stat._count._all;
+    }
 
     const coursesNames = (coursesList || []).map((c) => c.name).filter(Boolean);
     const todayClasses = (todaySchedules || []).map((s) => {
@@ -4033,7 +4189,46 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         conversationId,
         deriveConversationTitle(message),
       );
+    }
 
+    // ── Canonical Gateway Delegation ─────────────────────────────────────────
+    if (this.aiGateway && this.contextService) {
+      const context = this.contextService.fromRequest(
+        { sub: userId, organizationId, role: effectiveRole },
+        { locale: AiLocale.UZ, route: options?.pageContext },
+      );
+
+      try {
+        if (!skipPersistence && activeConvId) {
+          const res = await this.aiGateway.sendMessage(context, activeConvId, message);
+          const assistant = res.messages[res.messages.length - 1];
+          return {
+            id: assistant?.id ?? randomUUID(),
+            role: 'assistant',
+            content: assistant?.content ?? '',
+            createdAt: assistant?.createdAt ?? new Date().toISOString(),
+            conversationId: activeConvId,
+            ...(res.pendingAction ? { action: res.pendingAction } : {}),
+            ...(assistant?.toolCalls ? { toolCalls: assistant.toolCalls } : {}),
+          };
+        } else {
+          const content = await this.aiGateway.executeEphemeral(context, message, history);
+          return {
+            id: randomUUID(),
+            role: 'assistant',
+            content,
+            createdAt: new Date().toISOString(),
+            conversationId: activeConvId ?? 'transient',
+          };
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `AiGateway turn failed; attempting local fallback: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    if (!skipPersistence && activeConvId) {
       await this.persistUserMessage(organizationId, activeConvId, message);
     }
 
@@ -4052,6 +4247,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     const client = this.getAiClient();
     const modelsToTry = this.resolveModelsQueue(requestedModel);
     let assistantContent = '';
+    let pendingActionId: string | undefined;
 
     if (client) {
       const contents = this.buildModelContents(history, message);
@@ -4077,7 +4273,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       for (const model of modelsToTry) {
         const startMs = Date.now();
         try {
-          const text = await this.runToolLoopSync({
+          const outcome = await this.runToolLoopSync({
             client,
             model,
             contents,
@@ -4087,9 +4283,10 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
             conversationId: activeConvId ?? '',
           });
 
-          if (text.trim()) {
+          if (outcome.text.trim()) {
             this.recordModelOutcome(model, true, Date.now() - startMs);
-            assistantContent = text;
+            assistantContent = outcome.text;
+            pendingActionId = outcome.pendingActionIds?.[0];
             break;
           }
           this.recordModelOutcome(model, false, Date.now() - startMs);
@@ -4116,6 +4313,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         organizationId,
         activeConvId,
         assistantContent,
+        pendingActionId,
       );
 
       return {
@@ -4124,6 +4322,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         content: assistantContent,
         createdAt: astMsg.createdAt.toISOString(),
         conversationId: activeConvId,
+        ...(pendingActionId ? { actionId: pendingActionId } : {}),
       };
     }
 
@@ -4266,7 +4465,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
 
     for (const call of params.calls) {
       const toolCall: AiToolCall = {
-        id: `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        id: call.id || `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
         name: call.name,
         arguments: (call.args as Record<string, unknown>) ?? {},
       };
@@ -4341,10 +4540,24 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
 
       params.emit('tool', { type: 'tool_running', toolName: toolCall.name });
 
-      const result = await this.toolOrchestrator!.executeReadTool(
-        params.toolContext,
-        toolCall,
-      );
+      let result: any;
+      try {
+        result = await this.toolOrchestrator!.executeReadTool(
+          params.toolContext,
+          toolCall,
+        );
+      } catch (toolErr: unknown) {
+        this.logger.error(
+          `Unexpected exception executing tool ${toolCall.name}: ${toolErr instanceof Error ? toolErr.message : String(toolErr)}`,
+        );
+        result = {
+          ok: false,
+          error: {
+            code: 'AI_INTERNAL',
+            message: `Tool execution failed: ${toolErr instanceof Error ? toolErr.message : 'Unknown tool failure'}`,
+          },
+        };
+      }
 
       params.emit('tool', {
         type: 'tool_result',
@@ -4486,9 +4699,10 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
     tools: GenAiToolDeclaration[];
     toolContext: AiContext | null;
     conversationId: string;
-  }): Promise<string> {
+  }): Promise<{ text: string; pendingActionIds: string[] }> {
     let contents = params.contents;
     let text = '';
+    const pendingActionIds: string[] = [];
 
     for (let round = 0; round < AiService.MAX_TOOL_ROUNDS; round += 1) {
       const response = await params.client.models.generateContent({
@@ -4512,7 +4726,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         ).values(),
       );
       if (uniqueCalls.length === 0) {
-        return `${text}${roundText}`;
+        return { text: `${text}${roundText}`, pendingActionIds };
       }
 
       text += roundText;
@@ -4544,13 +4758,13 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         toolContext: params.toolContext,
         conversationId: params.conversationId,
         emit: () => undefined,
-        onPendingAction: () => undefined,
+        onPendingAction: (id) => pendingActionIds.push(id),
       });
 
       contents = [...contents, { role: 'user', parts: responseParts }];
     }
 
-    return text;
+    return { text, pendingActionIds };
   }
 
   async chatStream(
@@ -4576,11 +4790,14 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       );
     }
 
+    const isParent = options?.principalType === 'PARENT_ACCOUNT';
+    const effectiveRole =
+      options?.userRole || (isParent ? 'PARENT' : userRole || 'ADMIN');
     const allowFinancials = this.canAccessFinancials(
-      userRole,
+      effectiveRole,
       includeFinancials,
     );
-    const normalizedRole = (userRole || '').trim().toUpperCase();
+    const normalizedRole = (effectiveRole || '').trim().toUpperCase();
 
     const activeConvId = await this.resolveOwnedConversationId(
       organizationId,
@@ -4622,7 +4839,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         this.toolRegistry &&
         this.toolOrchestrator
           ? this.contextService.fromRequest(
-              { sub: userId, organizationId, role: userRole },
+              { sub: userId, organizationId, role: effectiveRole },
               { locale: AiLocale.UZ, route: pageContext },
             )
           : null;
@@ -4632,7 +4849,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
         this.resolveEntityDossier(
           organizationId,
           message,
-          userRole,
+          effectiveRole,
           userId,
           options?.studentId,
           options?.parentId,
@@ -4656,6 +4873,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       const modelsToTry = this.resolveModelsQueue(requestedModel);
 
       let assistantContent = '';
+      let pendingActionId: string | undefined;
       let streamSuccess = false;
       let hasEmittedToClient = false;
 
@@ -4682,6 +4900,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
             if (outcome.text.trim()) {
               this.recordModelOutcome(model, true, Date.now() - startMs);
               assistantContent = outcome.text;
+              pendingActionId = outcome.pendingActionIds?.[0];
               streamSuccess = true;
               break;
             }
@@ -4715,6 +4934,7 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
             organizationId,
             activeConvId,
             assistantContent,
+            pendingActionId,
           );
           messageId = astMsg?.id;
         } catch (persistErr: unknown) {
@@ -4753,46 +4973,51 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
       return { success: true, imported: 0 };
     }
 
-    const importedCount = await this.prisma.$transaction(async (tx) => {
-      let count = 0;
-      for (const conv of safeConversations) {
-        const validMessages = (conv.messages ?? [])
-          .filter((m) => m && typeof m.content === 'string' && m.content.trim())
-          .slice(0, 500);
+    const importedCount = await this.prisma.$transaction(
+      async (tx) => {
+        let count = 0;
+        const now = Date.now();
+        for (const conv of safeConversations) {
+          const validMessages = (conv.messages ?? [])
+            .filter((m) => m && typeof m.content === 'string' && m.content.trim())
+            .slice(0, 500);
 
-        const lastMessagePreview =
-          validMessages.length > 0
-            ? validMessages[validMessages.length - 1].content
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, 80)
-            : '';
+          const lastMessagePreview =
+            validMessages.length > 0
+              ? validMessages[validMessages.length - 1].content
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .slice(0, 80)
+              : '';
 
-        const newConv = await tx.aiConversation.create({
-          data: {
-            organizationId,
-            createdBy: userId,
-            title: (conv.title?.trim() || 'Imported conversation').slice(0, 200),
-            preview: lastMessagePreview,
-            messageCount: validMessages.length,
-          },
-          select: { id: true },
-        });
-
-        if (validMessages.length > 0) {
-          await tx.aiMessage.createMany({
-            data: validMessages.map((msg) => ({
+          const newConv = await tx.aiConversation.create({
+            data: {
               organizationId,
-              conversationId: newConv.id,
-              role: msg.role === 'assistant' ? 'assistant' : 'user',
-              content: msg.content.slice(0, 4000),
-            })),
+              createdBy: userId,
+              title: (conv.title?.trim() || 'Imported conversation').slice(0, 200),
+              preview: lastMessagePreview,
+              messageCount: validMessages.length,
+            },
+            select: { id: true },
           });
+
+          if (validMessages.length > 0) {
+            await tx.aiMessage.createMany({
+              data: validMessages.map((msg, idx) => ({
+                organizationId,
+                conversationId: newConv.id,
+                role: msg.role === 'assistant' ? 'assistant' : 'user',
+                content: msg.content.slice(0, 4000),
+                createdAt: new Date(now - (validMessages.length - idx) * 1000),
+              })),
+            });
+          }
+          count++;
         }
-        count++;
-      }
-      return count;
-    });
+        return count;
+      },
+      { timeout: 30_000 },
+    );
 
     return { success: true, imported: importedCount };
   }
@@ -4844,19 +5069,30 @@ MUHIM YO'RIQNOMA: Foydalanuvchiga ushbu o'quvchilar ro'yxatini ko'rsating va ayn
 
     return `Siz M-EDU ta'lim boshqaruv platformasining yuqori intellektual AI Copilotisiz. Foydalanuvchi — markaz rahbari, ma'muri, o'qituvchisi yoki hisobchisi. Sizning vazifangiz: chuqur tahliliy, estetik jihatdan go'zal formatlangan, ishonchli va darhol amalga oshiriladigan natija berish.
 ${pageContextBlock}
-═══ 1. VIZUAL FORMATLASH VA JAVOB TUZILISHI (MUHIM) ═══
-- AVVAL XULOSA, KEYIN DALIL: Birinchi 1-2 gapda savolga to'g'ridan-to'g'ri javob yoki boshqaruv xulosasini bering.
-- DIZAYN BLOKLARI (Callout Alerts): Fikr va xulosalarni ta'kidlash uchun GitHub/Apple uslubidagi maxsus bloklardan foydalaning:
-  > [!NOTE] Muhim ma'lumot, rasmiy holat yoki asosiy tushuntirish.
-  > [!TIP] Amaliy pedagogik yoki biznes maslahat, samaradorlikni oshirish usuli.
-  > [!IMPORTANT] Tezkor e'tibor va shaxsiy nazorat talab qiladigan vaziyatlar.
-  > [!WARNING] Qarzdorlik yoki past davomat kabi kritik xavflar.
-  > [!RECOMMENDATION] Aniq keyingi boshqaruv qarori yoki qadam.
-- JADVALLAR: 2 yoki undan ortiq o'quvchi, guruh, to'lov yoki dars taqqoslanganda doimo toza Markdown jadval ishlating (| Nom | Ko'rsatkich | Holat |).
-- HARAKAT HAVOLALARI: Har bir tahlil yakunida foydalanuvchi bir marta bosish bilan o'tishi uchun tizim havolalarini bering:
-  [Davomat jurnali](/attendance), [To'lovlar va kassa](/payments), [O'quvchilar ro'yxati](/students), [Guruhlar](/groups), [Dars jadvali](/schedule), [Akademik xavf tahlili](/academic-risk), [Xabarnomalar](/notifications).
-- HAR BIR RAQAM FAQAT LIVE BAZADAN: Hech qachon o'quvchi ismi, summa, davomat foizi yoki sanani to'qimang. Ma'lumot yo'q bo'lsa, "Ushbu ma'lumot mavjud emas" deb ayting.
-- Umumiy gaplarni tashlang. "Yaxshi ishlash kerak", "e'tibor bering" kabi bo'sh tavsiyalar o'rniga aniq amal, aniq muddat va mas'ul bering.
+═══ 1. PREMIUMLIK STANDARTI VA JAVOB TUZILISHI (C-LEVEL EXECUTIVE FRAMEWORK) ═══
+Siz McKinsey / Harvard Business Review va Apple Executive standartlaridagi strategik maslahatchisiz. Javoblaringiz shunchaki ma'lumot emas, balki yuqori qiymatli boshqaruv qarorlari va aniq hisob-kitoblarni taqdim etishi shart:
+
+1. 🎯 Boshqaruv Xulosasi (Executive TL;DR):
+   - Birinchi 1-2 jumlada vaziyatning eng asosiy mohiyati, o'zgarish foizi va kritik boshqaruv signali beriladi. Bo'sh kirish jumlalarsiz.
+2. 📊 Telemetriya va Asoslovchi Jadval (Evidence Matrix):
+   - Barcha tahliliy so'rovlar, solishtirishlar, guruh/o'quvchi/moliya dinamikasida MAJBURIY ravishda toza Markdown jadval tuzing (| Ko'rsatkich | Amaldagi | Maqsad | O'zgarish | Dinamika |).
+3. 🔍 Faktorlar va Sabab-Oqibat Tahlili (Root Causes):
+   - Aniq sabablarni punktma-punkt yoriting (masalan: o'qituvchi o'zgarishi, to'lov muddati, yuklama).
+4. 🚀 Aniq Harakatlar Rejasi (Action Playbook - 24 soat va 7 kun):
+   - ⚡ 24 Soat Ichida (Immediate): Bugunoq bajarilishi shart bo'lgan 2-3 ta aniq tezkor qadam va mas'ul shaxs.
+   - 📅 7 Kun Ichida (Strategic): Tizimli yechim, monitoring va qayta ko'rib chiqish muddati.
+5. 🧭 1-Bosishda O'tish Havolalari (Deep Links):
+   - Xulosa so'ngida foydalanuvchining vaqtini tejash uchun tegishli modul havolalarini bering:
+     [Davomat](/attendance) • [To'lovlar & Kassa](/payments) • [O'quvchilar](/students) • [Guruhlar](/groups) • [Dars Jadvali](/schedule) • [Akademik Xavf Radari](/academic-risk) • [Moliya Xulosasi](/finance) • [Lidlar CRM](/leads).
+
+- DIZAYN BLOKLARI (Apple Liquid Callouts):
+  > [!NOTE] Rasmiy fakt, joriy ko'rsatkich yoki boshlang'ich parametr.
+  > [!TIP] Rentabellik yoki o'quv natijalarini oshiruvchi pedagogik/biznes xak.
+  > [!IMPORTANT] Administrator yoki rahbarning bevosita shaxsiy aralashuvini talab qiluvchi holat.
+  > [!WARNING] Moliyaviy yo'qotish (cash drain), o'quvchilar chiqib ketishi (churn) yoki keskin davomat tushishi xavfi.
+  > [!RECOMMENDATION] Boshqaruv kengashi yoki rahbar uchun qat'iy strategik tavsiya.
+- FAQAT ANIQ LIVE DATA: Raqam, foiz yoki ismni aslo to'qimang. Tool bergan natijaga tayanib gapiring.
+- Zero Boilerplate: "Yaxshi ishlash kerak", "e'tibor berish lozim" kabi noaniq jumlalar taqiqlangan. Har bir tavsiya raqam, muddat va natijaga bog'langan bo'lsin.
 
 ═══ 2. MULOQOT MADANIYATI ═══
 - Foydalanuvchi qaysi tilda yozsa, o'sha tilda javob bering (o'zbekcha / ruscha / inglizcha).

@@ -16,6 +16,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
 import { fireExecutiveConfetti } from '@/lib/executiveConfetti';
 import { studentsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 import type { Student } from '@/types/students';
 
 export type MilestoneType = 'ATTENDANCE_100' | 'EXAM_ACE' | 'STREAK_30' | 'COURSE_COMPLETION';
@@ -26,6 +27,16 @@ export interface MilestoneConfig {
   badgeEmoji: string;
   badgeLabel: string;
   congratsMessage: string;
+}
+
+/** Student may carry a display `name` even though the core model doesn't declare it. */
+function getStudentName(student: Student): string {
+  const fallback = (student as { name?: unknown }).name;
+  return (
+    [student.user?.firstName, student.user?.lastName].filter(Boolean).join(' ') ||
+    (typeof fallback === 'string' ? fallback : '') ||
+    'Talaba'
+  );
 }
 
 const MILESTONES: Record<MilestoneType, MilestoneConfig> = {
@@ -83,9 +94,9 @@ export const StudentMilestoneCelebrationModal: React.FC<StudentMilestoneCelebrat
     if (!isOpen) return;
     let active = true;
     studentsApi.list({ limit: 30 })
-      .then((res: any) => {
+      .then((res) => {
         if (!active) return;
-        const list: Student[] = res?.data || res?.items || (Array.isArray(res) ? res : []);
+        const list = toList<Student>(res);
         setStudents(list);
         setSelectedStudentId((prev) => prev || defaultStudentId || list[0]?.id || '');
       })
@@ -100,19 +111,15 @@ export const StudentMilestoneCelebrationModal: React.FC<StudentMilestoneCelebrat
       playSuccess();
       haptics.success();
     }
-  }, [isOpen]);
+  }, [isOpen, playSuccess, haptics]);
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) || students[0] || null;
   }, [students, selectedStudentId]);
 
   const studentName = useMemo(() => {
-    if (!selectedStudent) return "Talaba tanlanmagan";
-    return (
-      [selectedStudent.user?.firstName, selectedStudent.user?.lastName].filter(Boolean).join(' ') ||
-      (selectedStudent as any).name ||
-      "Talaba"
-    );
+    if (!selectedStudent) return 'Talaba tanlanmagan';
+    return getStudentName(selectedStudent);
   }, [selectedStudent]);
 
   const currentConfig = MILESTONES[activeMilestone];
@@ -179,7 +186,7 @@ export const StudentMilestoneCelebrationModal: React.FC<StudentMilestoneCelebrat
                 className="w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
               >
                 {students.map((st) => {
-                  const name = [st.user?.firstName, st.user?.lastName].filter(Boolean).join(' ') || (st as any).name || 'Talaba';
+                  const name = getStudentName(st);
                   return (
                     <option key={st.id} value={st.id}>
                       {name}

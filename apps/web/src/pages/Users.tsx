@@ -188,7 +188,7 @@ export function UsersPage() {
 
   const users = useQuery({
     queryKey: ['users'],
-    queryFn: () => usersApi.list({ limit: 100 }),
+    queryFn: () => usersApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -687,7 +687,7 @@ export function UsersPage() {
                               onClick={() => handleOpenUserSidecar(user)}
                               title={t('common.details') || 'Sidecarda ko‘rish'}
                               aria-label={`${formatUserName(user)} ma'lumotlari`}
-                              className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
+                              className="flex min-h-10 min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
                             >
                               <svg className="h-4 w-4 sm:h-3.5 sm:w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                 <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -701,7 +701,7 @@ export function UsersPage() {
                               type="button"
                               onClick={() => setCardUser(user)}
                               title="360° Shaffof ID Karta"
-                              className="flex min-h-[40px] px-2.5 sm:min-h-0 sm:h-8 sm:px-2 items-center justify-center gap-1 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-all duration-300 active:scale-95"
+                              className="flex min-h-10 px-2.5 sm:min-h-0 sm:h-8 sm:px-2 items-center justify-center gap-1 rounded-xl text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-all duration-300 active:scale-95"
                             >
                               <span className="text-xs">🪪</span>
                               <span className="text-[10px] font-bold">360°</span>
@@ -713,7 +713,7 @@ export function UsersPage() {
                               onClick={() => handleEdit(user)}
                               disabled={isCurrentUser}
                               title={isCurrentUser ? t('users.cannotEditSelf') : t('common.edit')}
-                              className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
+                              className="flex min-h-10 min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-[var(--text-secondary)] transition-all duration-300 hover:bg-white/60 hover:text-brand-600 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] dark:hover:text-brand-400"
                             >
                               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 20h9" />
@@ -728,7 +728,7 @@ export function UsersPage() {
                                 onClick={() => { playTick(); setResetPasswordTarget(user); }}
                                 title="Parolni yangilash (Platform Owner)"
                                 aria-label={`${formatUserName(user)} parolini yangilash`}
-                                className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:shadow-[0_4px_12px_-4px_rgba(245,158,11,0.4)] transition-all duration-300 active:scale-95"
+                                className="flex min-h-10 min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:shadow-[0_4px_12px_-4px_rgba(245,158,11,0.4)] transition-all duration-300 active:scale-95"
                               >
                                 <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                   <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
@@ -744,7 +744,7 @@ export function UsersPage() {
                                 onClick={() => { playTick(); setSlipTarget(user); }}
                                 title="Hisob varaqasini chop etish (Onboarding Slip)"
                                 aria-label={`${formatUserName(user)} hisob varaqasini chop etish`}
-                                className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] transition-all duration-300 active:scale-95"
+                                className="flex min-h-10 min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 hover:shadow-[0_4px_12px_-4px_rgba(59,130,246,0.4)] transition-all duration-300 active:scale-95"
                               >
                                 <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                   <polyline points="6 9 6 2 18 2 18 9" />
@@ -760,7 +760,7 @@ export function UsersPage() {
                               onClick={() => handleToggleActive(user)}
                               disabled={isToggling || isCurrentUser}
                               title={isCurrentUser ? t('users.cannotDeactivateSelf') : user.isActive ? t('users.deactivate') : t('users.activate')}
-                              className={`flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl transition-all duration-300 hover:bg-white/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] ${
+                              className={`flex min-h-10 min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl transition-all duration-300 hover:bg-white/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-white/[0.06] ${
                                 user.isActive
                                   ? 'text-emerald-600 hover:shadow-[0_4px_12px_-4px_rgba(16,185,129,0.5)] dark:text-emerald-400'
                                   : 'text-slate-500 hover:shadow-[0_4px_12px_-4px_rgba(100,116,139,0.5)]'
@@ -789,7 +789,7 @@ export function UsersPage() {
                               onClick={() => handleDelete(user)}
                               disabled={isDeleting || isCurrentUser}
                               title={isCurrentUser ? t('users.cannotDeleteSelf') : t('common.delete')}
-                              className="flex min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-red-500 transition-all duration-300 hover:bg-red-500/10 hover:shadow-[0_4px_12px_-4px_rgba(239,68,68,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                              className="flex min-h-10 min-w-[40px] sm:min-h-0 sm:min-w-0 sm:h-8 sm:w-8 items-center justify-center rounded-xl text-red-500 transition-all duration-300 hover:bg-red-500/10 hover:shadow-[0_4px_12px_-4px_rgba(239,68,68,0.5)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
                             >
                               {isDeleting ? (
                                 <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

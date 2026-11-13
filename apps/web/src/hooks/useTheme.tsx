@@ -66,9 +66,9 @@ const STORAGE_KEY = 'medu-theme';
 const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)';
 
 const META_THEME_COLORS: Readonly<Record<ResolvedTheme, string>> = {
-  light: '#f8fafc', // Apple Alabaster / Slate-50
-  dark: '#090d16',  // M-EDU Deep Space Dark
-  oled: '#000000',  // Pure AMOLED Black
+  light: '#F4F7FC', // Apple Studio Alabaster / High-Luminance Crisp Canvas
+  dark: '#050912',  // Apple Space Black Velvet / Deep Midnight
+  oled: '#000000',  // Pure AMOLED True Black
   sepia: '#F5EEDB', // Apple Books Warm Sepia
 };
 

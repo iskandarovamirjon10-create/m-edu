@@ -52,6 +52,13 @@ export class PaymentsController {
     return this.paymentsService.findAll(orgId, query);
   }
 
+  @Get('summary')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({ summary: 'Get total aggregate payments metrics' })
+  getSummary(@CurrentUser('organizationId') orgId: string, @Query() query: PaymentQuery) {
+    return this.paymentsService.getSummary(orgId, query);
+  }
+
   @Post('cashier/shift/open')
   @Roles(...ADMIN_ROLES)
   @ApiOperation({ summary: 'Open a new cashier shift with opening drawer balance' })

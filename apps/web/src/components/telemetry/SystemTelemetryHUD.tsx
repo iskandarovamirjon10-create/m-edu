@@ -38,9 +38,12 @@ export const SystemTelemetryHUD = memo(function SystemTelemetryHUD({
   const relayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Cleanup vaqtida ref o‘zgargan bo‘lishi mumkin — joriy referenslarni ushlab qolamiz.
+    const pingTimer = pingTimerRef;
+    const relayTimer = relayTimerRef;
     return () => {
-      if (pingTimerRef.current) clearTimeout(pingTimerRef.current);
-      if (relayTimerRef.current) clearTimeout(relayTimerRef.current);
+      if (pingTimer.current) clearTimeout(pingTimer.current);
+      if (relayTimer.current) clearTimeout(relayTimer.current);
     };
   }, []);
 

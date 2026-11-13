@@ -501,7 +501,7 @@ export function KpiTile({
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20"
       />
       <div
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform group-hover:scale-105"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
         style={{
           background: c.bg,
           color: c.fg,
@@ -697,7 +697,7 @@ export function CertificatesPage() {
   /* ── Queries ──────────────────────────────────────────────────────── */
   const certificates = useQuery({
     queryKey: ['certificates'],
-    queryFn: () => certificatesApi.list({ limit: 100 }),
+    queryFn: () => certificatesApi.list({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -709,12 +709,12 @@ export function CertificatesPage() {
 
   const courses = useQuery({
     queryKey: queryKeys.courses.selectors(),
-    queryFn: () => coursesApi.list({ limit: 100 }),
+    queryFn: () => coursesApi.list({ limit: 500 }),
   });
 
   const students = useQuery({
     queryKey: queryKeys.students.selectors(),
-    queryFn: () => studentsApi.list({ limit: 100 }),
+    queryFn: () => studentsApi.list({ limit: 500 }),
   });
 
   const certificateList = useMemo(() => {
@@ -1027,7 +1027,14 @@ export function CertificatesPage() {
       c.verificationCode || '',
       c.issueDate || '',
     ]);
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.map((val) => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'` + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1326,7 +1333,7 @@ export function CertificatesPage() {
 
                         {/* Avatar */}
                         <div
-                          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[12px] font-black text-white shadow-sm ring-1 ring-white/40 dark:ring-white/10"
+                          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[12px] font-black text-white shadow-sm ring-1 ring-white/40 dark:ring-white/10"
                           style={{
                             background: gradient,
                             boxShadow: '0 4px 12px -4px rgba(0,0,0,0.25)',
@@ -1613,7 +1620,7 @@ export function CertificatesPage() {
                     >
                       {/* Template icon */}
                       <div
-                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm"
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
                         style={{
                           background: tpl.isDefault
                             ? 'linear-gradient(135deg, #34C759 0%, #30D158 100%)'

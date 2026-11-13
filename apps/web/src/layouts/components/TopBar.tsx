@@ -32,15 +32,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  motion,
-  AnimatePresence,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  type MotionValue,
-  type MotionStyle,
-} from 'framer-motion';
+import { motion, AnimatePresence, type MotionValue } from 'framer-motion';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { NotificationsMenu } from '@/components/NotificationsMenu';
 import { LanguageSwitcher } from '@/i18n/LanguageSwitcher';
@@ -69,57 +61,14 @@ import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard36
 const FOCUS =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--border-focus)]';
 
-/** v2: Tactile Liquid Glass Pill with chromatic warm/cool inset rims */
-const LIQUID_PILL = cn(
-  'border border-black/[0.07] bg-white/50 text-secondary backdrop-blur-md',
-  'shadow-[',
-  'inset_0_1px_0_0_rgba(255,255,255,0.72),',
-  'inset_0_-1px_0_0_rgba(120,200,255,0.1),',
-  '0_1px_2px_rgba(0,0,0,0.03)',
-  ']',
-  'dark:border-white/[0.09] dark:bg-white/[0.05]',
-  'dark:shadow-[',
-  'inset_0_1px_0_0_rgba(255,255,255,0.14),',
-  'inset_0_-1px_0_0_rgba(120,200,255,0.08),',
-  '0_1px_3px_rgba(0,0,0,0.2)',
-  ']',
-  'hover:border-black/[0.11] hover:bg-white/80 hover:text-primary',
-  'dark:hover:border-white/[0.14] dark:hover:bg-white/[0.09]',
-);
-
-/** Active state — v2 chromatic rim on both edges */
-const LIQUID_PILL_ACTIVE = cn(
-  'border border-brand-500/35 bg-gradient-to-b from-brand-500/20 to-brand-500/10 text-brand-600 backdrop-blur-md',
-  'shadow-[',
-  'inset_0_1px_0_0_rgba(255,255,255,0.6),',
-  'inset_0_-1px_0_0_rgba(255,200,120,0.14),',
-  '0_3px_10px_-2px_rgba(0,122,255,0.24)',
-  ']',
-  'dark:border-brand-400/35 dark:from-brand-400/25 dark:to-brand-500/12 dark:text-brand-300',
-  'dark:shadow-[',
-  'inset_0_1px_0_0_rgba(255,255,255,0.22),',
-  'inset_0_-1px_0_0_rgba(255,180,80,0.14),',
-  '0_3px_12px_-2px_rgba(0,122,255,0.4)',
-  ']',
-);
-
-/** v2: Popover — refined shadow stack + chromatic bottom rim */
-const LIQUID_POPOVER = cn(
-  'border border-white/50 bg-white/80 backdrop-blur-3xl backdrop-saturate-[190%]',
-  'shadow-[',
-  'inset_0_1px_0_0_rgba(255,255,255,0.9),',
-  'inset_0_-1px_0_0_rgba(120,200,255,0.16),',
-  '0_24px_56px_-12px_rgba(0,0,0,0.18),',
-  '0_4px_16px_-4px_rgba(0,0,0,0.07)',
-  ']',
-  'dark:border-white/[0.12] dark:bg-surface/80',
-  'dark:shadow-[',
-  'inset_0_1px_0_0_rgba(255,255,255,0.16),',
-  'inset_0_-1px_0_0_rgba(120,200,255,0.1),',
-  '0_28px_64px_-12px_rgba(0,0,0,0.68),',
-  '0_4px_18px_-4px_rgba(0,0,0,0.42)',
-  ']',
-);
+/**
+ * TopBar sirtlari endi `globals.css`dagi semantik tokenlardan keladi
+ * (`--tb-*`). Komponentda birorta rang/soya qiymati yo‘q — mavzu
+ * o‘zgarganda faqat tokenlar qayta hisoblanadi.
+ */
+const LIQUID_PILL = 'tb-control';
+const LIQUID_PILL_ACTIVE = 'tb-control tb-control-active';
+const LIQUID_POPOVER = 'tb-popover';
 
 /** v2 refined spring physics */
 const LIQUID_SPRING = { type: 'spring' as const, stiffness: 400, damping: 32, mass: 0.7 };
@@ -131,45 +80,9 @@ const GEL_SPRING = { type: 'spring' as const, stiffness: 820, damping: 24, mass:
  * LIQUID GLASS — SVG FILTER SYSTEM (tb-prefixed, no collision with nav)
  * ════════════════════════════════════════════════════════════════════ */
 
-const TopBarDefs = memo(function TopBarDefs() {
-  return (
-    <svg aria-hidden="true" className="pointer-events-none absolute h-0 w-0 overflow-hidden">
-      <defs>
-        <filter id="tb-bloom" x="-40%" y="-40%" width="180%" height="180%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.012" numOctaves="2" seed="3" result="noise" />
-          <feGaussianBlur in="noise" stdDeviation="1.1" result="soft" />
-          <feDisplacementMap in="SourceGraphic" in2="soft" scale="7" xChannelSelector="R" yChannelSelector="G" />
-          <feGaussianBlur stdDeviation="1.4" />
-        </filter>
-      </defs>
-    </svg>
-  );
-});
-
 /* ══════════════════════════════════════════════════════════════════════
  * AMBIENT LIGHT — time-aware, dual-harmonic, no re-renders
  * ════════════════════════════════════════════════════════════════════ */
-
-function useTopBarAmbient(_enabled: boolean) {
-  const temp = useMemo(() => {
-    const h = new Date().getHours();
-    if (h >= 5 && h < 9) return { warm: 'rgba(255,180,120,0.12)', cool: 'rgba(120,170,255,0.08)' };
-    if (h >= 9 && h < 17) return { warm: 'rgba(255,210,150,0.08)', cool: 'rgba(120,190,255,0.12)' };
-    if (h >= 17 && h < 20) return { warm: 'rgba(255,170,100,0.14)', cool: 'rgba(140,150,255,0.08)' };
-    return { warm: 'rgba(180,150,255,0.06)', cool: 'rgba(120,190,255,0.14)' };
-  }, []);
-
-  const warm = useMemo(
-    () => `radial-gradient(70% 100% at 30% 50%, ${temp.warm}, transparent 65%)`,
-    [temp.warm],
-  );
-  const cool = useMemo(
-    () => `radial-gradient(70% 100% at 70% 50%, ${temp.cool}, transparent 65%)`,
-    [temp.cool],
-  );
-
-  return { warm, cool };
-}
 
 /* ══════════════════════════════════════════════════════════════════════
  * VISUAL LAYERS — grain, specular, edges
@@ -2244,7 +2157,7 @@ export const TopBar = memo(function TopBar({
   const now = useNow();
 
   const isStaff = useMemo(() => isStaffRole(userRole), [userRole]);
-  const isExecutiveRoute = location.pathname.startsWith('/executive');
+  const isExecutiveRoute = location.pathname.startsWith('/executive') || location.pathname.startsWith('/showcase');
   const isCopilotRoute = location.pathname.startsWith('/ai-copilot') || location.pathname.startsWith('/copilot');
   const isDashboardRoute = location.pathname === '/' || location.pathname === '/dashboard';
 
@@ -2253,19 +2166,6 @@ export const TopBar = memo(function TopBar({
 
   const cmdLabel = isApple ? '⌘K' : 'Ctrl K';
   const greeting = t(getGreetingKey(now), 'Welcome');
-
-  /* v2: ambient light for header background */
-  const ambient = useTopBarAmbient(!reduced && !reducedTransparency);
-
-  /* v2: length-reactive search bloom */
-  const searchLenMv = useMotionValue(0);
-  const searchLenSpring = useSpring(searchLenMv, { stiffness: 220, damping: 28, mass: 0.5 });
-  const bloomScale = useTransform(searchLenSpring, [0, 40], [1, 1.16], { clamp: true });
-  const bloomOpacity = useTransform(searchLenSpring, [0, 40], [0.35, 0.85], { clamp: true });
-
-  useEffect(() => {
-    searchLenMv.set(isSearchFocused ? Math.min(search.trim().length, 40) : 0);
-  }, [search.length, isSearchFocused, searchLenMv, search]);
 
   const handleClearSearch = useCallback(() => {
     setSearch('');
@@ -2311,42 +2211,17 @@ export const TopBar = memo(function TopBar({
       }}
       className="relative z-30 hidden shrink-0 select-none md:block"
     >
-      {!reducedTransparency && <TopBarDefs />}
       <div
         className={cn(
-          'relative flex h-[var(--top-bar-height)] w-full items-center gap-2.5 lg:gap-3.5 px-3.5 lg:px-5 isolate',
-          'border-b border-black/[0.07] dark:border-white/[0.09]',
-          reducedTransparency
-            ? 'bg-[var(--bg-card)]'
-            : cn(
-                'bg-[var(--glass-surface-bg)] backdrop-blur-3xl backdrop-saturate-[190%]',
-                'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6),inset_0_-1px_0_0_rgba(120,200,255,0.12),0_8px_28px_-12px_rgba(0,0,0,0.07)]',
-                'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),inset_0_-1px_0_0_rgba(120,200,255,0.08),0_10px_32px_-12px_rgba(0,0,0,0.45)]',
-              ),
+          'relative flex h-[var(--top-bar-height)] w-full items-center gap-2.5 px-3.5 isolate lg:gap-3.5 lg:px-5',
+          reducedTransparency ? 'bg-[var(--bg-card)]' : 'tb-surface',
         )}
       >
-        {/* v2: ambient drift layer */}
-        {!reducedTransparency && (
-          <>
-            <motion.div
-              aria-hidden="true"
-              style={{ background: ambient.warm, opacity: 0.8 } as MotionStyle}
-              className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
-            />
-            <motion.div
-              aria-hidden="true"
-              style={{ background: ambient.cool, opacity: 0.8 } as MotionStyle}
-              className="pointer-events-none absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
-            />
-          </>
-        )}
-
-        {/* v2: chromatic bottom rim + top specular + grain */}
+        {/* Nozik spekulyar qirralar — dekorativ shovqinsiz */}
         {!reducedTransparency && (
           <>
             <TopSpecular inset="inset-x-8" />
             <BottomChromatic inset="inset-x-10" />
-            <GrainOverlay opacity={0.026} />
           </>
         )}
 
@@ -2381,7 +2256,7 @@ export const TopBar = memo(function TopBar({
           )}
         </div>
 
-        {/* Center: Spotlight Search Well (v2 bloom) */}
+        {/* Center: global qidiruv */}
         <form
           role="search"
           onSubmit={(e) => e.preventDefault()}
@@ -2392,26 +2267,6 @@ export const TopBar = memo(function TopBar({
               : 'max-w-[260px] lg:max-w-[280px] xl:max-w-[340px]',
           )}
         >
-          {/* v2: dual-layer length-reactive search bloom */}
-          {!reducedTransparency && !reduced && (
-            <>
-              <motion.span
-                aria-hidden="true"
-                style={{ scale: bloomScale, opacity: bloomOpacity, filter: 'blur(20px)' }}
-                className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-brand-500/40 via-[#5E5CE6]/35 to-[#00C7BE]/35"
-              />
-              <motion.span
-                aria-hidden="true"
-                style={{
-                  scale: bloomScale,
-                  opacity: bloomOpacity,
-                  filter: 'blur(10px)',
-                }}
-                className="pointer-events-none absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-[#5AC8FA]/50 via-transparent to-[#5E5CE6]/50"
-              />
-            </>
-          )}
-
           <span
             className={cn(
               'pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 transition-all duration-200',
@@ -2432,21 +2287,11 @@ export const TopBar = memo(function TopBar({
             onBlur={() => setIsSearchFocused(false)}
             id="global-topbar-search" name="global-topbar-search" type="search" placeholder={
               isCopilotRoute
-                ? 'AI Copilot’ga savol yozing yoki buyruq bering...'
-                : t('nav.searchPlaceholder', 'O‘quvchi, o‘qituvchi, guruh yoki to‘lovlarni qidirish...')
+                ? 'AI Copilot’ga savol yozing...'
+                : t('nav.searchPlaceholder', 'O‘quvchi, guruh yoki to‘lovlar...')
             }
             aria-label={t('nav.searchPlaceholder', 'Search')}
-            className={cn(
-              'h-9 w-full rounded-xl pl-9 pr-8 xl:pr-24',
-              'border border-black/[0.07] bg-black/[0.035] dark:border-white/[0.09] dark:bg-white/[0.045]',
-              'shadow-[inset_0_1px_2px_rgba(0,0,0,0.04),inset_0_-1px_0_rgba(120,200,255,0.14),0_1px_0_rgba(255,255,255,0.65)]',
-              'dark:shadow-[inset_0_1px_2px_rgba(0,0,0,0.28),inset_0_-1px_0_rgba(120,200,255,0.1),0_1px_0_rgba(255,255,255,0.07)]',
-              'text-[13.5px] text-primary placeholder:text-placeholder',
-              'outline-none backdrop-blur-md transition-all duration-200',
-              'focus:border-brand-500/50 focus:bg-white/80 focus:shadow-[inset_0_1px_1px_rgba(0,0,0,0.02),inset_0_-1px_0_rgba(120,200,255,0.25),0_0_0_3.5px_var(--focus-ring),0_8px_20px_-6px_rgba(0,122,255,0.18)]',
-              'dark:focus:bg-white/[0.09]',
-              '[&::-webkit-search-cancel-button]:hidden',
-            )}
+            className="tb-search [&::-webkit-search-cancel-button]:hidden"
           />
 
           <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
@@ -2523,7 +2368,8 @@ export const TopBar = memo(function TopBar({
         </form>
 
         {/* Right Action Cluster */}
-        <div className="relative z-20 ml-auto flex shrink-0 items-center gap-1.5 lg:gap-2">          <div className="hidden lg:block">
+        <div className="relative z-20 ml-auto flex shrink-0 items-center gap-1.5 lg:gap-2">
+          <div className="hidden lg:block">
             <BranchSelectorMenu
               orgName={orgName}
               academicYear={getAcademicYear(now)}
@@ -2548,9 +2394,9 @@ export const TopBar = memo(function TopBar({
           <ActionButton
             onClick={toggleCalculator}
             active={isCalculatorOpen}
-            className="hidden 2xl:flex"
+            className="flex"
             ariaLabel={t('nav.calculator', 'Calculator')}
-            title={t('nav.calculator', 'Calculator')}
+            title={`${t('nav.calculator', 'Kalkulyator')} (C / Alt+C)`}
           >
             <StaticIcon paths={I.calculator} size={18} />
           </ActionButton>
@@ -2612,8 +2458,6 @@ export const MobileTopBar = memo(function MobileTopBar({
   const currentNav = useMemo(() => resolveRouteNav(location.pathname), [location.pathname]);
   const currentTitle = currentNav ? t(currentNav.labelKey, currentNav.label) : 'M-EDU';
 
-  const ambient = useTopBarAmbient(!reduced && !reducedTransparency);
-
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-40 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pt-[calc(0.5rem+env(safe-area-inset-top,0px))] select-none md:hidden">
       <motion.div
@@ -2621,33 +2465,15 @@ export const MobileTopBar = memo(function MobileTopBar({
         animate={{ y: 0, opacity: 1 }}
         transition={LIQUID_SPRING}
         className={cn(
-          'pointer-events-auto relative flex h-[60px] w-full items-center justify-between gap-2 rounded-[24px] px-2.5 isolate',
-          'border border-white/45 dark:border-white/[0.12]',
-          reducedTransparency
-            ? 'bg-[var(--bg-card)] shadow-card'
-            : cn(
-                'bg-[var(--glass-surface-bg)] backdrop-blur-3xl backdrop-saturate-[200%]',
-                'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.72),inset_0_-1px_0_0_rgba(120,200,255,0.16),0_12px_32px_-8px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.05)]',
-                'dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.16),inset_0_-1px_0_0_rgba(120,200,255,0.1),0_14px_36px_-8px_rgba(0,0,0,0.6)]',
-              ),
+          'pointer-events-auto relative isolate flex h-[60px] w-full items-center justify-between gap-2 rounded-[24px] px-2.5',
+          reducedTransparency ? 'border border-[var(--tb-surface-border)] bg-[var(--bg-card)] shadow-card' : 'tb-float',
         )}
       >
-        {/* v2: ambient + chromatic rims + grain (clipped inside decor wrapper) */}
+        {/* Nozik spekulyar/chromatik qirralar (statik) */}
         {!reducedTransparency && (
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[22px]">
-            <motion.div
-              aria-hidden="true"
-              style={{ background: ambient.warm, opacity: 0.7 } as MotionStyle}
-              className="absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
-            />
-            <motion.div
-              aria-hidden="true"
-              style={{ background: ambient.cool, opacity: 0.7 } as MotionStyle}
-              className="absolute inset-0 z-0 mix-blend-soft-light dark:mix-blend-screen"
-            />
             <TopSpecular inset="inset-x-4" />
             <BottomChromatic inset="inset-x-6" />
-            <GrainOverlay opacity={0.03} />
           </div>
         )}
 
@@ -2657,7 +2483,7 @@ export const MobileTopBar = memo(function MobileTopBar({
           <button
             type="button"
             onClick={onOpenSearch}
-            aria-label={t('nav.searchPlaceholder', 'Search')}
+            aria-label={t('a11y.search', 'Search')}
             className={cn(
               'inline-flex min-w-0 flex-1 max-w-none items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold min-h-[36px]',
               LIQUID_PILL,
@@ -2682,12 +2508,22 @@ export const MobileTopBar = memo(function MobileTopBar({
           <ActionButton
             size="sm"
             onClick={onOpenSearch}
-            ariaLabel={t('nav.searchPlaceholder', 'Search')}
+            ariaLabel={t('a11y.search', 'Search')}
           >
             <SearchGlyph size={16} />
           </ActionButton>
 
           <QuickActionHub size="sm" />
+
+          <ActionButton
+            size="sm"
+            onClick={toggleCalculator}
+            active={isCalculatorOpen}
+            ariaLabel={t('nav.calculator', 'Calculator')}
+            title={t('nav.calculator', 'Kalkulyator')}
+          >
+            <StaticIcon paths={I.calculator} size={16} />
+          </ActionButton>
 
           <NotificationsMenu size="sm" />
 

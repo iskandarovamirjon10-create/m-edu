@@ -5,6 +5,7 @@ import {
   type AiToolDefinition,
 } from '@medu/contracts';
 import type { AttendanceService } from '../../../attendance/attendance.service';
+import { computeAttendanceRate } from '../../../common/attendance-rate';
 import type { AttendanceQuery } from '../../../common/dto/query';
 import type { PrismaService } from '../../../prisma/prisma.service';
 
@@ -98,8 +99,19 @@ export function createAttendanceTools(
 
         const items = groups.map((group) => {
           const stats = statsMap.get(group.id) ?? { total: 0, present: 0, absent: 0, late: 0 };
-          const attended = stats.present + stats.late;
-          const rate = stats.total > 0 ? Math.round((attended / stats.total) * 100) : null;
+          // Canonical rate: LATE counts as attended and EXCUSED is excluded
+          // from the denominator, matching every other attendance surface.
+          const rate =
+            stats.total > 0
+              ? computeAttendanceRate(
+                  [
+                    { status: 'PRESENT', count: stats.present },
+                    { status: 'LATE', count: stats.late },
+                    { status: 'ABSENT', count: stats.absent },
+                  ],
+                  true,
+                )
+              : null;
           const teacherName = group.teacher?.user
             ? `${group.teacher.user.firstName || ''} ${group.teacher.user.lastName || ''}`.trim()
             : "O'qituvchi tayinlanmagan";

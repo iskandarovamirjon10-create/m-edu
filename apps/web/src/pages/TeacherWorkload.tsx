@@ -4,6 +4,7 @@
  */
 
 import React, { useMemo, useRef, useEffect, useState, useCallback, useId } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
@@ -824,6 +825,14 @@ function ModelLegend() {
  * SMART PAYROLL & KPI CALCULATOR (Interactive Simulator)
  * ========================================================================== */
 
+interface SmartKpiSnapshot {
+  pillars?: {
+    retention?: { rate?: number };
+    attendance?: { rate?: number };
+    discipline?: { hoursWorked?: number };
+  };
+}
+
 function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
   const { t } = useSafeI18n();
   const selectId = useId();
@@ -844,7 +853,7 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
         setAttendanceRate(found.attendanceRate || 88);
       }
       try {
-        const kpi = await payrollApi.getSmartKpi({ teacherId: id });
+        const kpi = (await payrollApi.getSmartKpi({ teacherId: id })) as SmartKpiSnapshot;
         if (kpi?.pillars) {
           if (kpi.pillars.retention?.rate !== undefined) setRetentionRate(kpi.pillars.retention.rate);
           if (kpi.pillars.attendance?.rate !== undefined) setAttendanceRate(kpi.pillars.attendance.rate);
@@ -1102,8 +1111,10 @@ function SmartPayrollCalculator({ teachers }: { teachers: TeacherWorkload[] }) {
  * ========================================================================== */
 
 export function TeacherWorkloadPage() {
+  const navigate = useNavigate();
   const { t } = useSafeI18n();
   usePageTitle(t('teacherWorkload.title', "O'qituvchilar yuklamasi"));
+  const { playTick, playPop } = usePremiumSound();
 
   const summaryQuery = useQuery({
     queryKey: ['teacher-workload-summary'],
@@ -1134,7 +1145,36 @@ export function TeacherWorkloadPage() {
     });
   }, [teachers, filterStatus, searchQuery]);
 
-  const { playTick } = usePremiumSound();
+  const handleExportWorkload = useCallback(() => {
+    playPop();
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+      }
+      return '"' + str.replace(/"/g, '""') + '"';
+    };
+    const csvRows = [
+      ['Teacher ID', 'Teacher Name', 'Hours/Week', 'Capacity', 'Utilization (%)', 'Status'].map(escapeCsvCell).join(','),
+      ...filteredTeachers.map((tw) =>
+        [
+          escapeCsvCell(tw.teacherId),
+          escapeCsvCell(tw.teacherName),
+          escapeCsvCell(tw.hoursPerWeek),
+          escapeCsvCell(tw.capacityHours),
+          escapeCsvCell(Math.round(tw.utilization * 100)),
+          escapeCsvCell(tw.status),
+        ].join(','),
+      ),
+    ];
+    const blob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `teacher-workload-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [playPop, filteredTeachers]);
 
   const handleOpenTeacherWorkloadSidecar = useCallback(
     (tw: TeacherWorkload) => {
@@ -1217,58 +1257,111 @@ export function TeacherWorkloadPage() {
             className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/20 z-10"
           />
 
-          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            {/* Gradient workload tile */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, rotate: -4 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={SPRING.smooth}
-              className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg"
-              style={{
-                background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
-                boxShadow: '0 12px 28px -10px rgba(37,99,235,0.45), inset 0 2px 0 rgba(255,255,255,0.35)',
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/40 to-transparent"
-              />
-              <Icon paths={I.gauge} size={28} strokeWidth={2.2} className="relative" />
-            </motion.div>
+          <div className="relative flex flex-col items-start gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center min-w-0">
+              {/* Gradient workload tile */}
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, rotate: -4 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                transition={SPRING.smooth}
+                className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg"
+                style={{
+                  background: 'linear-gradient(135deg, #2563EB 0%, #6366F1 100%)',
+                  boxShadow: '0 12px 28px -10px rgba(37,99,235,0.45), inset 0 2px 0 rgba(255,255,255,0.35)',
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/40 to-transparent"
+                />
+                <Icon paths={I.gauge} size={28} strokeWidth={2.2} className="relative" />
+              </motion.div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
-                  Workload
-                </span>
-                {(summary?.overloaded ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-rose-600 dark:text-rose-400">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <motion.span
-                        className="absolute inset-0 rounded-full bg-rose-500"
-                        animate={{ scale: [1, 2.2, 1], opacity: [0.6, 0, 0.6] }}
-                        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
-                      />
-                      <span className="relative h-1.5 w-1.5 rounded-full bg-rose-500" />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
+                    <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
+                    Workload
+                  </span>
+                  {(summary?.overloaded ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-rose-600 dark:text-rose-400">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <motion.span
+                          className="absolute inset-0 rounded-full bg-rose-500"
+                          animate={{ scale: [1, 2.2, 1], opacity: [0.6, 0, 0.6] }}
+                          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+                        />
+                        <span className="relative h-1.5 w-1.5 rounded-full bg-rose-500" />
+                      </span>
+                      {summary?.overloaded ?? 0} {t('teacherWorkload.overloaded', 'Ortiqcha')}
                     </span>
-                    {summary?.overloaded ?? 0} {t('teacherWorkload.overloaded', 'Ortiqcha')}
-                  </span>
-                )}
-                {(summary?.balanced ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    {summary?.balanced ?? 0} {t('teacherWorkload.balanced', 'Muvozanatda')}
-                  </span>
-                )}
-              </div>
+                  )}
+                  {(summary?.balanced ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      {summary?.balanced ?? 0} {t('teacherWorkload.balanced', 'Muvozanatda')}
+                    </span>
+                  )}
+                </div>
 
-              <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
-                {t('teacherWorkload.title', "O'qituvchilar yuklamasi")}
-              </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-slate-500 dark:text-slate-400">
-                {t('teacherWorkload.subtitle', "Haftalik o'quv soatlari, quvvat tahlili va maosh ko'rsatkichlari")}
-              </p>
+                <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
+                  {t('teacherWorkload.title', "O'qituvchilar yuklamasi")}
+                </h1>
+                <p className="mt-1 text-[13.5px] font-medium text-slate-500 dark:text-slate-400">
+                  {t('teacherWorkload.subtitle', "Haftalik o'quv soatlari, quvvat tahlili va maosh ko'rsatkichlari")}
+                </p>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap items-center gap-2.5 self-stretch sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  playTick();
+                  void summaryQuery.refetch();
+                  void teachersQuery.refetch();
+                }}
+                disabled={summaryQuery.isFetching || teachersQuery.isFetching}
+                className="inline-flex items-center gap-2 rounded-xl bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] border border-black/10 dark:border-white/10 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <svg
+                  className={`h-3.5 w-3.5 ${summaryQuery.isFetching || teachersQuery.isFetching ? 'animate-spin' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                </svg>
+                <span>Yangilash</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportWorkload}
+                className="inline-flex items-center gap-2 rounded-xl bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] border border-black/10 dark:border-white/10 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all active:scale-95"
+                title="CSV eksport"
+              >
+                <svg className="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span>CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playPop();
+                  navigate('/schedule');
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 text-xs font-bold shadow-md shadow-blue-500/25 transition-all active:scale-95"
+              >
+                <span>Dars jadvali</span>
+                <span>↗</span>
+              </button>
             </div>
           </div>
         </div>

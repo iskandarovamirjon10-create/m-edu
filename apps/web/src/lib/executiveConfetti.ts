@@ -192,7 +192,7 @@ export function fireExecutiveConfetti(options?: {
   }
 
   let animationFrame = 0;
-  let startTime = performance.now();
+  const startTime = performance.now();
 
   function render(currentTime: number) {
     const elapsed = currentTime - startTime;

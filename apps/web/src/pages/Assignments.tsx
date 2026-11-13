@@ -323,7 +323,7 @@ function StatTile({
       className="liquid-glass-card group relative flex items-center gap-3.5 p-4"
     >
       <div
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl"
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
         style={{
           background: c.bg,
           color: c.fg,
@@ -1005,7 +1005,7 @@ export default function AssignmentsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('common.search', 'Topshiriq yoki guruh bo‘yicha qidirish...')}
-                className="min-h-[40px] w-full rounded-xl border border-black/10 bg-black/[0.02] pl-8 pr-8 text-xs font-medium text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-100"
+                className="min-h-10 w-full rounded-xl border border-black/10 bg-black/[0.02] pl-8 pr-8 text-xs font-medium text-neutral-900 placeholder:text-neutral-400 focus:border-blue-500 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-100"
               />
               {searchQuery && (
                 <button
@@ -1014,7 +1014,7 @@ export default function AssignmentsPage() {
                     playTick();
                     setSearchQuery('');
                   }}
-                  className="min-h-[40px] min-w-[32px] absolute inset-y-0 right-0 flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                  className="min-h-10 min-w-[32px] absolute inset-y-0 right-0 flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
                   aria-label={t('common.clear', 'Tozalash')}
                 >
                   <Icon paths={I.x} size={13} strokeWidth={2.4} />
@@ -1027,7 +1027,7 @@ export default function AssignmentsPage() {
               <select
                 value={selectedGroupId}
                 onChange={(e) => handleGroupFilterChange(e.target.value)}
-                className="min-h-[40px] w-full rounded-xl border border-black/10 bg-black/[0.02] px-3 text-xs font-semibold text-neutral-800 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-200 cursor-pointer"
+                className="min-h-10 w-full rounded-xl border border-black/10 bg-black/[0.02] px-3 text-xs font-semibold text-neutral-800 outline-none focus:border-blue-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-200 cursor-pointer"
                 aria-label={t('nav.groups', 'Guruh bo‘yicha filtr')}
               >
                 <option value="">{t('groups.allGroups', 'Barcha guruhlar')}</option>

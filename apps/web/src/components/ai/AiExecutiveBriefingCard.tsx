@@ -619,7 +619,7 @@ export function AiExecutiveBriefingCard() {
             onClick={handleCopyDigest}
             aria-label="Brifingni nusxalash"
             title="Brifing xulosasini nusxalash"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-all active:scale-95"
+            className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-all active:scale-95"
           >
             {copiedDigest ? (
               <Check className="h-3.5 w-3.5 text-emerald-500" />
@@ -663,7 +663,7 @@ export function AiExecutiveBriefingCard() {
             disabled={refreshing}
             aria-label="Qayta tahlil qilish"
             title="Ma'lumotlarni yangilash"
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-all active:scale-95 disabled:opacity-50"
+            className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-all active:scale-95 disabled:opacity-50"
           >
             <RefreshCw
               className={cn(
@@ -679,7 +679,7 @@ export function AiExecutiveBriefingCard() {
             onClick={toggleCollapsed}
             aria-expanded={!collapsed}
             aria-label={collapsed ? 'Brifingni yoyish' : 'Brifingni yig‘ish'}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-all active:scale-95"
+            className="flex h-9 w-9 min-h-[38px] min-w-[38px] items-center justify-center rounded-xl text-zinc-500 hover:bg-black/5 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-zinc-100 transition-all active:scale-95"
           >
             {collapsed ? (
               <ChevronDown className="h-4 w-4" />

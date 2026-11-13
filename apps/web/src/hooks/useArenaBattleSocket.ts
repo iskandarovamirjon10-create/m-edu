@@ -87,6 +87,7 @@ export interface DuelFinishedPayload {
   }>;
   roundsHistory?: Array<{
     roundNumber: number;
+    questionId?: string;
     questionText: string;
     codeSnippet?: string | null;
     codeLanguage?: string | null;
@@ -95,6 +96,22 @@ export interface DuelFinishedPayload {
     explanation: string;
     answers: RoundEndedAnswer[];
   }>;
+}
+
+export interface ArenaPowerUpResult {
+  success?: boolean;
+  removedKeys?: string[];
+  addedSec?: number;
+  hint?: string | null;
+}
+
+export interface ArenaCustomRoomResult {
+  success?: boolean;
+  roomCode?: string;
+}
+
+export interface ArenaJoinRoomResult extends ArenaCustomRoomResult {
+  roomId?: string;
 }
 
 export function useArenaBattleSocket() {
@@ -135,11 +152,13 @@ export function useArenaBattleSocket() {
     addTime: boolean;
     hint: boolean;
   }>({ fiftyFifty: false, addTime: false, hint: false });
-  const [roundsHistory, setRoundsHistory] = useState<any[]>([]);
+  const [roundsHistory, setRoundsHistory] = useState<
+    NonNullable<DuelFinishedPayload['roundsHistory']>
+  >([]);
   const [customRoomCode, setCustomRoomCode] = useState<string | null>(null);
 
-  const timerRef = useRef<any>(null);
-  const searchTimerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const roundStartTimeRef = useRef<number>(0);
 
   // Initialize Socket connection
@@ -198,7 +217,7 @@ export function useArenaBattleSocket() {
       timerRef.current = setInterval(() => {
         setRoundTimeLeft((prev) => {
           if (prev <= 1) {
-            clearInterval(timerRef.current);
+            if (timerRef.current) clearInterval(timerRef.current);
             return 0;
           }
           return prev - 1;
@@ -289,7 +308,7 @@ export function useArenaBattleSocket() {
       socketRef.current.emit(
         'join_queue',
         { subjectCategory, difficulty, mode },
-        (res: any) => {
+        (res: { success?: boolean }) => {
           if (res?.success) {
             if (searchTimerRef.current) clearInterval(searchTimerRef.current);
             searchTimerRef.current = setInterval(() => {
@@ -361,15 +380,15 @@ export function useArenaBattleSocket() {
     socketRef.current.emit('accept_rematch', { roomId: currentMatch.roomId });
   }, [currentMatch]);
 
-  // Use Tactical Cyber Power-Up
-  const usePowerUp = useCallback(
+  // Tactical Cyber Power-Up — nomi `use*` emas: bu hook emas, callback.
+  const activatePowerUp = useCallback(
     (type: 'FIFTY_FIFTY' | 'ADD_TIME' | 'HINT') => {
       if (!socketRef.current || !currentMatch) return Promise.resolve(null);
-      return new Promise<any>((resolve) => {
+      return new Promise<ArenaPowerUpResult | null>((resolve) => {
         socketRef.current?.emit(
           'use_power_up',
           { roomId: currentMatch.roomId, type },
-          (res: any) => {
+          (res: ArenaPowerUpResult) => {
             if (res?.success) {
               if (type === 'FIFTY_FIFTY') {
                 setDisabledOptionKeys(res.removedKeys || []);
@@ -394,14 +413,16 @@ export function useArenaBattleSocket() {
   const createCustomRoom = useCallback(
     (subjectCategory = 'MATHEMATICS', difficulty = 'MEDIUM') => {
       if (!socketRef.current) return Promise.resolve(null);
-      return new Promise<string>((resolve) => {
+      return new Promise<string | null>((resolve) => {
         socketRef.current?.emit(
           'create_custom_room',
           { subjectCategory, difficulty },
-          (res: any) => {
-            if (res?.success) {
+          (res: ArenaCustomRoomResult) => {
+            if (res.success && res.roomCode) {
               setCustomRoomCode(res.roomCode);
               resolve(res.roomCode);
+            } else {
+              resolve(null);
             }
           },
         );
@@ -413,8 +434,8 @@ export function useArenaBattleSocket() {
   // Join Private 1v1 Room with Code
   const joinCustomRoom = useCallback((roomCode: string) => {
     if (!socketRef.current) return Promise.resolve(null);
-    return new Promise<any>((resolve) => {
-      socketRef.current?.emit('join_custom_room', { roomCode }, (res: any) => {
+    return new Promise<ArenaJoinRoomResult>((resolve) => {
+      socketRef.current?.emit('join_custom_room', { roomCode }, (res: ArenaJoinRoomResult) => {
         resolve(res);
       });
     });
@@ -465,7 +486,7 @@ export function useArenaBattleSocket() {
     sendReaction,
     requestRematch,
     acceptRematch,
-    usePowerUp,
+    activatePowerUp,
     createCustomRoom,
     joinCustomRoom,
     surrenderDuel,

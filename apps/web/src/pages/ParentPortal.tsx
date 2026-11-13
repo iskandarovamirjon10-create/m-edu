@@ -14,7 +14,7 @@
  *  ✅ 100% preserved — ALL queries, permissions, i18n, format helpers.
  */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { parentPortalApi } from '@/lib/api';
@@ -118,7 +118,6 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-import React from 'react';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * LIQUID GLASS CARD
@@ -393,7 +392,7 @@ function getAttendanceBadge(status: string) {
     case 'ABSENT': return { bg: 'bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400', dot: 'bg-rose-500' };
     case 'LATE': return { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' };
     case 'EXCUSED': return { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', dot: 'bg-blue-500' };
-    default: return { bg: 'bg-slate-500/10', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-gray-400' };
+    default: return { bg: 'bg-slate-500/10', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-400' };
   }
 }
 

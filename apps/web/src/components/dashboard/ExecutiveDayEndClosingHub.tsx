@@ -14,6 +14,25 @@ import {
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
 import { paymentsApi, attendanceApi, leadsApi, scheduleApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
+
+interface DayEndPayment {
+  status?: string;
+  amount?: number | string;
+  method?: string;
+}
+
+interface DayEndAttendance {
+  status?: string;
+}
+
+interface DayEndLead {
+  stage?: string;
+}
+
+interface DayEndScheduleItem {
+  id?: string;
+}
 
 export interface DailyCloseMetrics {
   dateStr: string;
@@ -79,7 +98,7 @@ export const ExecutiveDayEndClosingHub: React.FC = () => {
     async function loadRealDailyMetrics() {
       setIsLoading(true);
       try {
-        const [paymentsRes, attendanceRes, leadsRes, scheduleRes]: any[] = await Promise.all([
+        const [paymentsRes, attendanceRes, leadsRes, scheduleRes] = await Promise.all([
           paymentsApi.list({ limit: 100 }).catch(() => null),
           attendanceApi.list({ limit: 100 }).catch(() => null),
           leadsApi.list({ limit: 50 }).catch(() => null),
@@ -89,7 +108,7 @@ export const ExecutiveDayEndClosingHub: React.FC = () => {
         if (!active) return;
 
         // 1. Payments calculation
-        const paymentsList: any[] = paymentsRes?.data || paymentsRes?.items || (Array.isArray(paymentsRes) ? paymentsRes : []);
+        const paymentsList = toList<DayEndPayment>(paymentsRes);
         let cash = 0;
         let card = 0;
         for (const p of paymentsList) {
@@ -102,7 +121,7 @@ export const ExecutiveDayEndClosingHub: React.FC = () => {
         const total = cash + card;
 
         // 2. Attendance calculation
-        const attendanceList: any[] = attendanceRes?.data || attendanceRes?.items || (Array.isArray(attendanceRes) ? attendanceRes : []);
+        const attendanceList = toList<DayEndAttendance>(attendanceRes);
         let present = 0;
         let absent = 0;
         for (const a of attendanceList) {
@@ -113,12 +132,12 @@ export const ExecutiveDayEndClosingHub: React.FC = () => {
         const attRate = attTotal > 0 ? Math.round((present / attTotal) * 100) : 100;
 
         // 3. Leads calculation
-        const leadsList: any[] = leadsRes?.data || leadsRes?.items || (Array.isArray(leadsRes) ? leadsRes : []);
+        const leadsList = toList<DayEndLead>(leadsRes);
         const newLeads = leadsList.filter((l) => l.stage === 'NEW' || l.stage === 'CONTACTED').length;
         const enrolled = leadsList.filter((l) => l.stage === 'ENROLLED').length;
 
         // 4. Tomorrow schedule calculation
-        const scheduleList: any[] = Array.isArray(scheduleRes) ? scheduleRes : scheduleRes?.items || [];
+        const scheduleList = toList<DayEndScheduleItem>(scheduleRes);
         const tomorrowClasses = Math.max(scheduleList.length, 1);
 
         setMetrics((prev) => ({

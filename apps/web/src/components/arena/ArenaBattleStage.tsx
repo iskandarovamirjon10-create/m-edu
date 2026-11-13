@@ -42,6 +42,7 @@ import {
 import { useAuth } from '@/auth/AuthContext';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useTelegram } from '@/hooks/useTelegram';
+import type { VaultMistakeItem } from './ArenaMistakeVault';
 import '@/styles/arena-liquid.css';
 
 interface ArenaBattleStageProps {
@@ -156,7 +157,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     sendReaction,
     requestRematch,
     acceptRematch,
-    usePowerUp,
+    activatePowerUp,
     createCustomRoom,
     joinCustomRoom,
     surrenderDuel,
@@ -300,25 +301,36 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     if (duelFinishResult && roundsHistory.length > 0) {
       try {
         const existingStr = localStorage.getItem('m-edu.arena-mistakes-vault');
-        const existing = existingStr ? JSON.parse(existingStr) : [];
-        const newMistakes: any[] = [];
+        const existing: VaultMistakeItem[] = existingStr
+          ? (JSON.parse(existingStr) as VaultMistakeItem[])
+          : [];
+        const newMistakes: VaultMistakeItem[] = [];
 
         roundsHistory.forEach((r) => {
           const myAns = r.answers.find(
-            (a: any) => a.studentId === effectiveMyId || a.studentId === user?.id
+            (a) => a.studentId === effectiveMyId || a.studentId === user?.id,
           );
+          const questionId = r.questionId ?? `round-${r.roundNumber}-${r.questionText.slice(0, 32)}`;
+          const difficulty: VaultMistakeItem['difficulty'] =
+            selectedDifficulty === 'MEDIUM' || selectedDifficulty === 'HARD'
+              ? selectedDifficulty
+              : 'EASY';
           if (myAns && !myAns.isCorrect) {
-            const alreadyExists = existing.some((item: any) => item.questionId === r.questionId);
+            const alreadyExists = existing.some((item) => item.questionId === questionId);
             if (!alreadyExists) {
               newMistakes.push({
                 id: `vm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                questionId: r.questionId,
+                questionId,
                 subjectCategory: selectedSubject,
                 subjectName: SUBJECTS.find((s) => s.id === selectedSubject)?.label || 'Fan',
-                difficulty: selectedDifficulty,
+                difficulty,
                 questionText: r.questionText,
-                options: r.options || [],
-                chosenOptionKey: myAns.chosenOptionKey,
+                options: r.options.map((opt) => ({
+                  optionKey: opt.optionKey,
+                  optionText: opt.optionText,
+                  isCorrect: opt.optionKey === r.correctOptionKey,
+                })),
+                chosenOptionKey: myAns.selectedKey,
                 correctOptionKey: r.correctOptionKey,
                 explanation: r.explanation || 'Pedagogik tahlil: Savol yechimini ko‘rib chiqing.',
                 failedAt: new Date().toISOString(),
@@ -361,9 +373,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
 
       play('zap');
       haptic('impactMedium');
-      usePowerUp(type);
+      activatePowerUp(type);
     },
-    [hasAnswered, roundResult, powerUpsUsed, play, haptic, usePowerUp]
+    [hasAnswered, roundResult, powerUpsUsed, play, haptic, activatePowerUp]
   );
 
   const handleSendReaction = (emoji: string) => {
@@ -441,19 +453,19 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
 
   const myFinal =
     duelFinishResult?.players?.find(
-      (p: any) => p.studentId === effectiveMyId || p.studentId === user?.id
+      (p) => p.studentId === effectiveMyId || p.studentId === user?.id,
     ) ||
     duelFinishResult?.results?.find(
-      (p: any) => p.studentId === effectiveMyId || p.studentId === user?.id
+      (p) => p.studentId === effectiveMyId || p.studentId === user?.id,
     ) ||
     duelFinishResult?.results?.[0];
 
   const oppFinal =
     duelFinishResult?.players?.find(
-      (p: any) => p.studentId !== myFinal?.studentId
+      (p) => p.studentId !== myFinal?.studentId,
     ) ||
     duelFinishResult?.results?.find(
-      (p: any) => p.studentId !== myFinal?.studentId
+      (p) => p.studentId !== myFinal?.studentId,
     );
 
   // Max round time for SVG circular timer calculation
@@ -1172,9 +1184,9 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
                 <div className="flex items-center gap-1 mt-1.5">
                   {Array.from({ length: currentMatch.totalRounds || 5 }).map((_, i) => {
                     const rNum = i + 1;
-                    const pastRound = roundsHistory.find((rh: any) => rh.roundNumber === rNum);
+                    const pastRound = roundsHistory.find((rh) => rh.roundNumber === rNum);
                     const pastMyAns = pastRound?.answers?.find(
-                      (a: any) => a.studentId === effectiveMyId || a.studentId === user?.id
+                      (a) => a.studentId === effectiveMyId || a.studentId === user?.id,
                     );
                     const isCurrent = (currentRound?.roundNumber || 1) === rNum;
 
@@ -1481,7 +1493,7 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
                 <button
                   key={emoji}
                   onClick={() => handleSendReaction(emoji)}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center text-base hover:scale-125 active:scale-95 transition-all hover:bg-slate-200/50 dark:hover:bg-white/10 shrink-0"
+                  className="w-9 h-9 min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center text-base hover:scale-125 active:scale-95 transition-all hover:bg-slate-200/50 dark:hover:bg-white/10 shrink-0"
                   title="Raqibga yuborish"
                 >
                   {emoji}
@@ -1757,10 +1769,10 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
                 <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Batafsil Raundlar Tahlili va Yechimlar:
                 </div>
-                {roundsHistory.map((r: any, idx: number) => {
+                {roundsHistory.map((r, idx) => {
                   const myAns = r.answers?.find(
-                    (a: any) =>
-                      a.studentId === effectiveMyId || a.studentId === user?.id
+                    (a) =>
+                      a.studentId === effectiveMyId || a.studentId === user?.id,
                   );
                   const isCorrect = Boolean(myAns?.isCorrect);
 

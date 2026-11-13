@@ -137,7 +137,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+              className="rounded-lg p-1.5 h-9 w-9 min-h-[44px] min-w-[44px] tap-extend flex items-center justify-center text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -164,7 +164,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
                     type="button"
                     onClick={() => setTopic(t.id)}
                     className={cn(
-                      'rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all',
+                      'rounded-lg px-2.5 py-2 min-h-[38px] tap-extend text-xs font-semibold transition-all',
                       topic === t.id
                         ? 'bg-purple-600 text-white shadow-sm'
                         : 'bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-black/10 dark:hover:bg-white/10',
@@ -194,7 +194,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
                     type="button"
                     onClick={() => setTone(t.id)}
                     className={cn(
-                      'rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-all',
+                      'rounded-lg px-2.5 py-2 min-h-[38px] tap-extend text-[11px] font-semibold transition-all',
                       tone === t.id
                         ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
                         : 'bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-black/10 dark:hover:bg-white/10',
@@ -225,7 +225,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
               type="button"
               onClick={handleGenerate}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 transition-all active:scale-[0.99]"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-3 min-h-[44px] tap-extend text-xs font-semibold text-white shadow-md hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 transition-all active:scale-[0.99]"
             >
               {loading ? (
                 <>
@@ -250,7 +250,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline"
+                    className="flex items-center gap-1 min-h-[36px] tap-extend text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline"
                   >
                     {copied ? (
                       <>
@@ -280,7 +280,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-3.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="rounded-xl px-4 py-2 min-h-[44px] tap-extend text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               Yopish
             </button>
@@ -288,7 +288,7 @@ export function AiParentMessageModal(props: AiParentMessageModalProps) {
               type="button"
               onClick={handleSendViaTelegram}
               disabled={!message}
-              className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-40 transition-all"
+              className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 min-h-[44px] tap-extend text-xs font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-40 transition-all"
             >
               <Send className="h-3 w-3" />
               <span>Telegram orqali yuborish</span>

@@ -987,7 +987,7 @@ export function LessonStreamItem({
                                   type="date"
                                   value={homeworkDueDate}
                                   onChange={(e) => onHomeworkDueDateChange(e.target.value)}
-                                  className="min-h-[40px] rounded-xl border border-black/[0.08] dark:border-white/[0.12] bg-white dark:bg-surface-900 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none"
+                                  className="min-h-10 rounded-xl border border-black/[0.08] dark:border-white/[0.12] bg-white dark:bg-surface-900 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 outline-none"
                                 />
                               </div>
                               <button
@@ -1050,12 +1050,12 @@ export function TeacherCockpitPage() {
     queryKey: ['teacher-cockpit-lessons', user?.id, selectedDate],
     queryFn: async () => {
       const res = await lessonsApi.list({ teacherId: user?.id, date: selectedDate, limit: 50 });
-      return Array.isArray(res) ? res : res?.items || [];
+      return (Array.isArray(res) ? res : res?.items || []) as LessonDetail[];
     },
     enabled: Boolean(user?.id),
   });
 
-  const lessons: LessonDetail[] = useMemo(() => lessonsQuery.data || [], [lessonsQuery.data]);
+  const lessons: LessonDetail[] = useMemo(() => (lessonsQuery.data as LessonDetail[]) || [], [lessonsQuery.data]);
 
   /* Sort by start time */
   const sortedLessons = useMemo(
@@ -1128,7 +1128,7 @@ export function TeacherCockpitPage() {
       queryClient.invalidateQueries({ queryKey: ['teacher-cockpit-lessons'] });
       queryClient.invalidateQueries({ queryKey: ['teacher-cockpit-lesson-detail', activeLessonId] });
     },
-    onError: (err: any) => {
+    onError: (err) => {
       push({
         type: 'error',
         title: t('common.error', 'Xatolik'),
@@ -1162,7 +1162,7 @@ export function TeacherCockpitPage() {
       queryClient.invalidateQueries({ queryKey: ['teacher-cockpit-lesson-detail', activeLessonId] });
       queryClient.invalidateQueries({ queryKey: ['teacher-cockpit-lessons'] });
     },
-    onError: (err: any) => {
+    onError: (err) => {
       push({
         type: 'error',
         title: t('common.error', 'Xatolik'),
@@ -1174,12 +1174,26 @@ export function TeacherCockpitPage() {
   const createHomeworkMutation = useMutation({
     mutationFn: async () => {
       if (!activeDetail) return;
+      const trimmedTitle = homeworkTitle.trim();
+      if (!trimmedTitle) {
+        throw new Error(t('homework.titleRequired', 'Uy vazifasi sarlavhasi kiritilishi shart'));
+      }
+      let dueIso: string;
+      if (homeworkDueDate) {
+        const d = new Date(`${homeworkDueDate}T23:59:59`);
+        dueIso = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        d.setHours(23, 59, 59, 999);
+        dueIso = d.toISOString();
+      }
       await assignmentsApi.create({
         groupId: activeDetail.groupId,
         lessonId: activeDetail.id,
-        title: homeworkTitle.trim(),
+        title: trimmedTitle,
         description: homeworkDescription.trim() || undefined,
-        dueDate: new Date(homeworkDueDate).toISOString(),
+        dueDate: dueIso,
       });
     },
     onSuccess: () => {
@@ -1193,7 +1207,7 @@ export function TeacherCockpitPage() {
       setShowHomeworkForm(false);
       queryClient.invalidateQueries({ queryKey: ['teacher-cockpit-lesson-detail', activeLessonId] });
     },
-    onError: (err: any) => {
+    onError: (err) => {
       push({
         type: 'error',
         title: t('common.error', 'Xatolik'),
@@ -1237,7 +1251,7 @@ export function TeacherCockpitPage() {
       queryClient.invalidateQueries({ queryKey: ['teacher-cockpit-lesson-detail', activeLessonId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'stats'] });
     },
-    onError: (err: any) => {
+    onError: (err) => {
       push({
         type: 'error',
         title: t('common.error', 'Xatolik'),

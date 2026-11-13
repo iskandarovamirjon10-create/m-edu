@@ -2066,7 +2066,11 @@ export class AttendanceDecisionEngine {
     this.notificationEvents
       .emit({
         organizationId,
-        type: 'ATTENDANCE_MARKED_PRESENT',
+        // A late arrival must not be announced to parents as "present".
+        type:
+          payload.status === 'LATE'
+            ? 'ATTENDANCE_MARKED_LATE'
+            : 'ATTENDANCE_MARKED_PRESENT',
         occurredAt: payload.recognizedAt.toISOString(),
         entityType: 'Attendance',
         entityId: payload.attendanceId,
@@ -2078,7 +2082,7 @@ export class AttendanceDecisionEngine {
       })
       .catch((e: unknown) =>
         this.logger.warn(
-          'Failed to emit ATTENDANCE_MARKED_PRESENT notification',
+          'Failed to emit ATTENDANCE_MARKED notification',
           { error: getErrorMessage(e) },
         ),
       );

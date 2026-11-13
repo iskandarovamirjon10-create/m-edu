@@ -477,7 +477,7 @@ export function LibraryPage() {
   // Query Data
   const booksQuery = useQuery({
     queryKey: ['library-books'],
-    queryFn: () => libraryApi.listBooks({ limit: 100 }),
+    queryFn: () => libraryApi.listBooks({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -1104,7 +1104,7 @@ export function LibraryPage() {
                               e.stopPropagation();
                               handleOpenBookSidecar(book);
                             }}
-                            className="min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1.5"
+                            className="min-h-10 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1.5"
                             title="Inspect in macOS Sidecar"
                             aria-label="Open Sidecar inspection"
                           >
@@ -1115,7 +1115,7 @@ export function LibraryPage() {
                             onClick={() => openModal(book)}
                             variant="ghost"
                             size="sm"
-                            className="min-h-[40px] rounded-xl text-xs px-3"
+                            className="min-h-10 rounded-xl text-xs px-3"
                             aria-label={t('common.edit') || 'Edit'}
                           >
                             <Icon paths={I.edit} size={13} />
@@ -1129,7 +1129,7 @@ export function LibraryPage() {
                             variant="danger"
                             size="sm"
                             disabled={removeMutation.isPending && removeMutation.variables === book.id}
-                            className="min-h-[40px] rounded-xl text-xs px-3"
+                            className="min-h-10 rounded-xl text-xs px-3"
                             aria-label={t('common.delete') || 'Delete'}
                           >
                             <Icon paths={I.trash} size={13} />

@@ -203,6 +203,94 @@ export function createTeachersTools(
         } as any);
         return { success: true, teacherId: result.id };
       },
-    }
+    },
+    {
+      name: 'teachers.performance_review',
+      description:
+        "O'qituvchilarning pedagogik va operatsion samaradorlik audit reytingi: guruhlar soni, o'quvchilar soni, dars yuklamasi, davomat ko'rsatkichi va o'quvchilarni ushlab qolish (retention) sifati.",
+      inputSchema: z.object({
+        limit: z.number().int().min(1).max(25).optional(),
+      }),
+      riskLevel: AiToolRiskLevel.LOW,
+      requiresConfirmation: false,
+      permission: AiPermission.TEACHERS_READ,
+      execute: async (input: { limit?: number }, context) => {
+        const rows = await (prisma.teacher.findMany as any)({
+          where: { organizationId: context.organizationId },
+          include: {
+            user: {
+              select: { firstName: true, lastName: true, email: true, phone: true },
+            },
+            groups: {
+              select: {
+                id: true,
+                name: true,
+                isActive: true,
+                students: {
+                  select: {
+                    studentId: true,
+                  },
+                },
+                attendance: {
+                  take: 60,
+                  select: { status: true },
+                },
+              },
+            },
+          },
+          take: input.limit ?? 15,
+        });
+
+        const scoredTeachers = (rows as any[]).map((t: any) => {
+          let totalStudents = 0;
+          let activeStudents = 0;
+          let attPresent = 0;
+          let attTotal = 0;
+
+          const teacherGroups = t.groups || [];
+          for (const g of teacherGroups) {
+            const stList = g.students || [];
+            totalStudents += stList.length;
+            activeStudents += stList.length;
+            const attList = g.attendance || [];
+            for (const att of attList) {
+              attTotal++;
+              if (att.status === 'PRESENT') attPresent++;
+            }
+          }
+
+          const retentionRate = totalStudents > 0 ? Math.round((activeStudents / totalStudents) * 100) : 100;
+          const attendanceRate = attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 100;
+          const overallScore = Math.round(retentionRate * 0.6 + attendanceRate * 0.4);
+
+          const performanceTier =
+            overallScore >= 90 ? 'STAR' : overallScore >= 75 ? 'CORE' : 'NEEDS_ATTENTION';
+
+          const tName = [t.user?.firstName, t.user?.lastName].filter(Boolean).join(' ') || "O'qituvchi";
+          return {
+            teacherId: t.id,
+            name: tName,
+            email: t.user?.email || null,
+            phone: t.user?.phone || null,
+            groupsCount: teacherGroups.length,
+            totalStudents,
+            activeStudents,
+            retentionRate,
+            attendanceRate,
+            overallScore,
+            performanceTier,
+          };
+        });
+
+        scoredTeachers.sort((a, b) => b.overallScore - a.overallScore);
+
+        return {
+          totalEvaluated: scoredTeachers.length,
+          topPerformersCount: scoredTeachers.filter((t) => t.performanceTier === 'STAR').length,
+          attentionNeededCount: scoredTeachers.filter((t) => t.performanceTier === 'NEEDS_ATTENTION').length,
+          teachers: scoredTeachers,
+        };
+      },
+    },
   ];
 }

@@ -300,7 +300,7 @@ function readRect(el: HTMLElement): CachedRect {
  * OPTICAL REFRACTION — pointer sheen + chromatic rim, zero React re-renders
  * ════════════════════════════════════════════════════════════════════════ */
 
-function useOpticalRefraction(initialX = 160, initialY = 30) {
+function useOpticalRefraction(initialX = 160, initialY = 30, enabled = true) {
   const x = useMotionValue(initialX);
   const y = useMotionValue(initialY);
   const opacity = useSpring(0, { stiffness: 280, damping: 28 });
@@ -310,6 +310,7 @@ function useOpticalRefraction(initialX = 160, initialY = 30) {
   const rectRef = useRef<CachedRect | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const invalidate = () => {
       rectRef.current = null;
     };
@@ -319,15 +320,20 @@ function useOpticalRefraction(initialX = 160, initialY = 30) {
       window.removeEventListener('scroll', invalidate, true);
       window.removeEventListener('resize', invalidate);
     };
-  }, []);
+  }, [enabled]);
 
-  const measure = useCallback((e: ReactPointerEvent<HTMLElement>) => {
-    const el = e.currentTarget as HTMLElement | null;
-    if (el) rectRef.current = readRect(el);
-  }, []);
+  const measure = useCallback(
+    (e: ReactPointerEvent<HTMLElement>) => {
+      if (!enabled) return;
+      const el = e.currentTarget as HTMLElement | null;
+      if (el) rectRef.current = readRect(el);
+    },
+    [enabled],
+  );
 
   const track = useCallback(
     (e: ReactPointerEvent<HTMLElement>) => {
+      if (!enabled) return;
       const el = e.currentTarget as HTMLElement | null;
       if (!el) return;
       if (!rectRef.current) rectRef.current = readRect(el);
@@ -336,7 +342,7 @@ function useOpticalRefraction(initialX = 160, initialY = 30) {
       y.set(e.clientY - r.top);
       opacity.set(1);
     },
-    [x, y, opacity],
+    [enabled, x, y, opacity],
   );
 
   const release = useCallback(() => opacity.set(0), [opacity]);
@@ -379,9 +385,11 @@ function useStableSound() {
 const FOCUS_RING =
   'outline-none focus-visible:ring-2 focus-visible:ring-apple-blue/70 focus-visible:ring-offset-0';
 
+// PERF: dock/sheet fixed sirt — scroll paytida har kadrda qayta blur bo‘ladi.
+// 64 px → 24 px: ko‘z ilg‘amaydi, GPU yuki esa bir necha barobar kam.
 const GLASS_SLAB = cn(
-  'border border-white/75 bg-white/[0.72]',
-  'backdrop-blur-3xl backdrop-saturate-[220%]',
+  'border border-white/75 bg-white/[0.78]',
+  'backdrop-blur-xl backdrop-saturate-150',
   'shadow-[0_20px_50px_-8px_rgba(0,0,0,0.16),0_6px_20px_-2px_rgba(0,0,0,0.08),inset_0_1.5px_1px_0_rgba(255,255,255,0.98),inset_0_-1px_1px_0_rgba(0,122,255,0.08)]',
   'dark:border-white/[0.16] dark:bg-[#16161a]/[0.80]',
   'dark:shadow-[0_24px_60px_-8px_rgba(0,0,0,0.75),0_8px_24px_-2px_rgba(0,0,0,0.5),inset_0_1.5px_1px_0_rgba(255,255,255,0.25),inset_0_-1px_1px_0_rgba(90,200,250,0.12)]',
@@ -391,8 +399,8 @@ const GLASS_SOLID =
   'border border-black/[0.08] bg-[var(--bg-card)] dark:border-white/[0.14]';
 
 const GLASS_DRAWER = cn(
-  'border border-white/65 bg-white/[0.84]',
-  'backdrop-blur-3xl backdrop-saturate-[210%]',
+  'border border-white/65 bg-white/[0.88]',
+  'backdrop-blur-xl backdrop-saturate-150',
   'shadow-[inset_0_1.5px_0_rgba(255,255,255,0.96),inset_0_-1px_0_rgba(0,122,255,0.15),0_24px_52px_-12px_rgba(0,0,0,0.3),0_4px_16px_-4px_rgba(0,0,0,0.12)]',
   'dark:border-white/[0.16] dark:bg-[#141418]/[0.90]',
   'dark:shadow-[inset_0_1.5px_0_rgba(255,255,255,0.24),inset_0_-1px_0_rgba(10,132,255,0.18),0_28px_60px_-12px_rgba(0,0,0,0.75),0_6px_20px_-4px_rgba(0,0,0,0.45)]',
@@ -405,13 +413,10 @@ const GLASS_CHIP = cn(
   'hover:bg-black/[0.08] dark:hover:bg-white/[0.15]',
 );
 
-const LENS_ACTIVE = cn(
-  'border border-white/80 bg-white/[0.84]',
-  'backdrop-blur-2xl backdrop-saturate-[210%]',
-  'shadow-[0_0_20px_rgba(0,122,255,0.2),0_4px_16px_rgba(0,0,0,0.08),0_1px_4px_rgba(0,0,0,0.04),inset_0_1.5px_1px_rgba(255,255,255,1),inset_0_-1px_1px_rgba(0,122,255,0.18)]',
-  'dark:border-white/[0.24] dark:bg-white/[0.18]',
-  'dark:shadow-[0_0_24px_rgba(10,132,255,0.35),0_6px_22px_rgba(0,0,0,0.5),inset_0_1.5px_1px_rgba(255,255,255,0.4),inset_0_-1px_1px_rgba(90,200,250,0.3)]',
-);
+// Aktiv linza: nested backdrop-filter YO‘Q (u eng qimmat compositing
+// yo‘llaridan biri). Chuqurlik va shisha qalinligi gradient + ichki
+// soyalar + spekulyar rim bilan beriladi — batafsil `globals.css`da.
+const LENS_ACTIVE = 'lg-dock-lens';
 
 const TAB_IDLE = 'text-[#8E8E93] dark:text-[#98989D]';
 const TAB_ACTIVE = 'text-[#007AFF] dark:text-[#0A84FF]';
@@ -449,7 +454,9 @@ const SheenLayer = memo(function SheenLayer({
   // Continuous drift is a luxury: skip it on low-power devices so the dock
   // never competes with page scrolling for the compositor.
   const profile = useDeviceProfile();
-  const canDrift = driftEnabled && !profile.lowPowerMode;
+  // Touch qurilmalarda doimiy drift + mix-blend har kadrda compositing
+  // talab qiladi. Telefonda bu effekt deyarli ko‘rinmaydi — o‘chiramiz.
+  const canDrift = driftEnabled && profile.hoverCapable && !profile.lowPowerMode;
   const warmAnim = canDrift
     ? { x: [-10, 10, -10], y: [-8, 5, -8], scale: [1, 1.04, 1] }
     : undefined;
@@ -516,6 +523,51 @@ const TopSpecular = memo(function TopSpecular({
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+ * DOCK LENS — active tab pill (bitta manba: tab ham, “More” ham shundan)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+const DockLens = memo(function DockLens({
+  reduced,
+  reducedTransparency,
+}: {
+  reduced: boolean;
+  reducedTransparency: boolean;
+}) {
+  return (
+    <motion.div
+      layoutId="dock-lens-active"
+      transition={
+        reduced ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 30, mass: 0.65 }
+      }
+      aria-hidden="true"
+      className={cn('absolute inset-0.5 z-0 overflow-hidden rounded-full', LENS_ACTIVE)}
+    >
+      {!reducedTransparency && (
+        <>
+          <span aria-hidden="true" className="lg-lens-rim" />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-3 top-0 h-[1px] rounded-full bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/70"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-1 top-0 h-3 w-4 rounded-full bg-gradient-to-br from-white/95 via-[#5AC8FA]/45 to-transparent blur-[1px] dark:from-white/50 dark:via-[#5AC8FA]/30"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-1 top-0 h-3 w-4 rounded-full bg-gradient-to-bl from-[#5E5CE6]/45 via-white/45 to-transparent blur-[1px] dark:from-[#5E5CE6]/30 dark:via-white/20"
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-3.5 bottom-0 h-[1px] rounded-full bg-gradient-to-r from-transparent via-apple-blue/60 to-transparent dark:via-[#5AC8FA]/60"
+          />
+        </>
+      )}
+    </motion.div>
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
  * 1. MOBILE BOTTOM NAV
  * ════════════════════════════════════════════════════════════════════════ */
 
@@ -535,9 +587,14 @@ export const MobileBottomNav = memo(function MobileBottomNav({
   const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
+  const canHover = useDeviceProfile().hoverCapable;
 
-  /* ── Optical refraction: pointer sheen on dock surface ── */
-  const { bind: refrBind, sheen, rim, opacity: refrOpacity } = useOpticalRefraction(180, 28);
+  /* ── Optical refraction: faqat sichqoncha/stylus uchun ── */
+  const { bind: refrBind, sheen, rim, opacity: refrOpacity } = useOpticalRefraction(
+    180,
+    28,
+    canHover,
+  );
   useLiquidDefs(!reducedTransparency);
 
   /* ── Recede while reading down, return on scroll up / route change ── */
@@ -589,36 +646,44 @@ export const MobileBottomNav = memo(function MobileBottomNav({
     const customEl = scrollContainerRef?.current;
     const target: HTMLElement | Window = customEl ?? window;
 
-    const getMetrics = () => {
-      if (customEl) {
-        return {
-          y: customEl.scrollTop,
-          clientHeight: customEl.clientHeight,
-          scrollHeight: customEl.scrollHeight,
-        };
-      }
-      const doc = document.documentElement;
-      return {
-        y: window.scrollY || doc.scrollTop,
-        clientHeight: window.innerHeight,
-        scrollHeight: doc.scrollHeight,
-      };
-    };
+    // PERF: scroll paytida `scrollHeight`/`clientHeight` o‘qish layoutni
+    // majburan hisoblattiradi. Endi: bitta rAF, avval faqat scrollTop,
+    // qolgan o‘lchamlar esa faqat haqiqatan kerak bo‘lganda o‘qiladi.
+    const getScrollTop = () =>
+      customEl ? customEl.scrollTop : window.scrollY || document.documentElement.scrollTop;
 
-    const onScroll = () => {
-      const { y, clientHeight, scrollHeight } = getMetrics();
+    let rafId = 0;
+    const update = () => {
+      rafId = 0;
+      const y = getScrollTop();
       const delta = y - lastScrollRef.current;
       if (Math.abs(delta) < 8) return;
       lastScrollRef.current = y;
 
       const atTop = y <= 72;
+      if (atTop) {
+        setDockHidden(false);
+        return;
+      }
+      const clientHeight = customEl ? customEl.clientHeight : window.innerHeight;
+      const scrollHeight = customEl
+        ? customEl.scrollHeight
+        : document.documentElement.scrollHeight;
       const atBottom = y + clientHeight >= scrollHeight - 36;
-      if (atTop || atBottom || delta < 0) setDockHidden(false);
+      if (atBottom || delta < 0) setDockHidden(false);
       else if (y > 180) setDockHidden(true);
     };
 
+    const onScroll = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(update);
+    };
+
     target.addEventListener('scroll', onScroll, { passive: true });
-    return () => target.removeEventListener('scroll', onScroll);
+    return () => {
+      target.removeEventListener('scroll', onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, [scrollContainerRef, reduced]);
 
   const revealDock = useCallback(() => setDockHidden(false), []);
@@ -712,15 +777,29 @@ export const MobileBottomNav = memo(function MobileBottomNav({
           )}
         >
           <div
-            {...(reducedTransparency ? {} : refrBind)}
+            {...(reducedTransparency || !canHover ? {} : refrBind)}
             className={cn(
               'relative overflow-hidden rounded-full',
-              reducedTransparency ? GLASS_SOLID : GLASS_SLAB,
+              reducedTransparency ? GLASS_SOLID : 'lg-dock-surface',
             )}
           >
-            {/* ── Liquid Glass optical layers ── */}
+            {/* ── Liquid Glass optical layers (barchasi statik) ── */}
             {!reducedTransparency && (
               <>
+                {/* Egri yuza gloss + pastki qaytgan yorug‘lik */}
+                <span aria-hidden="true" className="lg-dock-gloss" />
+                <span aria-hidden="true" className="lg-dock-underlight" />
+
+                {/* Chap/o‘ng qirra refraktsiyasi (xromatik dispersiya) */}
+                <span
+                  aria-hidden="true"
+                  className="lg-dock-edge lg-dock-edge--l"
+                />
+                <span
+                  aria-hidden="true"
+                  className="lg-dock-edge lg-dock-edge--r"
+                />
+
                 <SheenLayer
                   sheen={sheen}
                   rim={rim}
@@ -729,11 +808,11 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                   withRim
                   withRefract={false}
                 />
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-8 top-0 z-20 h-px bg-gradient-to-r from-transparent via-white/85 to-transparent dark:via-white/35"
-                />
-                <TopSpecular inset="inset-x-8" />
+
+                <TopSpecular inset="inset-x-10" />
+
+                {/* 1 px spekulyar rim */}
+                <span aria-hidden="true" className="lg-dock-rim" />
               </>
             )}
 
@@ -755,40 +834,10 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                       {({ isActive }) => (
                         <>
                           {isActive && (
-                            <motion.div
-                              layoutId="dock-lens-active"
-                              transition={
-                                reduced
-                                  ? { duration: 0.15 }
-                                  : { type: 'spring', stiffness: 420, damping: 30, mass: 0.65 }
-                              }
-                              aria-hidden="true"
-                              className={cn(
-                                'absolute inset-0.5 z-0 overflow-hidden rounded-full',
-                                LENS_ACTIVE,
-                              )}
-                            >
-                              {!reducedTransparency && (
-                                <>
-                                  <span
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute inset-x-2.5 top-0 h-[1.5px] rounded-full bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/80"
-                                  />
-                                  <span
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute -left-1 top-0 h-3 w-4 rounded-full bg-gradient-to-br from-white/90 via-[#5AC8FA]/40 to-transparent blur-[1px] dark:from-white/50 dark:via-[#5AC8FA]/30"
-                                  />
-                                  <span
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute -right-1 top-0 h-3 w-4 rounded-full bg-gradient-to-bl from-[#5E5CE6]/40 via-white/40 to-transparent blur-[1px] dark:from-[#5E5CE6]/30 dark:via-white/20"
-                                  />
-                                  <span
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute inset-x-3.5 bottom-0 h-[1px] rounded-full bg-gradient-to-r from-transparent via-apple-blue/50 to-transparent dark:via-[#5AC8FA]/60"
-                                  />
-                                </>
-                              )}
-                            </motion.div>
+                            <DockLens
+                              reduced={reduced}
+                              reducedTransparency={reducedTransparency}
+                            />
                           )}
 
                           <motion.div
@@ -852,40 +901,10 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                     )}
                   >
                     {!isTabActive && (
-                      <motion.div
-                        layoutId="dock-lens-active"
-                        transition={
-                          reduced
-                            ? { duration: 0.15 }
-                            : { type: 'spring', stiffness: 420, damping: 30, mass: 0.65 }
-                        }
-                        aria-hidden="true"
-                        className={cn(
-                          'absolute inset-0.5 z-0 overflow-hidden rounded-full',
-                          LENS_ACTIVE,
-                        )}
-                      >
-                        {!reducedTransparency && (
-                          <>
-                            <span
-                              aria-hidden="true"
-                              className="pointer-events-none absolute inset-x-2.5 top-0 h-[1.5px] rounded-full bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/80"
-                            />
-                            <span
-                              aria-hidden="true"
-                              className="pointer-events-none absolute -left-1 top-0 h-3 w-4 rounded-full bg-gradient-to-br from-white/90 via-[#5AC8FA]/40 to-transparent blur-[1px] dark:from-white/50 dark:via-[#5AC8FA]/30"
-                            />
-                            <span
-                              aria-hidden="true"
-                              className="pointer-events-none absolute -right-1 top-0 h-3 w-4 rounded-full bg-gradient-to-bl from-[#5E5CE6]/40 via-white/40 to-transparent blur-[1px] dark:from-[#5E5CE6]/30 dark:via-white/20"
-                            />
-                            <span
-                              aria-hidden="true"
-                              className="pointer-events-none absolute inset-x-3.5 bottom-0 h-[1px] rounded-full bg-gradient-to-r from-transparent via-apple-blue/50 to-transparent dark:via-[#5AC8FA]/60"
-                            />
-                          </>
-                        )}
-                      </motion.div>
+                      <DockLens
+                        reduced={reduced}
+                        reducedTransparency={reducedTransparency}
+                      />
                     )}
 
                     {!isTabActive && (
@@ -962,13 +981,14 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
   const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
+  const canHover = useDeviceProfile().hoverCapable;
 
   const {
     bind: drawerRefrBind,
     sheen: drawerSheen,
     rim: drawerRim,
     opacity: drawerRefrOpacity,
-  } = useOpticalRefraction(166, 40);
+  } = useOpticalRefraction(166, 40, canHover);
 
   // Keep the filter alive for the whole lifetime so exit animations never
   // lose their definition mid-flight.
@@ -1112,7 +1132,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
             className="absolute left-0 top-0 ml-[max(0.75rem,env(safe-area-inset-left,0px))] mt-[calc(0.75rem+env(safe-area-inset-top,0px))] h-[calc(100dvh-1.5rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(338px,88vw)] origin-left transform-gpu will-change-transform"
           >
             <div
-              {...(open && !reducedTransparency ? drawerRefrBind : {})}
+              {...(open && !reducedTransparency && canHover ? drawerRefrBind : {})}
               className={cn(
                 'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem]',
                 reducedTransparency ? GLASS_SOLID : GLASS_DRAWER,
@@ -1371,6 +1391,7 @@ export const MobileSearchSheet = memo(function MobileSearchSheet({
 
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
+  const canHover = useDeviceProfile().hoverCapable;
 
   // Keep the filter alive for the whole lifetime so exit animations never
   // lose their definition mid-flight.
@@ -1378,7 +1399,11 @@ export const MobileSearchSheet = memo(function MobileSearchSheet({
   useFocusTrap(containerRef, open, inputRef);
   useBodyScrollLock(open);
 
-  const { bind: searchRefrBind, sheen, rim, opacity } = useOpticalRefraction(200, 24);
+  const { bind: searchRefrBind, sheen, rim, opacity } = useOpticalRefraction(
+    200,
+    24,
+    canHover,
+  );
 
   useEffect(() => {
     if (open) {
@@ -1587,7 +1612,7 @@ export const MobileSearchSheet = memo(function MobileSearchSheet({
               />
             )}
 
-            <div {...(reducedTransparency ? {} : searchRefrBind)}>
+            <div {...(reducedTransparency || !canHover ? {} : searchRefrBind)}>
               <GlassSurface
                 tone="modal"
                 radius="2.1rem"

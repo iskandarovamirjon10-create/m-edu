@@ -43,7 +43,7 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
   const teacherName = teacher ? (fullName(teacher.user?.firstName, teacher.user?.lastName) || teacher.user?.phone || 'O‘qituvchi') : '';
   const isActive = teacher?.user?.isActive !== false;
   const groups = teacher?.groups || [];
-  const metrics = (teacher as any)?.metrics || {
+  const metrics = teacher?.metrics || {
     totalStudents: 0,
     weeklyHours: 0,
     groupsCount: groups.length,
@@ -59,7 +59,7 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
   }> = [];
 
   for (const group of groups) {
-    for (const schedule of (group as any).schedules || []) {
+    for (const schedule of group.schedules || []) {
       scheduleItems.push({
         day: DAY_NAMES[schedule.dayOfWeek] || schedule.dayOfWeek,
         startTime: schedule.startTime,
@@ -324,7 +324,7 @@ export const TeacherProfileDrawer = memo(function TeacherProfileDrawer({
                         {g.name}
                       </p>
                       <p className="text-[11px] text-slate-500 dark:text-white/50">
-                        {g.course?.name || 'Kurs nomi'} · {(g as any)._count?.enrollments ?? 0} o‘quvchi
+                        {g.course?.name || 'Kurs nomi'} · {g._count?.enrollments ?? 0} o‘quvchi
                       </p>
                     </div>
                   ))}

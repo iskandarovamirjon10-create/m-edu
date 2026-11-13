@@ -27,7 +27,6 @@ import {
   IconHistory,
   IconModels,
   IconMoon,
-  IconPlus,
   IconSearch,
   IconSidebarCollapse,
   IconSidebarExpand,
@@ -36,7 +35,6 @@ import {
   IconTrash,
 } from './copilotIcons';
 import {
-  CopilotButton,
   CopilotIconButton,
   CopilotKbd,
   CopilotSegmented,
@@ -552,14 +550,14 @@ export function AiCopilotHeader({
                   modelMenuOpen && 'border-[color:var(--cp-accent-line)] text-[color:var(--cp-text)]',
                 )}
               >
-                <IconModels size={13} className="text-[color:var(--cp-accent)]" />
-                <span className="max-w-[7.5rem] truncate">{selectedModel.label}</span>
-                <span className="rounded-[6px] bg-[color:var(--cp-accent-soft)] px-1 py-px text-[8.5px] font-bold uppercase tracking-wider text-[color:var(--cp-accent)]">
+                <IconModels size={13} className="shrink-0 text-[color:var(--cp-accent)]" />
+                <span className="truncate max-w-[8rem]">{selectedModel.label}</span>
+                <span className="shrink-0 rounded-[6px] bg-[color:var(--cp-accent-soft)] px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider text-[color:var(--cp-accent)]">
                   {selectedModel.badge}
                 </span>
                 <IconChevronDown
                   size={12}
-                  className={cn('opacity-60 transition-transform duration-200', modelMenuOpen && 'rotate-180')}
+                  className={cn('shrink-0 opacity-60 transition-transform duration-200', modelMenuOpen && 'rotate-180')}
                 />
               </button>
 
@@ -652,22 +650,7 @@ export function AiCopilotHeader({
             />
           )}
 
-          {onNewChat && (
-            <CopilotButton
-              variant="tint"
-              size="sm"
-              onClick={() => {
-                haptic('success');
-                onNewChat();
-              }}
-              aria-label={tr(t, 'ai.newChat', 'Yangi suhbat')}
-              aria-keyshortcuts="Meta+N Control+N"
-              className="!h-8 gap-1.5 rounded-[11px] px-2 text-[11.5px] sm:px-2.5"
-              icon={<IconPlus size={14} />}
-            >
-              <span className="hidden sm:inline">{tr(t, 'ai.newChat', 'Yangi suhbat')}</span>
-            </CopilotButton>
-          )}
+          {/* Secondary new chat button removed to eliminate duplication with sidebar action */}
 
           {onExportChat && (
             <CopilotIconButton

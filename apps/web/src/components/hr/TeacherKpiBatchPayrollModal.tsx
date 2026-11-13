@@ -25,6 +25,35 @@ interface TeacherKpiBatchPayrollModalProps {
   branchId?: string;
 }
 
+interface KpiSummary {
+  retentionRate?: number;
+  conductedHours?: number;
+  punctualityRate?: number;
+  activeGroupsCount?: number;
+}
+
+interface PayrollProposal {
+  teacherId?: string;
+  teacherName?: string;
+  specialization?: string;
+  baseSalary?: number;
+  groupRevenueShare?: number;
+  kpiBonus?: number;
+  deductions?: number;
+  totalGross?: number;
+  kpiSummary?: KpiSummary;
+}
+
+interface BatchCalculation {
+  proposals?: PayrollProposal[];
+  totalGrossAmount?: number;
+}
+
+interface BatchApprovalResult {
+  approvedCount?: number;
+  totalGrossAmount?: number;
+}
+
 export const TeacherKpiBatchPayrollModal: React.FC<TeacherKpiBatchPayrollModalProps> = ({
   isOpen,
   onClose,
@@ -45,7 +74,7 @@ export const TeacherKpiBatchPayrollModal: React.FC<TeacherKpiBatchPayrollModalPr
     data: calculationData,
     isLoading,
     refetch,
-  } = useQuery({
+  } = useQuery<BatchCalculation>({
     queryKey: ['teacher-kpi-batch', periodYear, periodMonth, branchId, commissionRate, retentionTarget],
     queryFn: () =>
       teacherKpiPayrollApi.calculateBatch({
@@ -54,37 +83,37 @@ export const TeacherKpiBatchPayrollModal: React.FC<TeacherKpiBatchPayrollModalPr
         branchId,
         commissionRatePercent: commissionRate,
         retentionTargetPercent: retentionTarget,
-      }),
+      }) as Promise<BatchCalculation>,
     enabled: isOpen,
     staleTime: 60_000,
   });
 
   const approveBatchMutation = useMutation({
-    mutationFn: (proposals: any[]) =>
+    mutationFn: (proposals: PayrollProposal[]) =>
       teacherKpiPayrollApi.approveBatch({
         periodYear,
         periodMonth,
         branchId,
         proposals,
-      }),
-    onSuccess: (res: any) => {
+      }) as Promise<BatchApprovalResult>,
+    onSuccess: (res: BatchApprovalResult) => {
       playSuccess();
       toast.success(
-        `Oylik maoshlar muvaffaqiyatli tasdiqlandi! ${res.approvedCount} ta o'qituvchining jami ${formatCurrency(res.totalGrossAmount)} to'lovi rasmiylashtirildi.`
+        `Oylik maoshlar muvaffaqiyatli tasdiqlandi! ${res.approvedCount ?? 0} ta o'qituvchining jami ${formatCurrency(res.totalGrossAmount ?? 0)} to'lovi rasmiylashtirildi.`
       );
       queryClient.invalidateQueries({ queryKey: ['teacher-kpi-batch'] });
       queryClient.invalidateQueries({ queryKey: ['payroll'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-runs'] });
       onClose();
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || "Oylik maoshlarni tasdiqlashda xatolik yuz berdi");
     },
   });
 
-  const proposals = calculationData?.proposals || [];
-  const totalPayout = calculationData?.totalGrossAmount || 0;
+  const proposals: PayrollProposal[] = calculationData?.proposals ?? [];
+  const totalPayout = calculationData?.totalGrossAmount ?? 0;
 
   const handleApproveAll = () => {
     if (proposals.length === 0) return;
@@ -201,7 +230,7 @@ export const TeacherKpiBatchPayrollModal: React.FC<TeacherKpiBatchPayrollModalPr
             <div className="text-lg font-bold text-emerald-500 mt-1">
               {proposals.length > 0
                 ? Math.round(
-                    proposals.reduce((acc: number, p: any) => acc + (p.kpiSummary?.retentionRate || 0), 0) /
+                    proposals.reduce((acc, p) => acc + (p.kpiSummary?.retentionRate || 0), 0) /
                       proposals.length
                   )
                 : 0}

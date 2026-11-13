@@ -16,6 +16,32 @@ interface StudentRecord {
   status: AttendanceStatus;
 }
 
+interface QuickGroup {
+  id: string;
+  name?: string;
+  isActive?: boolean;
+  room?: string | null;
+  course?: { name?: string } | null;
+}
+
+interface GroupStudentItem {
+  id?: string;
+  name?: string;
+  phone?: string;
+  student?: {
+    id?: string;
+    name?: string;
+    phone?: string;
+    user?: { firstName?: string; lastName?: string; phone?: string };
+  };
+  user?: { firstName?: string; lastName?: string; phone?: string };
+}
+
+interface GroupDetailsResponse {
+  students?: GroupStudentItem[];
+  enrollments?: GroupStudentItem[];
+}
+
 export function QuickAttendanceModal() {
   const { t } = useSafeI18n();
   const queryClient = useQueryClient();
@@ -28,7 +54,7 @@ export function QuickAttendanceModal() {
   // Fetch groups
   const { data: groupsData } = useQuery({
     queryKey: ['quick-attendance-groups'],
-    queryFn: () => groupsApi.list({ limit: 100 }) as Promise<{ items?: any[] } | any[]>,
+    queryFn: () => groupsApi.list({ limit: 500 }) as Promise<{ items?: QuickGroup[] } | QuickGroup[]>,
     enabled: open,
     staleTime: 60000,
   });
@@ -38,7 +64,7 @@ export function QuickAttendanceModal() {
     [groupsData],
   );
   const groups = useMemo(
-    () => rawGroups.filter((g: any) => g && g.isActive !== false),
+    () => rawGroups.filter((g) => g && g.isActive !== false),
     [rawGroups],
   );
 
@@ -52,7 +78,7 @@ export function QuickAttendanceModal() {
   // Fetch selected group details to get enrolled students
   const { data: groupDetails, isFetching: loadingStudents } = useQuery({
     queryKey: ['quick-attendance-group-details', selectedGroupId],
-    queryFn: () => groupsApi.get(selectedGroupId) as Promise<any>,
+    queryFn: () => groupsApi.get(selectedGroupId) as Promise<GroupDetailsResponse>,
     enabled: open && Boolean(selectedGroupId),
     staleTime: 30000,
   });
@@ -67,8 +93,10 @@ export function QuickAttendanceModal() {
     };
   }, [open]);
 
-  // Populate records when groupDetails arrive
+  // Populate records when groupDetails arrive (and reset stale statuses every
+  // time the modal is opened again, even when the query result is cached).
   useEffect(() => {
+    if (!open) return;
     if (groupDetails?.students || groupDetails?.enrollments) {
       const list = groupDetails.students || groupDetails.enrollments || [];
       if (!Array.isArray(list)) {
@@ -97,7 +125,7 @@ export function QuickAttendanceModal() {
     } else {
       setRecords([]);
     }
-  }, [groupDetails]);
+  }, [groupDetails, open]);
 
   const handleMarkAll = (status: AttendanceStatus) => {
     setRecords((prev) => prev.map((r) => ({ ...r, status })));
@@ -160,7 +188,7 @@ export function QuickAttendanceModal() {
 
       setOpen(false);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       push('error', err?.message || 'Davomatni saqlashda xatolik yuz berdi');
     },
   });
@@ -183,9 +211,18 @@ export function QuickAttendanceModal() {
       }
 
       if (e.key === 'Enter' && !saveAttendance.isPending && records.length > 0) {
-        // Don't trigger if focus is on a select or input
+        // Don't hijack Enter on form controls/buttons — otherwise pressing
+        // Enter on "Cancel" both closes the modal and saves attendance.
         const target = e.target as HTMLElement | null;
-        if (target?.tagName !== 'SELECT' && target?.tagName !== 'INPUT') {
+        const tag = target?.tagName;
+        const isControl =
+          tag === 'SELECT' ||
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'BUTTON' ||
+          tag === 'A' ||
+          Boolean(target?.isContentEditable);
+        if (!isControl) {
           e.preventDefault();
           saveAttendance.mutate();
         }
@@ -219,6 +256,9 @@ export function QuickAttendanceModal() {
       onClick={() => setOpen(false)}
     >
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-attendance-title"
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -239,7 +279,7 @@ export function QuickAttendanceModal() {
               📋
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              <h2 id="quick-attendance-title" className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 {t('quickAttendance.title', 'Tezkor Davomat (Express Mode)')}
                 <span className="rounded-full bg-indigo-500/15 border border-indigo-500/30 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
                   Fast Tap
@@ -253,7 +293,8 @@ export function QuickAttendanceModal() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 hover:text-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
+            aria-label={t('common.close', 'Yopish')}
+            className="flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 hover:text-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
           >
             ✕
           </button>
@@ -261,15 +302,18 @@ export function QuickAttendanceModal() {
 
         {/* Group Selector */}
         <div className="mb-4 shrink-0">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+          <label htmlFor="quick-attendance-group-select" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
             {t('quickAttendance.selectGroup', 'Guruhni tanlang')}
           </label>
           <select
+            id="quick-attendance-group-select"
+            name="quick-attendance-group-select"
+            aria-label={t('quickAttendance.selectGroup', 'Guruhni tanlang')}
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
             className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-2.5 text-base sm:text-sm text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 dark:border-white/10 dark:bg-white/5 dark:text-white"
           >
-            {groups.map((g: any) => (
+            {groups.map((g) => (
               <option key={g.id} value={g.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
                 {g.name} {g.course?.name ? `(${g.course.name})` : ''} {g.room ? `• Xona: ${g.room}` : ''}
               </option>
@@ -286,21 +330,21 @@ export function QuickAttendanceModal() {
             <button
               type="button"
               onClick={() => handleMarkAll('PRESENT')}
-              className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
+              className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 min-h-[44px] text-xs font-semibold text-emerald-700 hover:bg-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
             >
               🟢 {t('quickAttendance.markPresent', 'Keldi')}
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('EXCUSED')}
-              className="rounded-xl bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:hover:bg-sky-500/30 transition-colors flex items-center gap-1"
+              className="rounded-xl bg-sky-500/10 border border-sky-500/30 px-3 py-2 min-h-[44px] text-xs font-semibold text-sky-700 hover:bg-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:hover:bg-sky-500/30 transition-colors flex items-center gap-1"
             >
               🔵 {t('quickAttendance.markExcused', 'Sababli')}
             </button>
             <button
               type="button"
               onClick={() => handleMarkAll('ABSENT')}
-              className="rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-1.5 min-h-[36px] text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
+              className="rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2 min-h-[44px] text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 transition-colors flex items-center gap-1"
             >
               🔴 {t('quickAttendance.markAbsent', 'Kelmadi')}
             </button>
@@ -370,7 +414,7 @@ export function QuickAttendanceModal() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded-2xl border border-black/10 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-black/5 hover:text-slate-900 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
+            className="min-h-[44px] rounded-2xl border border-black/10 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-black/5 hover:text-slate-900 dark:border-white/10 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
           >
             {t('common.cancel', 'Bekor qilish')}
           </button>
@@ -381,7 +425,7 @@ export function QuickAttendanceModal() {
               saveAttendance.mutate();
             }}
             disabled={saveAttendance.isPending || records.length === 0}
-            className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 py-3 font-bold text-white shadow-xl shadow-indigo-500/25 hover:from-indigo-400 hover:to-purple-500 active:scale-[0.98] transition-all disabled:opacity-50"
+            className="flex-1 min-h-[44px] flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 py-3 font-bold text-white shadow-xl shadow-indigo-500/25 hover:from-indigo-400 hover:to-purple-500 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {saveAttendance.isPending ? (
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />

@@ -118,8 +118,8 @@ export function CashierZReportModal({
       queryClient.invalidateQueries({ queryKey: ['cashier-current-shift'] });
       queryClient.invalidateQueries({ queryKey: ['cashier-z-report-summary'] });
     },
-    onError: (err: any) => {
-      push('error', err?.message || 'Smenani ochishda xatolik yuz berdi');
+    onError: (err) => {
+      push('error', err.message || 'Smenani ochishda xatolik yuz berdi');
     },
   });
 
@@ -142,8 +142,8 @@ export function CashierZReportModal({
       queryClient.invalidateQueries({ queryKey: ['cashier-z-reports-history'] });
       onShiftClosed?.(data);
     },
-    onError: (err: any) => {
-      push('error', err?.message || 'Kassa smenasini yopishda xatolik yuz berdi');
+    onError: (err) => {
+      push('error', err.message || 'Kassa smenasini yopishda xatolik yuz berdi');
     },
   });
 
@@ -246,7 +246,7 @@ export function CashierZReportModal({
               <div className="border-t border-b border-dashed border-white/20 py-2 space-y-1.5 text-[11px]">
                 <div className="flex justify-between font-bold text-white print:text-black">
                   <span>BOSHLANG'ICH QOLDIQ:</span>
-                  <span>{formatCurrency((closedReport as any).openingBalance || 0)}</span>
+                  <span>{formatCurrency(closedReport.openingBalance || 0)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-white print:text-black pt-1">
                   <span>JAMI TUSHUM:</span>
@@ -296,10 +296,10 @@ export function CashierZReportModal({
                     {formatCurrency(closedReport.variance)}
                   </span>
                 </div>
-                {(closedReport as any).handoverAmount > 0 && (
+                {(closedReport.handoverAmount ?? 0) > 0 && (
                   <div className="flex justify-between border-t border-dashed border-white/20 pt-1 text-sky-400 font-semibold">
                     <span>Topshirilgan summa (Inkassatsiya):</span>
-                    <span>{formatCurrency((closedReport as any).handoverAmount)}</span>
+                    <span>{formatCurrency(closedReport.handoverAmount ?? 0)}</span>
                   </div>
                 )}
               </div>

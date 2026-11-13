@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GlassPageHeader } from '@/components/ui';
+import { useSafeI18n } from '@/i18n/I18nProvider';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/GlassToast';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -112,34 +113,23 @@ function accentOf(value: string): Accent {
   return (ACCENT_KEYS as string[]).includes(value) ? (value as Accent) : 'indigo';
 }
 
-const RATING_META: Record<
-  Rating,
-  { label: string; hint: string; className: string; key: string }
-> = {
+const RATING_META: Record<Rating, { className: string; key: string }> = {
   again: {
-    label: 'Qayta',
-    hint: '10 daqiqadan keyin',
     className:
       'border-[#E05776]/25 bg-[#E05776]/[0.07] text-[#A93050] hover:bg-[#E05776]/[0.12] dark:text-[#F5B3C3]',
     key: '1',
   },
   hard: {
-    label: 'Qiyin',
-    hint: 'Interval sekin o‘sadi',
     className:
       'border-[#E0A32E]/25 bg-[#E0A32E]/[0.07] text-[#9A6B10] hover:bg-[#E0A32E]/[0.12] dark:text-[#F3D79B]',
     key: '2',
   },
   good: {
-    label: 'Yaxshi',
-    hint: 'Reja bo‘yicha',
     className:
       'border-[#22A06B]/25 bg-[#22A06B]/[0.07] text-[#177A50] hover:bg-[#22A06B]/[0.12] dark:text-[#9BE3C4]',
     key: '3',
   },
   easy: {
-    label: 'Oson',
-    hint: 'Interval tezroq o‘sadi',
     className:
       'border-[#5B6CFF]/25 bg-[#5B6CFF]/[0.07] text-[#4350C9] hover:bg-[#5B6CFF]/[0.12] dark:text-[#A7B0FF]',
     key: '4',
@@ -153,10 +143,6 @@ function formatClock(totalSeconds: number): string {
   const minutes = Math.floor(safe / 60);
   const seconds = safe % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
-
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
 }
 
 /* ── Small surface pieces ───────────────────────────────────────────── */
@@ -267,6 +253,7 @@ function FocusTimer({
   onSave: (minutes: number) => void;
   saving: boolean;
 }) {
+  const { t } = useSafeI18n();
   const [preset, setPreset] = useState<number>(25);
   const [secondsLeft, setSecondsLeft] = useState(25 * 60);
   const [running, setRunning] = useState(false);
@@ -307,11 +294,19 @@ function FocusTimer({
   };
 
   const finishNow = () => {
+    if (elapsed < 60) return;
     const earned = Math.max(1, Math.round(elapsed / 60));
-    if (earned < 1) return;
     setRunning(false);
     autoSavedRef.current = true;
     onSave(earned);
+  };
+
+  const toggleRunning = () => {
+    if (!running && secondsLeft === 0) {
+      autoSavedRef.current = false;
+      setSecondsLeft(preset * 60);
+    }
+    setRunning((prev) => !prev);
   };
 
   return (
@@ -319,14 +314,14 @@ function FocusTimer({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-white">
-            Fokus taymer
+            {t('study.focusTitle')}
           </h2>
           <p className="mt-1 text-[12.5px] leading-relaxed text-[#6B7280] dark:text-slate-400">
-            Diqqatni bitta vazifaga qarating — daqiqalar hisobingizga yoziladi.
+            {t('study.focusDesc')}
           </p>
         </div>
         <span className="rounded-full border border-[#22A06B]/20 bg-[#22A06B]/[0.08] px-2.5 py-1 text-[10.5px] font-bold text-[#177A50] dark:text-[#9BE3C4]">
-          {minutesToday} daq bugun
+          {t('study.todayMinutes', { n: minutesToday })}
         </span>
       </div>
 
@@ -344,7 +339,7 @@ function FocusTimer({
                 : 'border-black/[0.07] bg-white/60 text-[#6B7280] hover:border-black/[0.12] dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-slate-400',
             )}
           >
-            {value} daq
+            {t('study.presetMinutes', { n: value })}
           </button>
         ))}
       </div>
@@ -355,7 +350,7 @@ function FocusTimer({
             {formatClock(secondsLeft)}
           </span>
           <span className="mt-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8A8F98] dark:text-slate-500">
-            {running ? 'Fokus' : 'Tayyor'}
+            {running ? t('study.focusing') : t('study.ready')}
           </span>
         </FocusRing>
       </div>
@@ -363,17 +358,21 @@ function FocusTimer({
       <div className="mt-3 flex items-center gap-2">
         <button
           type="button"
-          onClick={() => setRunning((prev) => !prev)}
+          onClick={toggleRunning}
           className="min-h-[46px] flex-1 rounded-2xl bg-[#1D1D1F] text-[13.5px] font-bold text-white shadow-[0_10px_24px_-12px_rgba(15,23,42,0.7)] transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 dark:bg-white dark:text-[#1D1D1F]"
         >
-          {running ? 'Pauza' : secondsLeft === total ? 'Boshlash' : 'Davom etish'}
+          {running
+            ? t('study.pause')
+            : secondsLeft === total
+              ? t('study.start')
+              : t('study.resume')}
         </button>
         <button
           type="button"
           onClick={reset}
           className="min-h-[46px] rounded-2xl border border-black/[0.08] bg-white/70 px-4 text-[12.5px] font-bold text-[#4B5563] transition-colors hover:bg-white dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300"
         >
-          Qayta
+          {t('study.reset')}
         </button>
         <button
           type="button"
@@ -381,12 +380,12 @@ function FocusTimer({
           disabled={elapsed < 60 || saving}
           className="min-h-[46px] rounded-2xl border border-[#22A06B]/25 bg-[#22A06B]/[0.08] px-4 text-[12.5px] font-bold text-[#177A50] transition-colors hover:bg-[#22A06B]/[0.14] disabled:cursor-not-allowed disabled:opacity-40 dark:text-[#9BE3C4]"
         >
-          {saving ? 'Saqlanmoqda…' : 'Saqlash'}
+          {saving ? t('study.saving') : t('study.save')}
         </button>
       </div>
 
       <p className="mt-3 text-center text-[11px] font-medium text-[#8A8F98] dark:text-slate-500">
-        Bu hafta {plural(minutesWeek, 'daqiqa', 'daqiqa')} fokus
+        {t('study.weekFocus', { n: minutesWeek })}
       </p>
     </section>
   );
@@ -407,6 +406,7 @@ function ReviewSurface({
   onRate: (rating: Rating) => void;
   pending: boolean;
 }) {
+  const { t } = useSafeI18n();
   const [flipped, setFlipped] = useState(false);
   const reduced = usePrefersReducedMotion();
   const currentId = card?.id ?? null;
@@ -414,6 +414,22 @@ function ReviewSurface({
   useEffect(() => {
     setFlipped(false);
   }, [currentId]);
+
+  // Space owns the flip; the parent owns 1–4 grading.
+  useEffect(() => {
+    if (!card) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (target?.isContentEditable) return;
+      if (event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        setFlipped((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [card]);
 
   const total = Math.max(1, remaining + reviewed);
   const progress = Math.min(1, reviewed / total);
@@ -423,14 +439,14 @@ function ReviewSurface({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[17px] font-bold tracking-tight text-[#1D1D1F] dark:text-white">
-            Takrorlash navbati
+            {t('study.reviewTitle')}
           </h2>
           <p className="mt-1 truncate text-[12.5px] text-[#6B7280] dark:text-slate-400">
-            {card ? card.deck.title : 'Bugun uchun karta yo‘q'}
+            {card ? card.deck.title : t('study.allDoneTitle')}
           </p>
         </div>
         <span className="shrink-0 rounded-full border border-[#5B6CFF]/20 bg-[#5B6CFF]/[0.08] px-2.5 py-1 text-[10.5px] font-bold text-[#4350C9] dark:text-[#A7B0FF]">
-          {reviewed} / {total}
+          {t('study.reviewedOf', { done: reviewed, total })}
         </span>
       </div>
 
@@ -457,14 +473,15 @@ function ReviewSurface({
                 <motion.button
                   type="button"
                   onClick={() => setFlipped((prev) => !prev)}
-                  aria-label="Kartani aylantirish"
+                  aria-label={t('study.flip')}
+                  aria-pressed={flipped}
                   animate={{ rotateY: reduced ? 0 : flipped ? 180 : 0 }}
                   transition={{ type: 'spring', stiffness: 170, damping: 22 }}
                   className="relative block h-full min-h-[250px] w-full rounded-[22px] border border-black/[0.06] bg-gradient-to-br from-white to-[#F6F7FF] p-6 text-left shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] [transform-style:preserve-3d] dark:border-white/[0.08] dark:from-white/[0.05] dark:to-white/[0.02]"
                   style={{ transformStyle: 'preserve-3d' }}
                 >
                   <span className="absolute left-5 top-4 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9AA0A6] dark:text-slate-500">
-                    Savol
+                    {t('study.question')}
                   </span>
                   <span
                     className="flex h-full items-center justify-center px-2 text-center text-[19px] font-semibold leading-snug text-[#1D1D1F] dark:text-white"
@@ -481,7 +498,7 @@ function ReviewSurface({
                     }}
                   >
                     <span className="absolute left-5 top-4 text-[10px] font-bold uppercase tracking-[0.18em] text-[#22A06B]">
-                      Javob
+                      {t('study.answer')}
                     </span>
                     <span className="text-[17.5px] font-medium leading-relaxed text-[#1D1D1F] dark:text-white">
                       {card.back}
@@ -491,7 +508,7 @@ function ReviewSurface({
               </div>
 
               <p className="mt-3 text-center text-[11px] font-medium text-[#8A8F98] dark:text-slate-500">
-                {flipped ? 'Baho bering — interval avtomatik hisoblanadi' : 'Kartani bosib javobni oching (Space)'}
+                {flipped ? t('study.rateHint') : t('study.flipHint')}
               </p>
             </motion.div>
           ) : (
@@ -508,10 +525,10 @@ function ReviewSurface({
                 </svg>
               </div>
               <p className="text-[15px] font-bold text-[#1D1D1F] dark:text-white">
-                Bugun hammasi takrorlandi
+                {t('study.allDoneTitle')}
               </p>
               <p className="mt-1 max-w-[260px] text-[12.5px] leading-relaxed text-[#6B7280] dark:text-slate-400">
-                Yangi kartalar qo‘shsangiz yoki interval tugasa, ular shu yerda paydo bo‘ladi.
+                {t('study.allDoneDesc')}
               </p>
             </motion.div>
           )}
@@ -532,9 +549,11 @@ function ReviewSurface({
                 meta.className,
               )}
             >
-              <span className="block text-[12.5px] font-bold leading-none">{meta.label}</span>
+              <span className="block text-[12.5px] font-bold leading-none">
+                {t(`study.rating${rating[0].toUpperCase()}${rating.slice(1)}`)}
+              </span>
               <span className="mt-1 block text-[9.5px] font-semibold uppercase tracking-[0.06em] opacity-70">
-                {meta.key} · {meta.hint}
+                {meta.key} · {t(`study.rating${rating[0].toUpperCase()}${rating.slice(1)}Hint`)}
               </span>
             </button>
           );
@@ -559,6 +578,7 @@ function Sheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useSafeI18n();
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -572,7 +592,7 @@ function Sheet({
         >
           <button
             type="button"
-            aria-label="Yopish"
+            aria-label={t('study.close')}
             onClick={onClose}
             className="absolute inset-0 bg-[#0B1020]/25 backdrop-blur-[2px]"
           />
@@ -600,7 +620,7 @@ function Sheet({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Yopish"
+                aria-label={t('study.close')}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[#6B7280] transition-colors hover:bg-black/[0.05] dark:text-slate-400 dark:hover:bg-white/[0.06]"
               >
                 <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -628,6 +648,7 @@ function NewDeckSheet({
   onCreate: (input: { title: string; subject?: string; accent: Accent; description?: string }) => void;
   pending: boolean;
 }) {
+  const { t } = useSafeI18n();
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [accent, setAccent] = useState<Accent>('indigo');
@@ -644,37 +665,37 @@ function NewDeckSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title="Yangi to‘plam"
-      description="Fan yoki mavzu bo‘yicha kartalar to‘plamini yarating."
+      title={t('study.createDeckTitle')}
+      description={t('study.createDeckDesc')}
     >
       <div className="space-y-3">
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-slate-400">
-            Nomi
+            {t('study.titleField')}
           </span>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Masalan: Biologiya — hujayra"
+            placeholder={t('study.titlePlaceholder')}
             maxLength={120}
             className="mt-1.5 min-h-[44px] w-full rounded-xl border border-black/[0.08] bg-white px-3.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-shadow focus:border-[#5B6CFF]/40 focus:ring-4 focus:ring-[#5B6CFF]/10 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white"
           />
         </label>
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-slate-400">
-            Fan (ixtiyoriy)
+            {t('study.subjectField')}
           </span>
           <input
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
-            placeholder="Biologiya"
+            placeholder={t('study.subjectPlaceholder')}
             maxLength={120}
             className="mt-1.5 min-h-[44px] w-full rounded-xl border border-black/[0.08] bg-white px-3.5 text-[13.5px] font-medium text-[#1D1D1F] outline-none transition-shadow focus:border-[#5B6CFF]/40 focus:ring-4 focus:ring-[#5B6CFF]/10 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white"
           />
         </label>
         <div>
           <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-slate-400">
-            Rang
+            {t('study.colorField')}
           </span>
           <div className="mt-2 flex gap-2">
             {ACCENT_KEYS.map((key) => (
@@ -682,7 +703,7 @@ function NewDeckSheet({
                 key={key}
                 type="button"
                 onClick={() => setAccent(key)}
-                aria-label={`Rang: ${key}`}
+                aria-label={t('study.colorAria', { name: key })}
                 aria-pressed={accent === key}
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-full transition-transform duration-200',
@@ -701,7 +722,7 @@ function NewDeckSheet({
           onClick={onClose}
           className="min-h-[44px] rounded-xl border border-black/[0.08] px-4 text-[12.5px] font-bold text-[#4B5563] dark:border-white/[0.1] dark:text-slate-300"
         >
-          Bekor qilish
+          {t('study.cancel')}
         </button>
         <button
           type="button"
@@ -709,7 +730,7 @@ function NewDeckSheet({
           onClick={() => onCreate({ title: title.trim(), subject: subject.trim() || undefined, accent })}
           className="min-h-[44px] rounded-xl bg-[#1D1D1F] px-4 text-[12.5px] font-bold text-white transition-opacity disabled:opacity-40 dark:bg-white dark:text-[#1D1D1F]"
         >
-          {pending ? 'Yaratilmoqda…' : 'Yaratish'}
+          {pending ? t('study.creating') : t('study.create')}
         </button>
       </div>
     </Sheet>
@@ -727,6 +748,7 @@ function DeckSheet({
   onClose: () => void;
   onDeleteDeck: (deck: DeckSummary) => void;
 }) {
+  const { t } = useSafeI18n();
   const queryClient = useQueryClient();
   const { push } = useToast();
   const [front, setFront] = useState('');
@@ -748,7 +770,7 @@ function DeckSheet({
         body: JSON.stringify({ cards }),
       }),
     onSuccess: (result) => {
-      push('success', `${result.created} ta karta qo‘shildi`);
+      push('success', t('study.cardsAdded', { n: result.created }));
       setFront('');
       setBack('');
       setBulk('');
@@ -795,18 +817,21 @@ function DeckSheet({
       open={Boolean(deck)}
       onClose={onClose}
       title={deck.title}
-      description={`${plural(cardsQuery.data?.length ?? deck.cardCount, 'karta', 'karta')} · ${deck.dueCount} takrorlash kutilmoqda`}
+      description={t('study.manageCardsDesc', {
+        n: cardsQuery.data?.length ?? deck.cardCount,
+        due: deck.dueCount,
+      })}
     >
       <div className="space-y-4">
         <div className="rounded-2xl border border-black/[0.06] p-3.5 dark:border-white/[0.08]">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-slate-400">
-            Karta qo‘shish
+            {t('study.addCard')}
           </p>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <textarea
               value={front}
               onChange={(event) => setFront(event.target.value)}
-              placeholder="Savol"
+              placeholder={t('study.frontPlaceholder')}
               rows={2}
               maxLength={2000}
               className="min-h-[46px] w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 text-[13px] text-[#1D1D1F] outline-none focus:border-[#5B6CFF]/40 focus:ring-4 focus:ring-[#5B6CFF]/10 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white"
@@ -814,7 +839,7 @@ function DeckSheet({
             <textarea
               value={back}
               onChange={(event) => setBack(event.target.value)}
-              placeholder="Javob"
+              placeholder={t('study.backPlaceholder')}
               rows={2}
               maxLength={4000}
               className="min-h-[46px] w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 text-[13px] text-[#1D1D1F] outline-none focus:border-[#5B6CFF]/40 focus:ring-4 focus:ring-[#5B6CFF]/10 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white"
@@ -824,47 +849,49 @@ function DeckSheet({
             type="button"
             disabled={!front.trim() || !back.trim() || addMutation.isPending}
             onClick={() => addMutation.mutate([{ front: front.trim(), back: back.trim() }])}
-            className="mt-2 min-h-[42px] w-full rounded-xl bg-[#1D1D1F] text-[12.5px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-[#1D1D1F]"
+            className="mt-2 min-h-10 w-full rounded-xl bg-[#1D1D1F] text-[12.5px] font-bold text-white disabled:opacity-40 dark:bg-white dark:text-[#1D1D1F]"
           >
-            {addMutation.isPending ? 'Qo‘shilmoqda…' : 'Kartani qo‘shish'}
+            {addMutation.isPending ? t('study.adding') : t('study.addCardAction')}
           </button>
         </div>
 
         <div className="rounded-2xl border border-black/[0.06] p-3.5 dark:border-white/[0.08]">
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-slate-400">
-            Ko‘plab qo‘shish
+            {t('study.bulkAdd')}
           </p>
           <p className="mt-1 text-[11.5px] text-[#8A8F98] dark:text-slate-500">
-            Har bir satr: <span className="font-mono">savol | javob</span>
+            {t('study.bulkHint')}
           </p>
           <textarea
             value={bulk}
             onChange={(event) => setBulk(event.target.value)}
             rows={4}
-            placeholder={'Hujayra nima? | Hayotning eng kichik birligi\nMitoxondriya vazifasi? | Energiya ishlab chiqarish'}
+            placeholder={t('study.bulkExample')}
             className="mt-2 w-full resize-y rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 font-mono text-[12px] text-[#1D1D1F] outline-none focus:border-[#5B6CFF]/40 focus:ring-4 focus:ring-[#5B6CFF]/10 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-white"
           />
           <button
             type="button"
             disabled={bulkCards.length === 0 || addMutation.isPending}
             onClick={() => addMutation.mutate(bulkCards)}
-            className="mt-2 min-h-[42px] w-full rounded-xl border border-[#5B6CFF]/25 bg-[#5B6CFF]/[0.08] text-[12.5px] font-bold text-[#4350C9] disabled:opacity-40 dark:text-[#A7B0FF]"
+            className="mt-2 min-h-10 w-full rounded-xl border border-[#5B6CFF]/25 bg-[#5B6CFF]/[0.08] text-[12.5px] font-bold text-[#4350C9] disabled:opacity-40 dark:text-[#A7B0FF]"
           >
-            {bulkCards.length > 0 ? `${bulkCards.length} ta kartani qo‘shish` : 'Kartalarni qo‘shish'}
+            {bulkCards.length > 0
+              ? t('study.bulkActionCount', { n: bulkCards.length })
+              : t('study.bulkAction')}
           </button>
         </div>
 
         <div>
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] dark:text-slate-400">
-              Kartalar
+              {t('study.cardsHeading')}
             </p>
             <button
               type="button"
               onClick={() => onDeleteDeck(deck)}
               className="text-[11.5px] font-bold text-[#E05776] hover:underline"
             >
-              To‘plamni o‘chirish
+              {t('study.deleteDeck')}
             </button>
           </div>
           <div className="mt-2 max-h-[240px] space-y-1.5 overflow-y-auto pr-1">
@@ -877,7 +904,7 @@ function DeckSheet({
             )}
             {cardsQuery.isError && (
               <p className="rounded-xl bg-[#E05776]/[0.08] p-3 text-[12px] font-medium text-[#A93050]">
-                Kartalarni yuklab bo‘lmadi. Qayta urinib ko‘ring.
+                {t('study.cardsError')}
               </p>
             )}
             {cardsQuery.data?.map((card) => (
@@ -894,12 +921,14 @@ function DeckSheet({
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-black/[0.04] px-2 py-0.5 text-[10px] font-bold text-[#6B7280] dark:bg-white/[0.06] dark:text-slate-400">
-                  {card.intervalDays === 0 ? 'yangi' : `${card.intervalDays} kun`}
+                  {card.intervalDays === 0
+                    ? t('study.cardNew')
+                    : t('study.cardInterval', { n: card.intervalDays })}
                 </span>
                 <button
                   type="button"
                   onClick={() => deleteCardMutation.mutate(card.id)}
-                  aria-label="Kartani o‘chirish"
+                  aria-label={t('study.deleteCard')}
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[#9AA0A6] transition-colors hover:bg-[#E05776]/10 hover:text-[#E05776]"
                 >
                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -910,7 +939,7 @@ function DeckSheet({
             ))}
             {cardsQuery.data?.length === 0 && (
               <p className="rounded-xl border border-dashed border-black/[0.08] p-4 text-center text-[12px] text-[#8A8F98] dark:border-white/[0.1] dark:text-slate-500">
-                Hali karta yo‘q — yuqoridan birinchisini qo‘shing.
+                {t('study.noCards')}
               </p>
             )}
           </div>
@@ -923,7 +952,8 @@ function DeckSheet({
 /* ── Page ───────────────────────────────────────────────────────────── */
 
 export function StudyStudioPage() {
-  usePageTitle('Study Studio');
+  const { t } = useSafeI18n();
+  usePageTitle(t('study.title'));
   const queryClient = useQueryClient();
   const { push } = useToast();
   const [newDeckOpen, setNewDeckOpen] = useState(false);
@@ -948,7 +978,7 @@ export function StudyStudioPage() {
       request('/study/decks', { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: () => {
       setNewDeckOpen(false);
-      push('success', 'To‘plam yaratildi');
+      push('success', t('study.deckCreated'));
       void queryClient.invalidateQueries({ queryKey: ['study-overview'] });
     },
     onError: (error) => push('error', getErrorMessage(error)),
@@ -960,7 +990,7 @@ export function StudyStudioPage() {
     onSuccess: () => {
       setDeckToDelete(null);
       setManagedDeck(null);
-      push('success', 'To‘plam o‘chirildi');
+      push('success', t('study.deckDeleted'));
       void queryClient.invalidateQueries({ queryKey: ['study-overview'] });
       void queryClient.invalidateQueries({ queryKey: ['study-queue'] });
     },
@@ -987,7 +1017,7 @@ export function StudyStudioPage() {
         body: JSON.stringify({ minutes, mode: 'FOCUS' }),
       }),
     onSuccess: () => {
-      push('success', 'Fokus sessiyasi saqlandi');
+      push('success', t('study.focusSaved'));
       void queryClient.invalidateQueries({ queryKey: ['study-overview'] });
     },
     onError: (error) => push('error', getErrorMessage(error)),
@@ -1022,10 +1052,6 @@ export function StudyStudioPage() {
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (target?.isContentEditable) return;
       const key = event.key.toLowerCase();
-      if (key === ' ' || key === 'spacebar') {
-        event.preventDefault();
-        return;
-      }
       const ratingByKey: Record<string, Rating> = {
         '1': 'again',
         '2': 'hard',
@@ -1051,42 +1077,42 @@ export function StudyStudioPage() {
       <SoftBackdrop />
       <div className="relative mx-auto w-full max-w-[1200px] pb-[max(6rem,env(safe-area-inset-bottom))]">
         <GlassPageHeader
-          title="O‘quv studiyasi"
-          description="Fokus, takrorlash va o‘sish — bitta xotirjam ish maydonida."
+          title={t('study.title')}
+          description={t('study.subtitle')}
           actions={
             <button
               type="button"
               onClick={() => setNewDeckOpen(true)}
               className="min-h-[44px] rounded-full bg-[#1D1D1F] px-4 text-[12.5px] font-bold text-white shadow-[0_10px_24px_-14px_rgba(15,23,42,0.8)] transition-transform hover:-translate-y-0.5 dark:bg-white dark:text-[#1D1D1F]"
             >
-              + Yangi to‘plam
+              {t('study.newDeck')}
             </button>
           }
         />
 
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile
-            label="Bugun"
+            label={t('study.statDueLabel')}
             value={String(totals?.due ?? 0)}
-            note="takrorlash kutilmoqda"
+            note={t('study.statDueNote')}
             tone="indigo"
           />
           <StatTile
-            label="Seriya"
-            value={`${totals?.streakDays ?? 0} kun`}
-            note="uzluksiz takrorlash"
+            label={t('study.statStreakLabel')}
+            value={t('study.dayCount', { n: totals?.streakDays ?? 0 })}
+            note={t('study.statStreakNote')}
             tone="amber"
           />
           <StatTile
-            label="Fokus"
-            value={`${totals?.focusMinutesToday ?? 0} daq`}
-            note={`bu hafta ${totals?.focusMinutesWeek ?? 0} daqiqa`}
+            label={t('study.statFocusLabel')}
+            value={t('study.todayMinutes', { n: totals?.focusMinutesToday ?? 0 })}
+            note={t('study.statFocusNote', { n: totals?.focusMinutesWeek ?? 0 })}
             tone="emerald"
           />
           <StatTile
-            label="Aniqlik"
+            label={t('study.statAccuracyLabel')}
             value={`${totals?.accuracy7d ?? 0}%`}
-            note="7 kunlik javoblar"
+            note={t('study.statAccuracyNote')}
             tone="violet"
           />
         </div>
@@ -1094,13 +1120,13 @@ export function StudyStudioPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
           {queueQuery.isError ? (
             <section className="flex min-h-[320px] flex-col items-center justify-center rounded-[28px] border border-[#E05776]/20 bg-[#E05776]/[0.05] p-6 text-center">
-              <p className="text-[14px] font-bold text-[#A93050]">Navbatni yuklab bo‘lmadi</p>
+              <p className="text-[14px] font-bold text-[#A93050]">{t('study.queueError')}</p>
               <button
                 type="button"
                 onClick={() => void queueQuery.refetch()}
-                className="mt-3 min-h-[42px] rounded-xl bg-[#A93050] px-4 text-[12.5px] font-bold text-white"
+                className="mt-3 min-h-10 rounded-xl bg-[#A93050] px-4 text-[12.5px] font-bold text-white"
               >
-                Qayta urinish
+                {t('study.retry')}
               </button>
             </section>
           ) : (
@@ -1125,10 +1151,13 @@ export function StudyStudioPage() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-[15px] font-bold tracking-tight text-[#1D1D1F] dark:text-white">
-                To‘plamlar
+                {t('study.decksHeading')}
               </h2>
               <p className="mt-0.5 text-[12px] text-[#6B7280] dark:text-slate-400">
-                {plural(totals?.cards ?? 0, 'karta', 'karta')} · {decks.length} to‘plam
+                {t('study.decksSummary', {
+                  cards: totals?.cards ?? 0,
+                  decks: decks.length,
+                })}
               </p>
             </div>
             <button
@@ -1136,7 +1165,7 @@ export function StudyStudioPage() {
               onClick={() => void overviewQuery.refetch()}
               className="min-h-[36px] rounded-full border border-black/[0.08] px-3 text-[11.5px] font-bold text-[#6B7280] transition-colors hover:bg-white dark:border-white/[0.1] dark:text-slate-400"
             >
-              Yangilash
+              {t('study.refresh')}
             </button>
           </div>
 
@@ -1148,23 +1177,22 @@ export function StudyStudioPage() {
             </div>
           ) : overviewQuery.isError ? (
             <p className="mt-3 rounded-2xl bg-[#E05776]/[0.07] p-4 text-[12.5px] font-medium text-[#A93050]">
-              Ma’lumotlarni yuklab bo‘lmadi. Sahifani yangilang.
+              {t('study.overviewError')}
             </p>
           ) : decks.length === 0 ? (
             <div className="mt-3 rounded-[24px] border border-dashed border-black/[0.1] bg-white/60 p-8 text-center dark:border-white/[0.1] dark:bg-white/[0.03]">
               <p className="text-[14px] font-bold text-[#1D1D1F] dark:text-white">
-                Birinchi to‘plamingizni yarating
+                {t('study.emptyTitle')}
               </p>
               <p className="mx-auto mt-1 max-w-[380px] text-[12.5px] leading-relaxed text-[#6B7280] dark:text-slate-400">
-                Har bir to‘plam — kartalar to‘plami. Takrorlash jadvali avtomatik
-                hisoblanadi, siz faqat baholaysiz.
+                {t('study.emptyDesc')}
               </p>
               <button
                 type="button"
                 onClick={() => setNewDeckOpen(true)}
                 className="mt-4 min-h-[44px] rounded-full bg-[#1D1D1F] px-5 text-[12.5px] font-bold text-white dark:bg-white dark:text-[#1D1D1F]"
               >
-                To‘plam yaratish
+                {t('study.emptyCta')}
               </button>
             </div>
           ) : (
@@ -1195,14 +1223,19 @@ export function StudyStudioPage() {
                             a.text,
                           )}
                         >
-                          {deck.dueCount > 0 ? `${deck.dueCount} navbatda` : 'tayyor'}
+                          {deck.dueCount > 0
+                            ? t('study.dueInQueue', { n: deck.dueCount })
+                            : t('study.deckReady')}
                         </span>
                       </div>
                       <p className="mt-2 line-clamp-2 text-[14px] font-bold leading-snug tracking-tight text-[#1D1D1F] dark:text-white">
                         {deck.title}
                       </p>
                       <p className="mt-1 truncate text-[11.5px] font-medium text-[#6B7280] dark:text-slate-400">
-                        {deck.subject || 'Umumiy'} · {plural(deck.cardCount, 'karta', 'karta')}
+                        {deck.subject || t('study.generalSubject')} · {t('study.manageCardsDesc', {
+                          n: deck.cardCount,
+                          due: deck.dueCount,
+                        })}
                       </p>
                     </div>
                   </motion.button>
@@ -1232,11 +1265,11 @@ export function StudyStudioPage() {
         onConfirm={() => {
           if (deckToDelete) deleteDeckMutation.mutate(deckToDelete.id);
         }}
-        title="To‘plamni o‘chirish"
-        description="To‘plam va uning barcha kartalari butunlay o‘chiriladi. Bu amalni ortga qaytarib bo‘lmaydi."
+        title={t('study.deleteDeckTitle')}
+        description={t('study.deleteDeckDesc')}
         itemName={deckToDelete?.title}
         tone="danger"
-        confirmLabel="O‘chirish"
+        confirmLabel={t('study.delete')}
       />
     </>
   );

@@ -18,7 +18,7 @@ export { GlassTooltip } from './GlassTooltip';
 export { GlassCard } from './GlassCard';
 export { GlassStatCard } from './GlassStatCard';
 export { GlassEmptyState, GlassErrorState } from './GlassEmptyState';
-export { GlassPageHeader } from './GlassPageHeader';
+export { GlassPageHeader, PageActions } from './GlassPageHeader';
 export { GlassDivider } from './GlassDivider';
 export { GlassSwitch } from './GlassSwitch';
 export { GlassSurface, type GlassElevation, type GlassTone } from './Glass';

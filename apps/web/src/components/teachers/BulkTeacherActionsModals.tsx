@@ -8,7 +8,7 @@ import {
   GlassTextArea,
   useToasts,
 } from '@/components/ui';
-import { teachersApi, notificationsApi } from '@/lib/api';
+import { teachersApi } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys.factory';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -123,16 +123,9 @@ export const BulkTeacherActionsModals = memo(function BulkTeacherActionsModals({
 
   const messageMutation = useMutation({
     mutationFn: async () => {
-      // Send notification or broadcast
-      const notifyAny = notificationsApi as any;
-      if (typeof notifyAny?.send === 'function') {
-        await notifyAny.send({
-          userIds: selectedIds,
-          title: msgTitle.trim(),
-          body: msgBody.trim(),
-          channel: msgChannel,
-        });
-      }
+      // Backendda ommaviy xabar yuborish endpointi hali mavjud emas —
+      // soxta muvaffaqiyat ko‘rsatish o‘rniga aniq xato qaytaramiz.
+      throw new Error(t('teachers.bulk.messageUnavailable'));
     },
     onSuccess: () => {
       sound.playSuccess?.();

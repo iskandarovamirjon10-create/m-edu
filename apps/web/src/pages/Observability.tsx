@@ -336,7 +336,7 @@ export function ObservabilityPage() {
  variant={autoRefresh ?'primary' :'secondary'}
  size="sm"
  onClick={() => setAutoRefresh(!autoRefresh)}
- icon={<span className={`w-2 h-2 rounded-full ${autoRefresh ?'bg-emerald-400 animate-pulse' :'bg-gray-400'}`} />}
+ icon={<span className={`w-2 h-2 rounded-full ${autoRefresh ?'bg-emerald-400 animate-pulse' :'bg-slate-400'}`} />}
  >
  {autoRefresh ? (t('obs.autoRefreshOn') || 'Auto-refresh ON') : (t('obs.autoRefreshOff') || 'Auto-refresh OFF')}
  </GlassButton>
@@ -364,7 +364,7 @@ export function ObservabilityPage() {
                 />
               )}
               <StatusDot status={isActive ? 'ok' : 'unknown'} />
-              <span>{t(tab.labelKey)}</span>
+              <span>{t(tab.labelKey) || tab.label}</span>
             </button>
           );
         })}
@@ -447,7 +447,7 @@ export function ObservabilityPage() {
  <th className="px-6 py-3 text-right text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-wider">Sidecar</th>
  </tr>
  </thead>
- <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+ <tbody className="divide-y divide-slate-100 dark:divide-white/5">
  {queues.map((q: any) => (
  <tr key={q.name} className="hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
  <td className="px-6 py-4 text-[0.9rem] font-bold text-[var(--text-primary)] font-mono">{q.name}</td>
@@ -578,7 +578,7 @@ export function ObservabilityPage() {
  <th className="px-6 py-3 text-right text-[0.75rem] font-bold text-[var(--text-muted)] uppercase tracking-wider">Sidecar</th>
  </tr>
  </thead>
- <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+ <tbody className="divide-y divide-slate-100 dark:divide-white/5">
  {(apiMetrics.endpointBreakdown ?? []).slice(0, 20).map((ep: any, idx: number) => (
  <tr key={`${ep.method}-${ep.path}-${idx}`} className="hover:bg-transparent dark:hover:bg-[var(--bg-card)] transition-colors">
  <td className="px-6 py-3 text-[0.8rem] font-bold text-[var(--text-primary)] font-mono">{ep.method}</td>

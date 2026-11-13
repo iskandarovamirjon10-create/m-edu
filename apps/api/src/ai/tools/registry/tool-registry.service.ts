@@ -48,9 +48,10 @@ export class ToolRegistryService {
     return [...this.tools.values()];
   }
 
-  /** Descriptors handed to the model (Gemini function declarations). */
-  toProviderTools(): AiProviderTool[] {
-    return this.list().map((tool) => ({
+  /** Descriptors handed to the model (Gemini function declarations). Supports optional permission/role filtering. */
+  toProviderTools(predicate?: (tool: AiToolDefinition) => boolean): AiProviderTool[] {
+    const list = predicate ? this.list().filter(predicate) : this.list();
+    return list.map((tool) => ({
       name: tool.name,
       description: tool.description,
       parameters: zodToJsonSchema(tool.inputSchema) as unknown as Record<string, unknown>,

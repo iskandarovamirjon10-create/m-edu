@@ -468,25 +468,25 @@ export function TurnstileTelegramNotificationBridge({
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         SNAP: {selectedNotification.passTime}
                       </div>
-                      <div className="absolute bottom-2 left-2 right-2 z-20 flex justify-between text-[10px] text-gray-300 font-mono">
+                      <div className="absolute bottom-2 left-2 right-2 z-20 flex justify-between text-[10px] text-slate-300 font-mono">
                         <span>{selectedNotification.turnstileId}</span>
                         <span className="text-emerald-400">Face ID 99.4%</span>
                       </div>
                     </div>
 
                     {/* Text Message */}
-                    <p className="text-xs sm:text-sm leading-relaxed text-gray-100 font-sans">
+                    <p className="text-xs sm:text-sm leading-relaxed text-slate-100 font-sans">
                       {selectedNotification.messageText}
                     </p>
 
                     {/* Footer Time & Double Checkmark */}
-                    <div className="flex items-center justify-end gap-1 text-[10px] text-gray-400 font-mono pt-1">
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 font-mono pt-1">
                       <span>{selectedNotification.passTime}</span>
                       <Icon name="checkCircle" className="w-3.5 h-3.5 text-sky-400" />
                     </div>
                   </motion.div>
                 ) : (
-                  <div className="text-center text-gray-400 py-16 text-xs">
+                  <div className="text-center text-slate-400 py-16 text-xs">
                     Xabarni ko‘rish uchun ro‘yxatdan tanlang
                   </div>
                 )}
@@ -494,7 +494,7 @@ export function TurnstileTelegramNotificationBridge({
             </div>
 
             {/* Telegram simulated action bottom */}
-            <div className="mt-4 pt-3 border-t border-[#242f3d] flex items-center justify-between text-xs text-gray-400">
+            <div className="mt-4 pt-3 border-t border-[#242f3d] flex items-center justify-between text-xs text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Icon name="shield" className="w-3.5 h-3.5 text-emerald-400" />
                 256-bit Shifrlangan Bot

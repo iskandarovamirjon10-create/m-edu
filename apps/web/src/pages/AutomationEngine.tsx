@@ -475,7 +475,7 @@ function StatCard({ label, value, accentClass, icon, delayMs = 0, reduced }: Sta
             </p>
             <div
               className={[
-                'flex h-10 w-10 items-center justify-center rounded-2xl text-white',
+                'flex h-10 w-10 items-center justify-center rounded-xl text-white',
                 accentClass,
                 'bg-opacity-15',
                 'transition-transform duration-500',

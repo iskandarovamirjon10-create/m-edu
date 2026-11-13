@@ -212,7 +212,6 @@ export function GlassTabs({
   const handleKeyDown = useTabKeyboardNav(tabs, onChange, tabRefs);
 
   if (import.meta.env.DEV && !ariaLabel && !ariaLabelledBy) {
-    // eslint-disable-next-line no-console
     console.warn('[GlassTabs] tablist should have `aria-label` or `aria-labelledby`.');
   }
 

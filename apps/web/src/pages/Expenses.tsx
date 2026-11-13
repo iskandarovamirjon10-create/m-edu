@@ -303,11 +303,13 @@ export function ExpensesPage() {
   const save = useMutation({
     mutationFn: () => {
       const parsed = parseFinancialAmount(form.amount);
+      const d = new Date(form.date);
+      const safeDate = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
       const payload = {
         category: form.category,
         amount: Number.isFinite(parsed) ? parsed : 0,
         description: form.description.trim() || undefined,
-        date: new Date(form.date).toISOString(),
+        date: safeDate,
       };
       return editingId ? expensesApi.update(editingId, payload) : expensesApi.create(payload);
     },
@@ -347,7 +349,7 @@ export function ExpensesPage() {
     if (!Number.isFinite(parsed) || parsed <= 0) {
       errors.amount = t('expenses.validation.amountPositive');
     }
-    if (!form.date) {
+    if (!form.date || isNaN(new Date(form.date).getTime())) {
       errors.date = t('expenses.validation.dateRequired');
     }
     setFormErrors(errors);
@@ -506,15 +508,22 @@ export function ExpensesPage() {
     const itemsToExport = selectedList.length > 0 ? selectedList : expenseList;
     if (!itemsToExport.length) return;
 
+    const escapeCsvCell = (val: unknown) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'` + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
     const headers = ['ID', 'Category', 'Description', 'Amount', 'Date'];
     const rows = itemsToExport.map((e) => [
-      e.id,
-      e.category,
-      `"${(e.description || '').replace(/"/g, '""')}"`,
-      e.amount,
-      e.date,
+      escapeCsvCell(e.id),
+      escapeCsvCell(e.category),
+      escapeCsvCell(e.description || ''),
+      escapeCsvCell(e.amount),
+      escapeCsvCell(e.date),
     ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

@@ -9,7 +9,12 @@ import { getStoredLocale } from '@/i18n';
 
 export type SupportedLocale = 'uz' | 'ru' | 'en';
 
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+/**
+ * Technical ID regex to distinguish database primary keys (UUID, ULID, ObjectId, NanoID, integer IDs)
+ * from human-readable names (e.g. "Ali Valiyev").
+ */
+const TECHNICAL_ID_REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9A-HJKMNP-TV-Z]{26}|[0-9a-fA-F]{24}|[A-Za-z0-9_-]{21,32}|\d+)$/i;
+const UUID_REGEX = TECHNICAL_ID_REGEX;
 
 export const FACE_ERROR_MESSAGES: Record<SupportedLocale, Record<string, string>> = {
   uz: {

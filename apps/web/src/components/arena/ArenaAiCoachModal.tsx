@@ -55,7 +55,7 @@ export function ArenaAiCoachModal({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full arena-inset flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold"
+            aria-label="Yopish" className="w-9 h-9 min-h-[44px] min-w-[44px] rounded-full arena-inset flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold"
           >
             <X className="w-4 h-4" />
           </button>

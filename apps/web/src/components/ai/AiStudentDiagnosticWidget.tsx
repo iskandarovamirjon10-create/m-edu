@@ -7,7 +7,7 @@
  * - Instant 1-click parent message composer tailored to the student's status.
  * ============================================================================
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
@@ -43,7 +43,7 @@ export function AiStudentDiagnosticWidget({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(true);
 
-  const loadDiagnostic = async () => {
+  const loadDiagnostic = useCallback(async () => {
     if (!aiApi || typeof aiApi.diagnoseStudent !== 'function') return;
     setLoading(true);
     setError(null);
@@ -60,13 +60,13 @@ export function AiStudentDiagnosticWidget({
     } finally {
       setLoading(false);
     }
-  };
+  }, [studentId]);
 
   useEffect(() => {
     if (studentId) {
       void loadDiagnostic();
     }
-  }, [studentId]);
+  }, [studentId, loadDiagnostic]);
 
   const handleCopyMessage = () => {
     if (!data?.suggestedParentMessage) return;
@@ -108,7 +108,7 @@ export function AiStudentDiagnosticWidget({
         <button
           type="button"
           onClick={() => void loadDiagnostic()}
-          className="mt-3 rounded-xl border border-amber-500/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300"
+          className="mt-3 rounded-xl border border-amber-500/30 px-3.5 py-2 min-h-[38px] tap-extend text-xs font-semibold text-amber-700 dark:text-amber-300"
         >
           Qayta urinish
         </button>
@@ -149,7 +149,7 @@ export function AiStudentDiagnosticWidget({
             type="button"
             onClick={loadDiagnostic}
             disabled={loading}
-            className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="rounded-lg p-1.5 h-9 w-9 min-h-[44px] min-w-[44px] tap-extend flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             title="Qayta tahlil qilish"
           >
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
@@ -157,7 +157,7 @@ export function AiStudentDiagnosticWidget({
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="rounded-lg px-3 py-1.5 min-h-[38px] tap-extend text-xs font-medium text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           >
             {expanded ? 'Yashirish' : "Ko'rsatish"}
           </button>
@@ -292,7 +292,7 @@ export function AiStudentDiagnosticWidget({
                     <button
                       type="button"
                       onClick={handleCopyMessage}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 min-h-[36px] tap-extend text-[11px] font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                     >
                       {copied ? (
                         <>
@@ -315,7 +315,7 @@ export function AiStudentDiagnosticWidget({
                             initialDraft: data.suggestedParentMessage,
                           })
                         }
-                        className="inline-flex items-center gap-1 rounded-md bg-[#007AFF] px-2 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-[#0051D5] transition-colors"
+                        className="inline-flex items-center gap-1 rounded-md bg-[#007AFF] px-3 py-1.5 min-h-[36px] tap-extend text-[11px] font-semibold text-white shadow-sm hover:bg-[#0051D5] transition-colors"
                       >
                         Yuborish
                       </button>

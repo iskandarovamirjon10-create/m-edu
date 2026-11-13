@@ -139,6 +139,9 @@ vi.mock('@/lib/api', () => ({
   faceApi: {
     enrollments: vi.fn().mockResolvedValue({ items: [] }),
   },
+  aiApi: {
+    diagnoseStudent: vi.fn().mockResolvedValue(null),
+  },
 }));
 
 vi.mock('@/auth/AuthContext', () => ({

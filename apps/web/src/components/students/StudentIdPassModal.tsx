@@ -595,7 +595,7 @@ export function StudentIdPassModal({
                   whileTap={{ scale: 0.9 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 0.7 }}
                   aria-label={t('common.close') || 'Close'}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] text-white/60 outline-none transition-colors hover:bg-white/[0.12] hover:text-white focus-visible:ring-2 focus-visible:ring-white/40"
+                  className="flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl bg-white/[0.06] text-white/60 outline-none transition-colors hover:bg-white/[0.12] hover:text-white focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   <Icon paths={I.close} size={14} strokeWidth={2.4} />
                 </motion.button>

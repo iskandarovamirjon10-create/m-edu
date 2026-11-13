@@ -475,8 +475,10 @@ describe('AiCopilot persistence and clear', () => {
     await typeAndSend(user, 'Assalomu alaykum');
     await screen.findByText('Saqlangan javob.');
 
+    await waitFor(() => {
+      expect(localStorage.getItem(STORAGE_KEY)).toBeTruthy();
+    }, { timeout: 2000 });
     const stored = localStorage.getItem(STORAGE_KEY);
-    expect(stored).toBeTruthy();
     const parsed = JSON.parse(stored as string);
     expect(parsed.version).toBe(1);
     expect(

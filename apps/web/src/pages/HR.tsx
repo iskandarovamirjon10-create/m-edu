@@ -36,7 +36,7 @@ import {
   GlassTD,
   useToast,
 } from '@/components/ui';
-import { formatCurrency, toLocalISOString } from '@/lib/format';
+import { formatCurrency, toLocalISOString, parseFinancialAmount } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, Employee, ContractType, User } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -368,7 +368,7 @@ export function validateEmployeeForm(
 
   if (!form.position.trim()) errors.position = 'hr.form.validation.positionRequired';
   if (!form.department.trim()) errors.department = 'hr.form.validation.departmentRequired';
-  if (!form.salary || isNaN(parseFloat(form.salary)) || parseFloat(form.salary) <= 0) {
+  if (!form.salary || isNaN(parseFinancialAmount(form.salary)) || parseFinancialAmount(form.salary) <= 0) {
     errors.salary = 'hr.form.validation.salaryInvalid';
   }
 
@@ -501,13 +501,13 @@ export function HRPage() {
   // Queries
   const employeesQuery = useQuery({
     queryKey: ['hr-employees'],
-    queryFn: () => hrApi.listEmployees({ limit: 100 }),
+    queryFn: () => hrApi.listEmployees({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
   const usersQuery = useQuery({
     queryKey: ['hr-users-for-employee'],
-    queryFn: () => usersApi.list({ limit: 200 }) as Promise<Paginated<User>>,
+    queryFn: () => usersApi.list({ limit: 500 }) as Promise<Paginated<User>>,
     enabled: modalOpen && !editingId,
   });
 
@@ -593,7 +593,7 @@ export function HRPage() {
       const base = {
         position: form.position.trim(),
         department: form.department.trim(),
-        salary: parseFloat(form.salary),
+        salary: parseFinancialAmount(form.salary),
         bankAccount: form.bankAccount.trim() || undefined,
         taxId: form.taxId.trim() || undefined,
       };
@@ -1160,7 +1160,7 @@ export function HRPage() {
                                   e.stopPropagation();
                                   handleOpenEmployeeSidecar(emp);
                                 }}
-                                className="min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all border border-blue-500/20 inline-flex items-center gap-1.5"
+                                className="min-h-10 px-3 py-2 rounded-xl text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-all border border-blue-500/20 inline-flex items-center gap-1.5"
                                 title="Inspect in macOS Sidecar"
                                 aria-label="Open Sidecar inspection"
                               >
@@ -1171,7 +1171,7 @@ export function HRPage() {
                                 onClick={() => openModal(emp)}
                                 variant="ghost"
                                 size="sm"
-                                className="min-h-[40px] rounded-xl text-xs px-3"
+                                className="min-h-10 rounded-xl text-xs px-3"
                                 aria-label={t('common.edit') || 'Edit'}
                               >
                                 <Icon paths={I.edit} size={13} />
@@ -1182,7 +1182,7 @@ export function HRPage() {
                                   onClick={() => handleTerminateClick(emp)}
                                   variant="danger"
                                   size="sm"
-                                  className="min-h-[40px] rounded-xl text-xs px-3"
+                                  className="min-h-10 rounded-xl text-xs px-3"
                                   aria-label={t('hr.terminate') || 'Terminate'}
                                 >
                                   <Icon paths={I.trash} size={13} />

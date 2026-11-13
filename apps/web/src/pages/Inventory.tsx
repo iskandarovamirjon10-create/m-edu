@@ -37,7 +37,7 @@ import {
   useToasts,
   ConfirmDialog,
 } from '@/components/ui';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, parseFinancialAmount } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import type { Paginated, InventoryItem, InventoryCategory } from '@/lib/types';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -446,7 +446,7 @@ export function InventoryPage() {
   // Data Query
   const itemsQuery = useQuery({
     queryKey: ['inventory-items'],
-    queryFn: () => inventoryApi.listItems({ limit: 100 }),
+    queryFn: () => inventoryApi.listItems({ limit: 500 }),
     placeholderData: (previousData) => previousData,
   });
 
@@ -537,7 +537,7 @@ export function InventoryPage() {
       if (form.minStock) payload.minStock = parseInt(form.minStock, 10);
       if (form.location.trim()) payload.location = form.location.trim();
       if (form.supplier.trim()) payload.supplier = form.supplier.trim();
-      if (form.purchasePrice) payload.purchasePrice = parseFloat(form.purchasePrice);
+      if (form.purchasePrice) payload.purchasePrice = parseFinancialAmount(form.purchasePrice);
       if (form.description.trim()) payload.description = form.description.trim();
 
       if (editingId) {
@@ -1153,7 +1153,7 @@ export function InventoryPage() {
                                   e.stopPropagation();
                                   handleOpenInventorySidecar(item);
                                 }}
-                                className="min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1.5"
+                                className="min-h-10 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-all border border-indigo-500/20 inline-flex items-center gap-1.5"
                                 title="Inspect in macOS Sidecar"
                                 aria-label="Open Sidecar inspection"
                               >
@@ -1164,7 +1164,7 @@ export function InventoryPage() {
                                 onClick={() => openModal(item)}
                                 variant="ghost"
                                 size="sm"
-                                className="min-h-[40px] rounded-xl text-xs px-3"
+                                className="min-h-10 rounded-xl text-xs px-3"
                                 aria-label={t('common.edit') || 'Edit'}
                               >
                                 <Icon paths={I.edit} size={13} />
@@ -1178,7 +1178,7 @@ export function InventoryPage() {
                                 variant="danger"
                                 size="sm"
                                 disabled={removeMutation.isPending && removeMutation.variables === item.id}
-                                className="min-h-[40px] rounded-xl text-xs px-3"
+                                className="min-h-10 rounded-xl text-xs px-3"
                                 aria-label={t('common.delete') || 'Delete'}
                               >
                                 <Icon paths={I.trash} size={13} />

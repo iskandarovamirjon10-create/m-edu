@@ -35,7 +35,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { ExecutivePDFStudio, type PDFStudioDocData } from '@/components/pdf-studio';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, parseFinancialAmount } from '@/lib/format';
 import { getErrorMessage } from '@/lib/errorMessages';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useSafeI18n } from '@/i18n/I18nProvider';
@@ -275,6 +275,48 @@ interface RefundFormState {
 const EMPTY_PAYMENT: PaymentFormState = { amount: '', method: 'CASH', reference: '', description: '' };
 const EMPTY_REFUND: RefundFormState = { paymentId: '', amount: '', reason: '' };
 
+/** To‘lov havolalari (Payme/Click) API javobi. */
+interface InvoicePaymentLinks {
+  paymeUrl: string;
+  clickUrl: string;
+  qrCodeUrl?: string;
+  amountUzs?: number;
+  invoiceNumber?: string;
+}
+
+interface CreateInvoiceFormState {
+  studentId?: string;
+  number?: string;
+  dueDate?: string;
+  description: string;
+  unitPrice: string;
+}
+
+type CreateInvoiceErrors = Partial<
+  Record<'studentId' | 'number' | 'dueDate' | 'description' | 'unitPrice' | '_error', string>
+>;
+
+interface CreateInvoicePayload {
+  studentId?: string;
+  number?: string;
+  dueDate?: string;
+  items: Array<{ description: string; unitPrice: number; quantity: number }>;
+}
+
+interface ProrateInvoicePayload {
+  studentId: string;
+  monthlyTuition: number;
+  totalLessonsInMonth: number;
+  attendedLessons: number;
+  reason: string;
+}
+
+interface RefundRequestPayload {
+  paymentId: string;
+  amount: number;
+  reason?: string;
+}
+
 const FILTER_TABS = ['', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
 
 function nameHash(str: string): number {
@@ -481,11 +523,14 @@ export function InvoicesPage() {
   const [previewTarget, setPreviewTarget] = useState<Invoice | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(EMPTY_PAYMENT);
   const [refundForm, setRefundForm] = useState<RefundFormState>(EMPTY_REFUND);
-  const [issueTarget, setIssueTarget] = useState<any>(null);
-  const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [issueTarget, setIssueTarget] = useState<Invoice | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<InvoiceRefund | null>(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [createForm, setCreateForm] = useState<any>({ description: '', unitPrice: '' });
-  const [createErrors, setCreateErrors] = useState<any>({});
+  const [createForm, setCreateForm] = useState<CreateInvoiceFormState>({
+    description: '',
+    unitPrice: '',
+  });
+  const [createErrors, setCreateErrors] = useState<CreateInvoiceErrors>({});
   const [paymentLinksTarget, setPaymentLinksTarget] = useState<Invoice | null>(null);
   const [prorateOpen, setProrateOpen] = useState(false);
   const [prorateForm, setProrateForm] = useState({
@@ -498,12 +543,15 @@ export function InvoicesPage() {
 
   const paymentLinksQuery = useQuery({
     queryKey: ['invoice-payment-links', paymentLinksTarget?.id],
-    queryFn: () => (paymentLinksTarget ? (invoicesApi.getPaymentLinks(paymentLinksTarget.id) as Promise<any>) : null),
+    queryFn: () =>
+      paymentLinksTarget
+        ? (invoicesApi.getPaymentLinks(paymentLinksTarget.id) as Promise<InvoicePaymentLinks>)
+        : null,
     enabled: !!paymentLinksTarget,
   });
 
   const createProratedInvoice = useMutation({
-    mutationFn: (data: any) => invoicesApi.createProrated(data),
+    mutationFn: (data: ProrateInvoicePayload) => invoicesApi.createProrated(data),
     onSuccess: () => {
       push('success', t('invoices.prorate.success'));
       setProrateOpen(false);
@@ -516,7 +564,7 @@ export function InvoicesPage() {
       });
       invalidateAll();
     },
-    onError: (err: any) => {
+    onError: (err) => {
       push('error', getErrorMessage(err));
     },
   });
@@ -535,11 +583,11 @@ export function InvoicesPage() {
 
   const students = useQuery({
     queryKey: queryKeys.students.selectors(),
-    queryFn: () => studentsApi.list({ limit: 100 }) as Promise<{ items: Student[]; total: number }>,
+    queryFn: () => studentsApi.list({ limit: 500 }) as Promise<{ items: Student[]; total: number }>,
   });
 
   const createInvoice = useMutation({
-    mutationFn: (data: any) => invoicesApi.create(data),
+    mutationFn: (data: CreateInvoicePayload) => invoicesApi.create(data),
     onSuccess: () => {
       push('success', t('invoices.createSuccess'));
       setCreateOpen(false);
@@ -547,7 +595,7 @@ export function InvoicesPage() {
       setCreateErrors({});
       invalidateAll();
     },
-    onError: (err: any) => setCreateErrors({ _error: getErrorMessage(err) }),
+    onError: (err) => setCreateErrors({ _error: getErrorMessage(err) }),
   });
 
   const processRefund = useMutation({
@@ -569,7 +617,7 @@ export function InvoicesPage() {
   });
 
   const requestRefund = useMutation({
-    mutationFn: (data: any) => invoicesApi.requestRefund(data),
+    mutationFn: (data: RefundRequestPayload) => invoicesApi.requestRefund(data),
     onSuccess: () => {
       push('success', t('invoices.refundRequested') || 'Refund requested');
       setRefundTarget(null);
@@ -611,13 +659,16 @@ export function InvoicesPage() {
       setPaymentForm(EMPTY_PAYMENT);
       invalidateAll();
     },
-    onError: (error: any) => {
+    onError: (error) => {
       push('error', getErrorMessage(error));
     },
   });
 
   /* ── Derived stats ────────────────────────────────────────────────── */
-  const items: Invoice[] = invoices.data?.items ?? [];
+  const items: Invoice[] = useMemo(
+    () => invoices.data?.items ?? [],
+    [invoices.data],
+  );
 
   const stats = useMemo(() => {
     const totalMinor = items.reduce((sum, inv) => sum + Math.round((Number(inv.total) || 0) * 100), 0);
@@ -637,7 +688,7 @@ export function InvoicesPage() {
   const [studioDocData, setStudioDocData] = useState<PDFStudioDocData | null>(null);
 
   /* ── Executive PDF Studio ─────────────────────────────────────────── */
-  const openExecutiveInvoiceStudio = useCallback((inv: any) => {
+  const openExecutiveInvoiceStudio = useCallback((inv: Invoice) => {
     sound.playPop();
     const studentName = inv.student?.user
       ? [inv.student?.user?.firstName, inv.student?.user?.lastName].filter(Boolean).join(' ') || inv.student?.user?.email || '—'
@@ -663,7 +714,7 @@ export function InvoicesPage() {
   }, [sound, t]);
 
   /* ── macOS Split-View Detail Sidecar ──────────────────────────────── */
-  const handleOpenInvoiceSidecar = useCallback((inv: any) => {
+  const handleOpenInvoiceSidecar = useCallback((inv: Invoice) => {
     sound.playTick();
     const studentName = inv.student?.user
       ? [inv.student?.user?.firstName, inv.student?.user?.lastName].filter(Boolean).join(' ') || inv.student?.user?.email || '—'
@@ -718,7 +769,7 @@ export function InvoicesPage() {
     isSelected,
     toggleSelection,
     clearSelection,
-  } = useListKeyboardNavigation<any>({
+  } = useListKeyboardNavigation<Invoice>({
     items,
     getItemId: (inv) => inv.id,
     rowIdPrefix: 'invoice-row-',
@@ -748,7 +799,11 @@ export function InvoicesPage() {
       inv.status,
       inv.createdAt,
     ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\r\n');
+    const csvContent = [headers.join(','), ...rows.map((r) => r.map((c) => {
+      let s = String(c ?? '');
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return `"${s.replace(/"/g, '""')}"`;
+    }).join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -777,8 +832,7 @@ export function InvoicesPage() {
   if (invoices.isError) {
     return (
       <div className="page-container space-y-5">
-        <div className="glass-card p-8">
-          <GlassErrorState message="Error loading invoices" onRetry={() => invoices.refetch()} />
+        <div className="glass-card p-8">                      <GlassErrorState message={t('invoices.loadError')} onRetry={() => invoices.refetch()} />
         </div>
       </div>
     );
@@ -854,7 +908,7 @@ export function InvoicesPage() {
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tighter text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] sm:text-4xl">
                 {t('nav.invoices')}
               </h1>
               <p className="mt-1 text-[13.5px] font-medium text-[#64748B]">
@@ -870,10 +924,10 @@ export function InvoicesPage() {
                   onClick={() => setProrateOpen(true)}
                   title={`${t('invoices.prorate.button')} (P)`}
                   aria-label={t('invoices.prorate.button')}
-                  className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="group relative h-10 min-h-10 px-3 inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
                   <Icon paths={I.calculator} size={15} strokeWidth={2.2} />
-                  <span className="text-xs font-semibold hidden sm:inline">Prorate</span>
+                  <span className="text-xs font-semibold hidden sm:inline">{t('invoices.prorate.short')}</span>
                   <span className="sr-only">{t('invoices.prorate.button')}</span>
                   <kbd className="hidden md:inline-block rounded bg-indigo-500/20 px-1 py-0.2 text-[10px] text-indigo-600 dark:text-indigo-300">P</kbd>
                 </button>
@@ -891,7 +945,7 @@ export function InvoicesPage() {
                   className="min-h-[44px] px-5 font-bold shadow-md shadow-blue-500/20"
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e: any) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       e.currentTarget.click();
@@ -987,7 +1041,7 @@ export function InvoicesPage() {
                       onClick={() => setCreateOpen(true)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e: any) => {
+                      onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           e.currentTarget.click();
@@ -1005,7 +1059,7 @@ export function InvoicesPage() {
           </div>
         ) : (
           <div className="relative divide-y divide-slate-200/80 dark:divide-slate-800 dark:divide-[#ffffff08]">
-            {items.map((inv: any, idx: number) => {
+            {items.map((inv, idx) => {
               const bal = remaining(inv);
               const seed = inv.number || inv.id || 'invoice';
               const studentName = inv.student?.user
@@ -1106,7 +1160,7 @@ export function InvoicesPage() {
                           whileHover={{ scale: 1.04, y: -1 }}
                           whileTap={{ scale: 0.96 }}
                           transition={SPRING.snappy}
-                          className="inline-flex min-h-[44px] h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
+                          className="inline-flex min-h-10 h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
                           style={{
                             background: 'rgba(37,99,235,0.10)',
                             color: '#2563EB',
@@ -1129,7 +1183,7 @@ export function InvoicesPage() {
                           transition={SPRING.snappy}
                           aria-label={t('invoices.recordPayment')}
                           title={t('invoices.recordPayment')}
-                          className="inline-flex min-h-[44px] h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
+                          className="inline-flex min-h-10 h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
                           style={{
                             background: 'rgba(16,185,129,0.10)',
                             color: '#10B981',
@@ -1149,7 +1203,7 @@ export function InvoicesPage() {
                           whileHover={{ scale: 1.04, y: -1 }}
                           whileTap={{ scale: 0.96 }}
                           transition={SPRING.snappy}
-                          className="inline-flex min-h-[44px] h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
+                          className="inline-flex min-h-10 h-11 items-center gap-1.5 rounded-xl px-3 text-[11px] font-bold tracking-tight outline-none"
                           style={{
                             background: 'rgba(244,63,94,0.10)',
                             color: '#F43F5E',
@@ -1230,8 +1284,7 @@ export function InvoicesPage() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!payTarget || recordPayment.isPending) return;
-            const cleanStr = paymentForm.amount.trim().replace(/,/g, '.').replace(/\s+/g, '');
-            const amount = parseFloat(cleanStr);
+            const amount = parseFinancialAmount(paymentForm.amount);
             if (!Number.isFinite(amount) || amount <= 0) {
               push('error', t('invoices.amountPositive'));
               return;
@@ -1242,7 +1295,7 @@ export function InvoicesPage() {
             }
             recordPayment.mutate({
               invoiceId: payTarget.id,
-              data: { ...paymentForm, amount: cleanStr },
+              data: { ...paymentForm, amount: String(Math.round(amount)) },
             });
           }}
           className="space-y-5"
@@ -1344,7 +1397,7 @@ export function InvoicesPage() {
                 onClick={() => setPayTarget(null)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e: any) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.currentTarget.click();
@@ -1404,7 +1457,7 @@ export function InvoicesPage() {
                 onClick={() => setIssueTarget(null)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e: any) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.currentTarget.click();
@@ -1421,7 +1474,7 @@ export function InvoicesPage() {
                 onClick={() => issueTarget && issue.mutate(issueTarget.id)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e: any) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.currentTarget.click();
@@ -1624,7 +1677,7 @@ export function InvoicesPage() {
                           disabled={processRefund.isPending}
                           role="button"
                           tabIndex={0}
-                          onKeyDown={(e: any) => {
+                          onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               e.currentTarget.click();
@@ -1642,7 +1695,7 @@ export function InvoicesPage() {
                           }}
                           role="button"
                           tabIndex={0}
-                          onKeyDown={(e: any) => {
+                          onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               e.currentTarget.click();
@@ -1668,7 +1721,7 @@ export function InvoicesPage() {
                   }}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e: any) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       e.currentTarget.click();
@@ -1683,20 +1736,19 @@ export function InvoicesPage() {
                   variant="danger"
                   disabled={
                     !refundForm.paymentId ||
-                    !Number(refundForm.amount) ||
-                    Number(refundForm.amount) <= 0 ||
+                    !Number.isFinite(parseFinancialAmount(refundForm.amount)) ||
+                    parseFinancialAmount(refundForm.amount) <= 0 ||
                     requestRefund.isPending
                   }
                   onClick={() => {
                     if (requestRefund.isPending) return;
-                    const cleanRefund = refundForm.amount.trim().replace(/,/g, '.').replace(/\s+/g, '');
-                    const amountNum = parseFloat(cleanRefund);
+                    const amountNum = parseFinancialAmount(refundForm.amount);
                     if (!Number.isFinite(amountNum) || amountNum <= 0) return;
-                    requestRefund.mutate({ ...refundForm, amount: amountNum });
+                    requestRefund.mutate({ ...refundForm, amount: Math.round(amountNum) });
                   }}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e: any) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       e.currentTarget.click();
@@ -1767,7 +1819,7 @@ export function InvoicesPage() {
                 onClick={() => setRejectTarget(null)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e: any) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.currentTarget.click();
@@ -1786,7 +1838,7 @@ export function InvoicesPage() {
                 }
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e: any) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.currentTarget.click();
@@ -1827,7 +1879,8 @@ export function InvoicesPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!createForm.studentId || !createForm.number || !Number(createForm.unitPrice)) {
+            const parsedUnitPrice = parseFinancialAmount(createForm.unitPrice);
+            if (!createForm.studentId || !createForm.number || !Number.isFinite(parsedUnitPrice) || parsedUnitPrice <= 0) {
               push('error', t('invoices.createValidation'));
               return;
             }
@@ -1842,13 +1895,12 @@ export function InvoicesPage() {
             if (Object.keys(newCreateErrors).length === 0) {
               if (createInvoice.isPending) return;
               const { description, unitPrice, ...rest } = createForm;
-              const cleanUnitPrice = unitPrice.trim().replace(/,/g, '.').replace(/\s+/g, '');
-              const parsedUnitPrice = parseFloat(cleanUnitPrice);
+              const parsedUnitPrice = parseFinancialAmount(unitPrice);
               createInvoice.mutate({
                 ...rest,
                 items: [{
                   description,
-                  unitPrice: Number.isFinite(parsedUnitPrice) ? Math.round(parsedUnitPrice * 100) / 100 : 0,
+                  unitPrice: Number.isFinite(parsedUnitPrice) ? Math.round(parsedUnitPrice) : 0,
                   quantity: 1,
                 }],
               });
@@ -1955,7 +2007,7 @@ export function InvoicesPage() {
                 disabled={createInvoice.isPending}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e: any) => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     e.currentTarget.click();
@@ -2158,7 +2210,7 @@ export function InvoicesPage() {
                   onClick={() => setPreviewTarget(null)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e: any) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       e.currentTarget.click();
@@ -2174,7 +2226,7 @@ export function InvoicesPage() {
                   onClick={() => window.print()}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e: any) => {
+                  onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       e.currentTarget.click();
@@ -2366,9 +2418,9 @@ export function InvoicesPage() {
                       onClick={() => {
                         if (navigator?.clipboard?.writeText) {
                           navigator.clipboard
-                            .writeText(paymentLinksQuery.data.paymeUrl)
+                            .writeText(paymentLinksQuery.data?.paymeUrl ?? '')
                             .then(() => push('success', t('invoices.payLinks.copied')))
-                            .catch(() => push('error', 'Clipboard ruxsati berilmadi'));
+                            .catch(() => push('error', t('invoices.payLinks.copyFailed')));
                         }
                       }}
                       className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 hover:underline min-h-[36px]"
@@ -2398,9 +2450,9 @@ export function InvoicesPage() {
                       onClick={() => {
                         if (navigator?.clipboard?.writeText) {
                           navigator.clipboard
-                            .writeText(paymentLinksQuery.data.clickUrl)
+                            .writeText(paymentLinksQuery.data?.clickUrl ?? '')
                             .then(() => push('success', t('invoices.payLinks.copied')))
-                            .catch(() => push('error', 'Clipboard ruxsati berilmadi'));
+                            .catch(() => push('error', t('invoices.payLinks.copyFailed')));
                         }
                       }}
                       className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300 hover:underline min-h-[36px]"

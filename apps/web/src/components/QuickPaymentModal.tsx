@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/GlassToast';
 import { useVoiceFeedback } from '@/hooks/useVoiceFeedback';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { parseFinancialAmount } from '@/lib/format';
 
 const PRESET_AMOUNTS = [
   { label: '100 ming', value: 100000 },
@@ -27,6 +28,26 @@ const METHODS = [
   { id: 'BANK_TRANSFER', label: 'Bank o\'tkazmasi', icon: '🏦' },
 ];
 
+/** Tezkor to‘lov oqimida ishlatiladigan minimal o‘quvchi shakli. */
+interface QuickStudent {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  balance?: number;
+  user?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+  };
+}
+
+interface QuickStudentListResponse {
+  items?: QuickStudent[];
+  data?: QuickStudent[];
+  total?: number;
+}
+
 export function QuickPaymentModal() {
   const { t } = useSafeI18n();
   const queryClient = useQueryClient();
@@ -36,7 +57,7 @@ export function QuickPaymentModal() {
 
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<QuickStudent | null>(null);
   const [amount, setAmount] = useState<string>('300 000');
   const [method, setMethod] = useState<string>('CASH');
   const [description, setDescription] = useState<string>('');
@@ -60,15 +81,15 @@ export function QuickPaymentModal() {
     };
 
     const handleCustomOpen = (e: Event) => {
-      const customEvent = e as CustomEvent<{ student?: any; studentId?: string }>;
+      const customEvent = e as CustomEvent<{ student?: QuickStudent; studentId?: string }>;
       if (customEvent.detail?.student) {
         setSelectedStudent(customEvent.detail.student);
       } else if (customEvent.detail?.studentId) {
         // Resolve student by studentId if only ID was passed (e.g. from Retention Radar)
         studentsApi
           .get(customEvent.detail.studentId)
-          .then((res: any) => {
-            if (res) setSelectedStudent(res);
+          .then((res: unknown) => {
+            if (res) setSelectedStudent(res as QuickStudent);
           })
           .catch(() => {});
       }
@@ -91,7 +112,7 @@ export function QuickPaymentModal() {
     queryKey: ['students', 'quick-search', searchTerm],
     queryFn: async () => {
       if (!searchTerm || searchTerm.trim().length < 2) return { items: [] };
-      return studentsApi.list({ search: searchTerm.trim(), limit: 8 }) as Promise<{ items: any[]; total: number }>;
+      return studentsApi.list({ search: searchTerm.trim(), limit: 8 }) as Promise<QuickStudentListResponse>;
     },
     enabled: open && !selectedStudent && searchTerm.trim().length >= 2,
     staleTime: 30000,
@@ -124,7 +145,7 @@ export function QuickPaymentModal() {
       if (!selectedStudent?.id) {
         throw new Error('Iltimos, o\'quvchini tanlang');
       }
-      const numAmount = parseFloat(amount.replace(/[^0-9.]/g, ''));
+      const numAmount = parseFinancialAmount(amount);
       if (!numAmount || isNaN(numAmount) || numAmount <= 0) {
         throw new Error('Iltimos, to\'g\'ri to\'lov summasini kiriting');
       }
@@ -144,7 +165,7 @@ export function QuickPaymentModal() {
       const sName = selectedStudent?.user
         ? `${selectedStudent.user.firstName} ${selectedStudent.user.lastName}`
         : (selectedStudent?.firstName ? `${selectedStudent.firstName} ${selectedStudent.lastName || ''}` : 'O\'quvchi');
-      const formattedAmount = Number(amount.replace(/[^0-9.]/g, '')).toLocaleString('uz-UZ');
+      const formattedAmount = (parseFinancialAmount(amount) || 0).toLocaleString('uz-UZ');
 
       playSuccess();
       voice.speakPaymentSuccess();
@@ -167,7 +188,7 @@ export function QuickPaymentModal() {
 
       setOpen(false);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       push('error', err?.message || 'To\'lovni kiritishda xatolik yuz berdi');
     },
   });
@@ -180,12 +201,13 @@ export function QuickPaymentModal() {
 
   if (!open) return null;
 
-  const studentList: any[] = Array.isArray(studentsData)
-    ? studentsData
-    : Array.isArray(studentsData?.items)
-      ? studentsData.items
-      : Array.isArray((studentsData as any)?.data)
-        ? (studentsData as any).data
+  const studentsResponse = studentsData as QuickStudentListResponse | QuickStudent[] | undefined;
+  const studentList: QuickStudent[] = Array.isArray(studentsResponse)
+    ? studentsResponse
+    : Array.isArray(studentsResponse?.items)
+      ? studentsResponse.items
+      : Array.isArray(studentsResponse?.data)
+        ? studentsResponse.data
         : [];
 
   // Dropdown search results
@@ -195,6 +217,9 @@ export function QuickPaymentModal() {
       onClick={() => setOpen(false)}
     >
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-payment-title"
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -215,7 +240,7 @@ export function QuickPaymentModal() {
               ⚡️
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              <h2 id="quick-payment-title" className="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 {t('quickPayment.title', "Tezkor To'lov (3 soniya)")}
                 <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
                   Instant
@@ -229,7 +254,8 @@ export function QuickPaymentModal() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 hover:text-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
+            aria-label={t('common.close', 'Yopish')}
+            className="flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-black/5 text-slate-500 hover:bg-black/10 hover:text-slate-800 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white transition-colors"
           >
             ✕
           </button>
@@ -279,10 +305,13 @@ export function QuickPaymentModal() {
               <div className="relative">
                 <input
                   ref={searchInputRef}
+                  id="quick-payment-search-student"
+                  name="quick-payment-search-student"
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder={t('quickPayment.searchStudent', 'Ism, familiya yoki telefon raqami bilan qidiring...')}
+                  aria-label={t('quickPayment.searchStudent', 'Ism, familiya yoki telefon raqami bilan qidiring...')}
                   className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-base sm:text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
                 />
 
@@ -293,7 +322,7 @@ export function QuickPaymentModal() {
                 {/* Dropdown search results */}
                 {searchTerm.trim().length >= 2 && studentList.length > 0 && (
                   <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-1 shadow-2xl backdrop-blur-xl dark:border-white/15 dark:bg-slate-900/95">
-                    {studentList.map((student: any) => (
+                    {studentList.map((student) => (
                       <button
                         key={student.id}
                         type="button"
@@ -324,12 +353,14 @@ export function QuickPaymentModal() {
 
           {/* Step 2: Amount with Quick Presets */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+            <label htmlFor="quick-payment-amount" className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
               2. {t('quickPayment.amount', "To'lov Summasi (UZS)")}
             </label>
             <div className="relative">
               <input
                 ref={amountInputRef}
+                id="quick-payment-amount"
+                name="quick-payment-amount"
                 type="text"
                 value={amount}
                 onChange={(e) => {
@@ -351,7 +382,7 @@ export function QuickPaymentModal() {
                   key={preset.value}
                   type="button"
                   onClick={() => setAmount(preset.value.toLocaleString('uz-UZ'))}
-                  className="rounded-xl border border-black/10 bg-black/[0.03] px-3 py-1.5 min-h-[36px] text-xs font-semibold text-slate-700 hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-700 transition-all dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-emerald-500/20 dark:hover:border-emerald-500/30 dark:hover:text-emerald-300 flex items-center justify-center"
+                  className="rounded-xl border border-black/10 bg-black/[0.03] px-3.5 py-2 min-h-[44px] text-xs font-semibold text-slate-700 hover:bg-emerald-500/15 hover:border-emerald-500/30 hover:text-emerald-700 transition-all dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-emerald-500/20 dark:hover:border-emerald-500/30 dark:hover:text-emerald-300 flex items-center justify-center"
                 >
                   {preset.label}
                 </button>
@@ -389,9 +420,12 @@ export function QuickPaymentModal() {
           {/* Optional Note */}
           <div>
             <input
+              id="quick-payment-description"
+              name="quick-payment-description"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              aria-label={t('quickPayment.description', 'Izoh (masalan: Oktyabr oyi ingliz tili kursi uchun)')}
               placeholder={t('quickPayment.description', 'Izoh (masalan: Oktyabr oyi ingliz tili kursi uchun)')}
               className="w-full rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-base sm:text-xs text-slate-900 placeholder-slate-400 outline-none focus:border-indigo-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-slate-500"
             />

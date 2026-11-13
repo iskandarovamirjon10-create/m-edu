@@ -3,7 +3,7 @@
  * Generates tailored Telegram/SMS reminders for student parents via paymentsApi.draftParentMessage.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   Sparkles,
@@ -91,10 +91,16 @@ export function AiDebtReminderModal({ open, onClose, payment }: AiDebtReminderMo
     [payment, tone, studentName, amountNum, sound, haptics],
   );
 
+  // Eng so‘nggi generatorni ref orqali chaqiramiz — tone o‘zgarganda qayta so‘rov yubormaydi.
+  const generateRef = useRef(handleGenerate);
+  useEffect(() => {
+    generateRef.current = handleGenerate;
+  }, [handleGenerate]);
+
   useEffect(() => {
     if (open && payment) {
       setCopied(false);
-      handleGenerate(tone);
+      void generateRef.current();
     } else {
       setDraft('');
     }

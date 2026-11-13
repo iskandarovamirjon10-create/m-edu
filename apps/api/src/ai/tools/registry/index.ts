@@ -44,7 +44,7 @@ export interface AiToolDependencies {
 /** Build the full, canonical set of AI tools from domain services. */
 export function createAiToolDefinitions(deps: AiToolDependencies): AiToolDefinition[] {
   const tools: AiToolDefinition[] = [
-    ...createStudentsTools(deps.students),
+    ...createStudentsTools(deps.students, deps.prisma),
     ...createTeachersTools(deps.teachers, deps.prisma),
     ...createAttendanceTools(deps.attendance, deps.prisma),
     ...createPaymentsTools(deps.invoices),

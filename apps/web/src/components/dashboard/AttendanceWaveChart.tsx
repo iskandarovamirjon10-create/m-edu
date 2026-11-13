@@ -45,18 +45,30 @@ interface Point {
 function periodStart(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days + 1);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+  // Send a local calendar date, not an ISO instant: `toISOString()` on local
+  // midnight shifts the lower bound one day back in UTC+ timezones.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 /** Group raw `{ date, status, count }` rows into one attendance rate per day. */
 function toDailyPoints(rows: DailyRow[]): Point[] {
-  const byDate = new Map<string, { present: number; total: number; rate?: number }>();
+  const byDate = new Map<
+    string,
+    { present: number; total: number; excused: number; rate?: number }
+  >();
   for (const row of rows) {
     const key = row.date ? String(row.date).slice(0, 10) : '';
     if (!key) continue;
     const entry =
-      byDate.get(key) ?? { present: 0, total: 0, rate: undefined as number | undefined };
+      byDate.get(key) ?? {
+        present: 0,
+        total: 0,
+        excused: 0,
+        rate: undefined as number | undefined,
+      };
     const explicit = Number(row.rate);
     if (row.rate !== undefined && Number.isFinite(explicit)) {
       entry.rate = clamp(Math.round(explicit), 0, 100);
@@ -64,14 +76,19 @@ function toDailyPoints(rows: DailyRow[]): Point[] {
       const count = Number(row.count) || 0;
       entry.total += count;
       if (row.status === 'PRESENT' || row.status === 'LATE') entry.present += count;
+      else if (row.status === 'EXCUSED') entry.excused += count;
     }
     byDate.set(key, entry);
   }
   return Array.from(byDate.entries())
-    .map(([date, v]) => ({
-      date,
-      rate: v.rate ?? (v.total > 0 ? Math.round((v.present / v.total) * 100) : 0),
-    }))
+    .map(([date, v]) => {
+      // Canonical rate: LATE counts as attended, EXCUSED is not penalised.
+      const denominator = v.total - v.excused;
+      return {
+        date,
+        rate: v.rate ?? (denominator > 0 ? Math.round((v.present / denominator) * 100) : 0),
+      };
+    })
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(({ date, rate }) => {
       const d = new Date(date);
@@ -111,7 +128,11 @@ export function AttendanceWaveChart({
     if (attendanceStats.length > 0) {
       const total = attendanceStats.reduce((sum, s) => sum + (Number(s.count) || 0), 0);
       const present = Number(attendanceStats.find((s) => s.status === 'PRESENT')?.count || 0);
-      const rate = total > 0 ? Math.round((present / total) * 100) : overallRate;
+      const late = Number(attendanceStats.find((s) => s.status === 'LATE')?.count || 0);
+      const excused = Number(attendanceStats.find((s) => s.status === 'EXCUSED')?.count || 0);
+      const denominator = total - excused;
+      const rate =
+        denominator > 0 ? Math.round(((present + late) / denominator) * 100) : overallRate;
       if (rate > 0) return [{ label: '30 kunlik', shortLabel: 'Oy', rate }];
     }
     return [];

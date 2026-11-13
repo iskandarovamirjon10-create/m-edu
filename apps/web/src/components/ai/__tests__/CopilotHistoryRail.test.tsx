@@ -16,10 +16,14 @@ describe('CopilotHistoryRail', () => {
         { id: '1', title: 'Test', preview: '', updatedAt: new Date().toISOString(), messageCount: 1 }
       ],
       isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
       createNew: vi.fn(),
+      renameConversation: vi.fn(),
+      isRenaming: false,
       deleteConversation: vi.fn(),
       loadMessages: vi.fn(),
-    } as any);
+    } as ReturnType<typeof useConversationsHook.useConversations>);
 
     vi.mocked(useAiHealthHook.useAiHealth).mockReturnValue({
       isOnline: true,
@@ -27,11 +31,11 @@ describe('CopilotHistoryRail', () => {
       configured: true,
       isLoading: false,
       refetch: vi.fn(),
-    } as any);
+    } as ReturnType<typeof useAiHealthHook.useAiHealth>);
   });
 
   it('returns null when conversations flag is false', () => {
-    (AI_FLAGS as any).conversations = false;
+    AI_FLAGS.conversations = false;
     const { container } = render(
       <CopilotHistoryRail
         collapsed={false}
@@ -46,7 +50,7 @@ describe('CopilotHistoryRail', () => {
   });
 
   it('renders correctly when conversations flag is true', () => {
-    (AI_FLAGS as any).conversations = true;
+    AI_FLAGS.conversations = true;
     render(
       <CopilotHistoryRail
         collapsed={false}
@@ -61,7 +65,7 @@ describe('CopilotHistoryRail', () => {
   });
 
   it('renames a conversation from the row menu without selecting it', async () => {
-    (AI_FLAGS as any).conversations = true;
+    AI_FLAGS.conversations = true;
     const user = userEvent.setup();
     const onRename = vi.fn().mockResolvedValue(undefined);
     const onSelect = vi.fn();
@@ -92,7 +96,7 @@ describe('CopilotHistoryRail', () => {
   });
 
   it('shows the provider mode in the footer', () => {
-    (AI_FLAGS as any).conversations = true;
+    AI_FLAGS.conversations = true;
     render(
       <CopilotHistoryRail
         collapsed={false}

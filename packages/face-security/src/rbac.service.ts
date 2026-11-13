@@ -38,8 +38,15 @@ export class RbacService implements AuthorizationPort {
   }
 
   async hasAnyPermission(permissions: Permission[], role?: string): Promise<boolean> {
+    if (!permissions || permissions.length === 0) return false;
+    // Batch resolution: load dynamic permissions once to prevent N+1 DB calls
+    const userPermissions = await this.getPermissions();
+    const rolePermissions = role ? RbacService.getPermissionsForRole(role) : [];
+    
     for (const permission of permissions) {
-      if (await this.hasPermission(permission, role)) return true;
+      if (userPermissions.includes(permission) || rolePermissions.includes(permission)) {
+        return true;
+      }
     }
     return false;
   }

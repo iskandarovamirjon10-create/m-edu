@@ -52,6 +52,29 @@ interface InvoiceItem {
   status: 'PENDING' | 'PAID' | 'CANCELLED';
 }
 
+interface SubscriptionInfo {
+  status?: string;
+  trialEndAt?: string | null;
+  plan?: string;
+}
+
+interface UsageQuota {
+  current?: number;
+  max?: number;
+  percentage?: number;
+}
+
+interface UsageInfo {
+  students?: UsageQuota;
+  branches?: UsageQuota;
+  employees?: UsageQuota;
+}
+
+interface InvoicePaymentLinks {
+  paymeUrl?: string;
+  clickUrl?: string;
+}
+
 export function BillingSettingsPage() {
   const { t } = useSafeI18n();
   const sound = usePremiumSound();
@@ -62,31 +85,31 @@ export function BillingSettingsPage() {
   usePageTitle(t('settings.billing', 'Ta’rif va obuna to‘lovlari'));
 
   // Queries
-  const { data: currentSub } = useQuery({
+  const { data: currentSub } = useQuery<SubscriptionInfo>({
     queryKey: ['subscription-current'],
-    queryFn: subscriptionsApi.getCurrentSubscription,
+    queryFn: () => subscriptionsApi.getCurrentSubscription() as Promise<SubscriptionInfo>,
   });
 
-  const { data: usage } = useQuery({
+  const { data: usage } = useQuery<UsageInfo>({
     queryKey: ['subscription-usage'],
-    queryFn: subscriptionsApi.getUsage,
+    queryFn: () => subscriptionsApi.getUsage() as Promise<UsageInfo>,
   });
 
-  const { data: plans = [] } = useQuery({
+  const { data: plans = [] } = useQuery<PlanItem[]>({
     queryKey: ['subscription-plans'],
-    queryFn: subscriptionsApi.getPlans,
+    queryFn: () => subscriptionsApi.getPlans() as Promise<PlanItem[]>,
   });
 
-  const { data: invoices = [] } = useQuery({
+  const { data: invoices = [] } = useQuery<InvoiceItem[]>({
     queryKey: ['billing-invoices'],
-    queryFn: billingApi.getInvoices,
+    queryFn: () => billingApi.getInvoices() as Promise<InvoiceItem[]>,
   });
 
-  const { data: payLinks, isLoading: isLinksLoading } = useQuery({
+  const { data: payLinks, isLoading: isLinksLoading } = useQuery<InvoicePaymentLinks>({
     queryKey: ['billing-pay-links', activeInvoiceForPay?.invoiceNumber],
     queryFn: () => {
       if (!activeInvoiceForPay) throw new Error('No invoice selected');
-      return billingApi.getPaymentLinks(activeInvoiceForPay.invoiceNumber);
+      return billingApi.getPaymentLinks(activeInvoiceForPay.invoiceNumber) as Promise<InvoicePaymentLinks>;
     },
     enabled: Boolean(activeInvoiceForPay),
   });

@@ -27,7 +27,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
  * TYPES
  * ══════════════════════════════════════════════════════════════════════ */
 
-export type ConfirmTone = 'danger' | 'warning' | 'primary';
+export type ConfirmTone = 'danger' | 'warning' | 'primary' | 'default' | 'info';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -84,6 +84,18 @@ const TONE_STYLES: Record<ConfirmTone, ToneStyle> = {
     badge: 'border-apple-blue/25 bg-apple-blue/10 text-apple-blue',
     buttonVariant: 'primary',
   },
+  default: {
+    icon: 'checkCircle',
+    tile: 'bg-sunken text-secondary',
+    badge: 'border-subtle bg-sunken text-secondary',
+    buttonVariant: 'primary',
+  },
+  info: {
+    icon: 'checkCircle',
+    tile: 'bg-apple-blue/10 text-apple-blue',
+    badge: 'border-apple-blue/25 bg-apple-blue/10 text-apple-blue',
+    buttonVariant: 'primary',
+  },
 };
 
 const FAILURE_MESSAGE = 'Something went wrong. Please try again.';
@@ -125,7 +137,7 @@ export const ConfirmDialog = memo(function ConfirmDialog({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const isBusy = loading || internalLoading;
-  const toneStyle = TONE_STYLES[tone];
+  const toneStyle = TONE_STYLES[tone] ?? TONE_STYLES.primary;
 
   /** Translate with an English fallback when the key is missing. */
   const tr = useCallback(
@@ -205,7 +217,6 @@ export const ConfirmDialog = memo(function ConfirmDialog({
       }
     } catch (err) {
       // Caught here so a rejected promise never escapes as an unhandled rejection.
-      // eslint-disable-next-line no-console
       console.error('[ConfirmDialog] onConfirm failed', err);
       sound.playError?.();
       setError(tr('confirm.failed', FAILURE_MESSAGE));

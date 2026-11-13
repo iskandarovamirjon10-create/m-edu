@@ -232,7 +232,7 @@ export class ArenaQuestionVerifierService {
     auditLog.push("[Math] Deterministik matematik ifodalar tahlili boshlandi.");
 
     // Detect basic arithmetic expressions e.g. "12 + 15", "2^8", "24 * 5", "100 / 4"
-    const arithmeticPattern = /([\d\.]+)\s*([\+\-\*\/\^])\s*([\d\.]+)/g;
+    const arithmeticPattern = /([\d.]+)\s*([+\-*/^])\s*([\d.]+)/g;
     let match: RegExpExecArray | null;
     let verifiedCount = 0;
 
@@ -254,7 +254,7 @@ export class ArenaQuestionVerifierService {
         auditLog.push(`[Math] Aniqlangan ifoda: ${a} ${op} ${b} = ${expected}`);
         verifiedCount++;
         // Check if correct option contains or equals this number
-        const optNumMatch = correctOpt.optionText.match(/[\d\.]+/);
+        const optNumMatch = correctOpt.optionText.match(/[\d.]+/);
         if (optNumMatch) {
           const optVal = parseFloat(optNumMatch[0]);
           if (Math.abs(optVal - expected) < 0.001) {
@@ -294,20 +294,20 @@ export class ArenaQuestionVerifierService {
     auditLog.push("[Physics] Fizik cheklovlar va o'lchov birliklari tekshiruvi.");
 
     // 1. Absolute zero check: T < 0 K or T < -273.15 C is physically impossible
-    const kelvinMatch = combined.match(/([-\d\.]+)\s*k(?:elvin)?\b/i);
+    const kelvinMatch = combined.match(/([-\d.]+)\s*k(?:elvin)?\b/i);
     if (kelvinMatch && parseFloat(kelvinMatch[1]) < 0) {
       errors.push(`Fizik paradoks: Absolyut noldan past harorat (${kelvinMatch[1]} K) mavjud bo'lishi mumkin emas.`);
       return false;
     }
 
-    const celsiusMatch = combined.match(/([-\d\.]+)\s*°?\s*c(?:elsius)?\b/i);
+    const celsiusMatch = combined.match(/([-\d.]+)\s*°?\s*c(?:elsius)?\b/i);
     if (celsiusMatch && parseFloat(celsiusMatch[1]) < -273.15) {
       errors.push(`Fizik paradoks: -273.15°C dan past harorat (${celsiusMatch[1]}°C) mavjud emas.`);
       return false;
     }
 
     // 2. Speed of light barrier: v <= 3 * 10^8 m/s
-    const speedMatch = combined.match(/([\d\.]+)\s*(?:x|\*|\×)\s*10\^?(\d+)\s*m\/s/i);
+    const speedMatch = combined.match(/([\d.]+)\s*(?:x|\*|×)\s*10\^?(\d+)\s*m\/s/i);
     if (speedMatch) {
       const mantissa = parseFloat(speedMatch[1]);
       const exp = parseInt(speedMatch[2], 10);

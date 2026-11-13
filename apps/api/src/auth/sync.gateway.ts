@@ -1,5 +1,5 @@
 import { isAllowedOrigin } from '../common/cors.util';
-﻿import {
+import {
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,

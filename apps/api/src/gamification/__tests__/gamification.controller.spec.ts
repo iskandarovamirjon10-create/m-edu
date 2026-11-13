@@ -115,12 +115,11 @@ describe('GamificationController', () => {
   });
 
   describe('getMyStats', () => {
-    it('throws ForbiddenException if student profile does not exist', async () => {
+    it('returns null if student profile does not exist (e.g. staff/admin user)', async () => {
       prisma.student.findFirst.mockResolvedValue(null);
 
-      await expect(
-        controller.getMyStats('org-1', 'user-1'),
-      ).rejects.toThrow(ForbiddenException);
+      const result = await controller.getMyStats('org-1', 'user-1');
+      expect(result).toBeNull();
     });
 
     it('returns student stats when profile exists', async () => {
@@ -147,12 +146,11 @@ describe('GamificationController', () => {
   });
 
   describe('getMyEvents', () => {
-    it('throws ForbiddenException if student profile does not exist', async () => {
+    it('returns empty items list if student profile does not exist', async () => {
       prisma.student.findFirst.mockResolvedValue(null);
 
-      await expect(
-        controller.getMyEvents('org-1', 'user-1', { limit: 10 }),
-      ).rejects.toThrow(ForbiddenException);
+      const result = await controller.getMyEvents('org-1', 'user-1', { limit: 10 });
+      expect(result).toEqual({ items: [] });
     });
 
     it('returns student events when profile exists', async () => {

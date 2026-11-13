@@ -644,9 +644,13 @@ interface ExportRow {
   timestamp?: string;
 }
 
-/** Escape a field per RFC 4180 — only doubles quotes. Does NOT touch ";". */
+/** Escape a field per RFC 4180 — only doubles quotes. Does NOT touch ";". Formula-injection hardened. */
 function csvField(s: string): string {
-  return `"${String(s).replace(/"/g, '""')}"`;
+  let str = String(s ?? '');
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
 function buildCsv(

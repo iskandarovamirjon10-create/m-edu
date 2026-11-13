@@ -1,4 +1,4 @@
-﻿import { Type } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 /** Body for resolving a security alert (SF-4 — was an inline object type). */
@@ -16,6 +16,9 @@ export class SecurityAlertQueryDto {
 
   @IsOptional() @IsString()
   resolved?: string;
+
+  @IsOptional() @IsString()
+  status?: string;
 
   @IsOptional() @Type(() => Number) @IsInt() @Min(0)
   skip?: number;

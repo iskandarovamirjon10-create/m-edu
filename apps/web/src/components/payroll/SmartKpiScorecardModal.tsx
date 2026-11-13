@@ -33,7 +33,8 @@ export function SmartKpiScorecardModal({
 
   const { data: kpi, isLoading, isError } = useQuery<TeacherSmartKpiScorecard>({
     queryKey: ['smart-kpi', teacherId, year, month],
-    queryFn: () => payrollApi.getSmartKpi({ teacherId, year, month }),
+    queryFn: () =>
+      payrollApi.getSmartKpi({ teacherId, year, month }) as Promise<TeacherSmartKpiScorecard>,
     enabled: open && Boolean(teacherId),
   });
 
@@ -46,7 +47,7 @@ export function SmartKpiScorecardModal({
         year,
         month,
         customBonus: bonus,
-      });
+      }) as Promise<TeacherSmartKpiScorecard>;
     },
     onSuccess: () => {
       push('success', t('payroll.smartKpiApplied', 'Smart KPI maoshi va bonusi muvaffaqiyatli hisoblandi'));
@@ -58,8 +59,8 @@ export function SmartKpiScorecardModal({
       }
       onClose();
     },
-    onError: (err: any) => {
-      push('error', err?.message || t('common.error', 'Xatolik yuz berdi'));
+    onError: (err) => {
+      push('error', err.message || t('common.error', 'Xatolik yuz berdi'));
     },
   });
 

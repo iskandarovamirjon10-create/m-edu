@@ -78,7 +78,7 @@ function getChannelConfig(channel: string) {
  case'SMS': return { bg:'bg-emerald-500/10', text:'text-emerald-600', border:'border-emerald-500/20', dot:'bg-emerald-500', fill:'#10b981'};
  case'TELEGRAM': return { bg:'bg-indigo-500/10', text:'text-indigo-600', border:'border-indigo-500/20', dot:'bg-indigo-500', fill:'#6366f1'};
  case'IN_APP': return { bg:'bg-amber-500/10', text:'text-amber-600', border:'border-amber-500/20', dot:'bg-amber-500', fill:'#f59e0b'};
- default: return { bg:'bg-[var(--state-hover)]', text:'text-[var(--text-secondary)]', border:'border-[var(--border-subtle)]/50', dot:'bg-gray-400', fill:'#9ca3af'};
+ default: return { bg:'bg-[var(--state-hover)]', text:'text-[var(--text-secondary)]', border:'border-[var(--border-subtle)]/50', dot:'bg-slate-400', fill:'#94a3b8'};
 }
 }
 
@@ -90,7 +90,7 @@ function getStatusConfig(status: string) {
  case'FAILED': return { bg:'bg-rose-500/10', text:'text-rose-600', border:'border-rose-500/20', dot:'bg-rose-500', fill:'#f43f5e'};
  case'BOUNCED': return { bg:'bg-amber-500/10', text:'text-amber-600', border:'border-amber-500/20', dot:'bg-amber-500', fill:'#f59e0b'};
  case'QUEUED': return { bg:'bg-slate-500/10', text:'text-slate-500 dark:text-slate-400', border:'border-slate-500/20', dot:'bg-slate-400 animate-pulse', fill:'#94a3b8'};
- default: return { bg:'bg-[var(--state-hover)]', text:'text-[var(--text-secondary)]', border:'border-[var(--border-subtle)]/50', dot:'bg-gray-400', fill:'#9ca3af'};
+ default: return { bg:'bg-[var(--state-hover)]', text:'text-[var(--text-secondary)]', border:'border-[var(--border-subtle)]/50', dot:'bg-slate-400', fill:'#94a3b8'};
 }
 }
 
@@ -196,7 +196,7 @@ function TimelineTab() {
  ) : (
  <div className="relative pl-6 sm:pl-8">
  {/* Central vertical line */}
- <div className="absolute left-[27px] sm:left-[35px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-gray-200 via-gray-200 to-transparent dark:from-white/10 dark:via-white/10 dark:to-transparent"/>
+ <div className="absolute left-[27px] sm:left-[35px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-slate-200 via-slate-200 to-transparent dark:from-white/10 dark:via-white/10 dark:to-transparent"/>
  
  <div className="space-y-8">
  {items.map((item: CommunicationLogItem, idx: number) => {
@@ -446,7 +446,7 @@ function DonutChart({ data}: { data: any[]}) {
  return (
  <div className="relative w-48 h-48 drop-shadow-md mx-auto">
  <svg width="100%"height="100%"viewBox="0 0 100 100"className="transform -rotate-90">
- <circle cx={cx} cy={cy} r={r} fill="none"className="stroke-gray-100 dark:stroke-white/5"strokeWidth={12} />
+ <circle cx={cx} cy={cy} r={r} fill="none"className="stroke-slate-100 dark:stroke-white/5"strokeWidth={12} />
  {segments.map((seg) => {
  const dash = seg.pct * circumference;
  const offset = (1 - seg.start) * circumference;

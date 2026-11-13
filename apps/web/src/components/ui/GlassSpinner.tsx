@@ -10,13 +10,13 @@ export interface GlassSpinnerProps extends HTMLAttributes<HTMLDivElement> {
   /** @deprecated no-op */ noReflection?: boolean;
   /** @deprecated no-op */ enableNoise?: boolean;
   /** @deprecated no-op */ glassDepth?: number;
-  /** @deprecated no-op */ variant?: any;
+  /** @deprecated no-op */ variant?: unknown;
   label?: string;
 }
 
 const sizeMap: Record<GlassSpinnerSize, string> = { xs: 'h-3 w-3', sm: 'h-4 w-4', md: 'h-5 w-5', lg: 'h-6 w-6', xl: 'h-8 w-8' };
 
-export function GlassSpinner({size='md', className='', label, disableRefraction,decorative,noReflection,enableNoise,glassDepth,variant,...props}: GlassSpinnerProps) {
+export function GlassSpinner({size='md', className='', label, disableRefraction: _disableRefraction, decorative: _decorative, noReflection: _noReflection, enableNoise: _enableNoise, glassDepth: _glassDepth, variant: _variant, ...props}: GlassSpinnerProps) {
   const aria = label ? { 'role':'status' as const, 'aria-label': label } : { 'aria-hidden': true as const };
   return (<div {...aria} className={cn('animate-spin rounded-full border-2 border-[var(--border-subtle)] border-t-[var(--text-primary)]', sizeMap[size], className)} {...props} />);
 }

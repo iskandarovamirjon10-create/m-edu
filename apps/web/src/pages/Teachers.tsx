@@ -48,7 +48,7 @@ import {
 } from '@/components/ui';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { getErrorMessage } from '@/lib/errorMessages';
-import { fullName, formatCurrency } from '@/lib/format';
+import { fullName, formatCurrency, parseFinancialAmount } from '@/lib/format';
 import type { Paginated } from '@/lib/types';
 import type { Teacher } from '@/types/academics';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -505,7 +505,7 @@ const TeachersSkeleton = memo(function TeachersSkeleton({ viewMode }: { viewMode
             <div key={key} className="flex items-center justify-between gap-4 px-5 py-4">
               <div className="flex items-center gap-3.5 flex-1 min-w-0">
                 <div className="h-4.5 w-4.5 rounded-full bg-slate-200/70 dark:bg-white/10 shrink-0" />
-                <div className="h-10 w-10 rounded-2xl bg-slate-200/70 dark:bg-white/10 shrink-0" />
+                <div className="h-10 w-10 rounded-xl bg-slate-200/70 dark:bg-white/10 shrink-0" />
                 <div className="space-y-2 flex-1 min-w-0">
                   <div className="h-4 w-36 rounded-md bg-slate-200/80 dark:bg-white/15" />
                   <div className="h-3 w-56 rounded-md bg-slate-100 dark:bg-white/[0.06]" />
@@ -523,7 +523,7 @@ const TeachersSkeleton = memo(function TeachersSkeleton({ viewMode }: { viewMode
           {[1, 2, 3, 4, 5, 6].map((key) => (
             <div key={key} className="p-4.5 rounded-2xl border border-slate-200/60 dark:border-white/[0.06] bg-white/40 dark:bg-white/[0.02] space-y-4">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-2xl bg-slate-200/70 dark:bg-white/10" />
+                <div className="h-11 w-11 rounded-xl bg-slate-200/70 dark:bg-white/10" />
                 <div className="space-y-2 flex-1">
                   <div className="h-4 w-28 rounded-md bg-slate-200/80 dark:bg-white/15" />
                   <div className="h-3 w-40 rounded-md bg-slate-100 dark:bg-white/[0.06]" />
@@ -697,8 +697,8 @@ export function TeachersPage() {
           ? form.specializations.split(',').map((s) => s.trim()).filter(Boolean)
           : [],
         salaryType: form.salaryType || undefined,
-        hourlyRate: form.hourlyRate ? parseFloat(form.hourlyRate) : undefined,
-        lessonRate: form.lessonRate ? parseFloat(form.lessonRate) : undefined,
+        hourlyRate: form.hourlyRate ? parseFinancialAmount(form.hourlyRate) : undefined,
+        lessonRate: form.lessonRate ? parseFinancialAmount(form.lessonRate) : undefined,
         bio: form.bio.trim() || undefined,
         experience: form.experience ? parseInt(form.experience, 10) : undefined,
       };
@@ -890,9 +890,9 @@ export function TeachersPage() {
     if (form.email && !validateEmail(form.email)) errors.email = t('teachers.form.emailInvalid');
     if (form.password && form.password.trim().length > 0 && form.password.trim().length < 6)
       errors.password = t('teachers.form.passwordMin');
-    if (form.hourlyRate && parseFloat(form.hourlyRate) < 0)
+    if (form.hourlyRate && parseFinancialAmount(form.hourlyRate) < 0)
       errors.hourlyRate = t('teachers.form.hourlyRateNumber');
-    if (form.lessonRate && parseFloat(form.lessonRate) < 0)
+    if (form.lessonRate && parseFinancialAmount(form.lessonRate) < 0)
       errors.lessonRate = t('teachers.form.lessonRateNumber');
     if (form.experience && parseInt(form.experience, 10) < 0)
       errors.experience = t('teachers.form.experienceNumber');
@@ -1017,24 +1017,31 @@ export function TeachersPage() {
   const handleBatchToggleStatus = useCallback(async () => {
     sound.playTick?.();
     haptics.medium();
-    let count = 0;
-    for (const id of selectedIds) {
-      try {
-        const item = teacherList.find((t) => t.id === id);
-        if (item) {
-          const nextActive = item.user?.isActive === false;
-          await teachersApi.update(id, { isActive: nextActive });
-          count++;
-        }
-      } catch {
-        // continue
-      }
+    const idsToUpdate = Array.from(selectedIds);
+    if (idsToUpdate.length === 0) return;
+
+    let successfulCount = 0;
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < idsToUpdate.length; i += CHUNK_SIZE) {
+      const chunk = idsToUpdate.slice(i, i + CHUNK_SIZE);
+      const results = await Promise.allSettled(
+        chunk.map((id) => {
+          const item = teacherList.find((t) => t.id === id);
+          if (item) {
+            const nextActive = item.user?.isActive === false;
+            return teachersApi.update(id, { isActive: nextActive });
+          }
+          return Promise.resolve();
+        })
+      );
+      successfulCount += results.filter((r) => r.status === 'fulfilled').length;
     }
+
     qc.invalidateQueries({ queryKey: queryKeys.teachers.all() });
     clearSelection();
     sound.playSuccess?.();
     haptics.success();
-    push('success', t('teachers.bulk.statusUpdated', { count }));
+    push('success', t('teachers.bulk.statusUpdated', { count: successfulCount }));
   }, [selectedIds, teacherList, qc, clearSelection, sound, haptics, t, push]);
 
   /* ── Close action popover on outside click or Escape ──────────────── */
@@ -1077,15 +1084,18 @@ export function TeachersPage() {
         title={t('teachers.title')}
         description={t('teachers.pageSubtitle')}
         actions={
-          <div className="flex items-center gap-2.5">
+          <div className="action-bar action-bar--stack w-full sm:w-auto">
             {/* Pro Glass Segmented Capsule */}
-            <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.04] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-sm">
+            <div
+              data-action="secondary"
+              className="inline-flex items-center gap-0.5 rounded-xl border border-black/[0.06] bg-black/[0.04] p-0.5 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]"
+            >
               <button
                 type="button"
                 onClick={() => handleExportCSV()}
                 title={`${t('teachers.bulk.exportCsv')} (E)`}
                 aria-label={t('teachers.bulk.exportCsv')}
-                className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="group relative inline-flex h-10 min-h-10 items-center gap-1.5 rounded-lg px-3 text-slate-700 transition-colors hover:bg-slate-500/10 focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-200"
               >
                 <Glyph name="export" size={15} weight={2} />
                 <span className="text-xs font-semibold hidden sm:inline">CSV</span>
@@ -1101,7 +1111,7 @@ export function TeachersPage() {
                 }}
                 title="AI Dars Sifati & Pedagogik Audit Studiyasi (A)"
                 aria-label="AI Dars Auditi"
-                className="group relative h-10 min-h-[44px] px-3 inline-flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-500 dark:text-blue-400 hover:bg-blue-500/20 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="group relative inline-flex h-10 min-h-10 items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 text-blue-500 transition-colors hover:bg-blue-500/20 focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-400"
               >
                 <MeduAiLogo size="xs" />
                 <span className="text-xs font-semibold hidden sm:inline">AI Audit</span>
@@ -1114,7 +1124,8 @@ export function TeachersPage() {
               type="button"
               variant="primary"
               onClick={handleOpenCreateModal}
-              className="!rounded-2xl shadow-lg shadow-blue-500/20 font-bold min-h-[44px] px-4"
+              data-action="primary"
+              className="h-10 min-h-10 rounded-xl px-4 font-semibold shadow-[var(--shadow-brand)]"
             >
               <span className="inline-flex items-center gap-2 font-semibold">
                 <Glyph name="userPlus" size={16} weight={2.2} />
@@ -1542,7 +1553,7 @@ export function TeachersPage() {
                           onClick={() => handleQuickLook(teacher)}
                           title={`${t('teachers.actions.quickLook')} (Space)`}
                           aria-label={t('teachers.actions.quickLook')}
-                          className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          className="h-10 w-10 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
                           <Glyph name="eye" size={15} weight={2.2} />
                         </button>
@@ -1553,7 +1564,7 @@ export function TeachersPage() {
                           onClick={() => handleOpenTeacherSidecar(teacher)}
                           title={t('teachers.actions.sidecar')}
                           aria-label={t('teachers.actions.sidecar')}
-                          className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          className="h-10 w-10 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
                           <Glyph name="sidecar" size={15} weight={2.2} />
                         </button>
@@ -1564,7 +1575,7 @@ export function TeachersPage() {
                           onClick={() => handleEdit(teacher)}
                           title={t('teachers.actions.edit')}
                           aria-label={t('teachers.actions.edit')}
-                          className="h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-blue-600 dark:text-white/60 dark:hover:text-blue-400 hover:bg-blue-500/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          className="h-10 w-10 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-blue-600 dark:text-white/60 dark:hover:text-blue-400 hover:bg-blue-500/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
                           <Glyph name="edit" size={15} weight={2.2} />
                         </button>
@@ -1580,7 +1591,7 @@ export function TeachersPage() {
                             title={t('teachers.actions.more')}
                             aria-label={t('teachers.actions.more')}
                             aria-expanded={isMenuOpen}
-                            className={`h-10 w-10 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                            className={`h-10 w-10 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                               isMenuOpen
                                 ? 'bg-slate-200 dark:bg-white/15 text-slate-900 dark:text-white'
                                 : 'text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10'
@@ -1755,7 +1766,7 @@ export function TeachersPage() {
                           onClick={() => handleOpenTeacherSidecar(teacher)}
                           title={t('teachers.actions.sidecar')}
                           aria-label={t('teachers.actions.sidecar')}
-                          className="h-9 w-9 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
+                          className="h-9 w-9 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-slate-900 dark:text-white/60 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors"
                         >
                           <Glyph name="sidecar" size={14} weight={2.2} />
                         </button>
@@ -1764,7 +1775,7 @@ export function TeachersPage() {
                           onClick={() => handleEdit(teacher)}
                           title={t('teachers.actions.edit')}
                           aria-label={t('teachers.actions.edit')}
-                          className="h-9 w-9 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-blue-600 dark:text-white/60 dark:hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                          className="h-9 w-9 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center text-slate-500 hover:text-blue-600 dark:text-white/60 dark:hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
                         >
                           <Glyph name="edit" size={14} weight={2.2} />
                         </button>
@@ -1775,7 +1786,7 @@ export function TeachersPage() {
                         onClick={() => handleDeleteClick(teacher.id)}
                         title={t('teachers.actions.delete')}
                         aria-label={t('teachers.actions.delete')}
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] rounded-xl inline-flex items-center justify-center text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        className="h-9 w-9 min-h-10 min-w-[44px] rounded-xl inline-flex items-center justify-center text-rose-500 hover:bg-rose-500/10 transition-colors"
                       >
                         <Glyph name="trash" size={14} weight={2.2} />
                       </button>

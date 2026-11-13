@@ -145,6 +145,10 @@ export interface ZReportRecord {
   cashierName: string;
   period: { start: string; end: string };
   summary: ZReportSummary;
+  /** Smena ochilishidagi naqd qoldiq (server ixtiyoriy qaytaradi). */
+  openingBalance?: number;
+  /** Inkassatsiyaga topshirilgan summa. */
+  handoverAmount?: number | null;
   actualCashCounted: number;
   expectedCash: number;
   variance: number;

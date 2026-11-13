@@ -133,42 +133,42 @@ const ACCENT_VISUAL_MAP: Record<string, AccentVisuals> = {
   blue: {
     pill: 'from-white/50 via-brand-500/[0.14] to-brand-500/[0.06] dark:from-white/[0.12] dark:via-brand-400/[0.22] dark:to-brand-500/[0.08] border-brand-500/30 dark:border-brand-400/35 shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.85),inset_0_-1px_0_0_rgba(10,132,255,0.2),0_4px_14px_-3px_rgba(10,132,255,0.24)] dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.26),inset_0_-1px_0_0_rgba(90,200,250,0.25),0_4px_16px_-3px_rgba(10,132,255,0.38)]',
     bar: 'from-brand-400 to-brand-600 shadow-[0_0_10px_rgba(10,132,255,0.85)]',
-    text: 'text-brand-600 dark:text-brand-300',
+    text: 'text-brand-700 dark:text-white font-semibold',
     dot: 'bg-brand-500 shadow-[0_0_6px_rgba(10,132,255,0.75)]',
     meniscus: 'via-brand-500/45 dark:via-brand-400/55',
   },
   purple: {
     pill: 'from-white/50 via-purple-500/[0.14] to-purple-500/[0.06] dark:from-white/[0.12] dark:via-purple-400/[0.22] dark:to-purple-500/[0.08] border-purple-500/30 dark:border-purple-400/35 shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.85),inset_0_-1px_0_0_rgba(175,82,222,0.2),0_4px_14px_-3px_rgba(175,82,222,0.24)] dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.26),inset_0_-1px_0_0_rgba(191,90,242,0.25),0_4px_16px_-3px_rgba(191,90,242,0.38)]',
     bar: 'from-purple-400 to-purple-600 shadow-[0_0_10px_rgba(191,90,242,0.85)]',
-    text: 'text-purple-600 dark:text-purple-300',
+    text: 'text-purple-700 dark:text-white font-semibold',
     dot: 'bg-purple-500 shadow-[0_0_6px_rgba(191,90,242,0.75)]',
     meniscus: 'via-purple-500/45 dark:via-purple-400/55',
   },
   pink: {
     pill: 'from-white/50 via-rose-500/[0.14] to-rose-500/[0.06] dark:from-white/[0.12] dark:via-rose-400/[0.22] dark:to-rose-500/[0.08] border-rose-500/30 dark:border-rose-400/35 shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.85),inset_0_-1px_0_0_rgba(255,55,95,0.2),0_4px_14px_-3px_rgba(255,55,95,0.24)] dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.26),inset_0_-1px_0_0_rgba(255,55,95,0.25),0_4px_16px_-3px_rgba(255,55,95,0.38)]',
     bar: 'from-rose-400 to-rose-600 shadow-[0_0_10px_rgba(255,55,95,0.85)]',
-    text: 'text-rose-600 dark:text-rose-300',
+    text: 'text-rose-700 dark:text-white font-semibold',
     dot: 'bg-rose-500 shadow-[0_0_6px_rgba(255,55,95,0.75)]',
     meniscus: 'via-rose-500/45 dark:via-rose-400/55',
   },
   green: {
     pill: 'from-white/50 via-emerald-500/[0.14] to-emerald-500/[0.06] dark:from-white/[0.12] dark:via-emerald-400/[0.22] dark:to-emerald-500/[0.08] border-emerald-500/30 dark:border-emerald-400/35 shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.85),inset_0_-1px_0_0_rgba(52,199,89,0.2),0_4px_14px_-3px_rgba(52,199,89,0.24)] dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.26),inset_0_-1px_0_0_rgba(48,209,88,0.25),0_4px_16px_-3px_rgba(48,209,88,0.36)]',
     bar: 'from-emerald-400 to-emerald-600 shadow-[0_0_10px_rgba(52,199,89,0.85)]',
-    text: 'text-emerald-600 dark:text-emerald-300',
+    text: 'text-emerald-700 dark:text-white font-semibold',
     dot: 'bg-emerald-500 shadow-[0_0_6px_rgba(52,199,89,0.75)]',
     meniscus: 'via-emerald-500/45 dark:via-emerald-400/55',
   },
   orange: {
     pill: 'from-white/50 via-amber-500/[0.14] to-amber-500/[0.06] dark:from-white/[0.12] dark:via-amber-400/[0.22] dark:to-amber-500/[0.08] border-amber-500/30 dark:border-amber-400/35 shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.85),inset_0_-1px_0_0_rgba(255,149,0,0.2),0_4px_14px_-3px_rgba(255,149,0,0.24)] dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.26),inset_0_-1px_0_0_rgba(255,159,10,0.25),0_4px_16px_-3px_rgba(255,159,10,0.38)]',
     bar: 'from-amber-400 to-orange-500 shadow-[0_0_10px_rgba(255,149,0,0.85)]',
-    text: 'text-amber-600 dark:text-amber-300',
+    text: 'text-amber-700 dark:text-white font-semibold',
     dot: 'bg-amber-500 shadow-[0_0_6px_rgba(255,149,0,0.75)]',
     meniscus: 'via-amber-500/45 dark:via-amber-400/55',
   },
   rainbow: {
     pill: 'from-brand-500/[0.20] via-purple-500/[0.15] to-rose-500/[0.12] dark:from-brand-400/[0.26] dark:via-purple-500/[0.20] dark:to-rose-500/[0.15] border-purple-500/35 dark:border-purple-400/40 shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.88),inset_0_-1px_0_0_rgba(191,90,242,0.28),0_4px_16px_-3px_rgba(175,82,222,0.3)] dark:shadow-[inset_0_1.5px_0_0_rgba(255,255,255,0.28),inset_0_-1px_0_0_rgba(191,90,242,0.35),0_4px_18px_-3px_rgba(191,90,242,0.45)]',
     bar: 'from-brand-400 via-purple-500 to-rose-500 shadow-[0_0_12px_rgba(191,90,242,0.9)]',
-    text: 'text-purple-600 dark:text-purple-300',
+    text: 'text-purple-700 dark:text-white font-semibold',
     dot: 'bg-gradient-to-tr from-brand-500 via-purple-500 to-rose-500 shadow-[0_0_8px_rgba(191,90,242,0.8)]',
     meniscus: 'via-purple-500/55 dark:via-purple-400/65',
   },
@@ -233,6 +233,7 @@ export const ADMINISTRATION_NAV: readonly NavItem[] = [
 ];
 
 export const MORE_NAV: readonly NavItem[] = [
+  { to: '/showcase', labelKey: 'nav.showcase', label: ' Flagman Taqdimot', iconPath: I.executive, accent: 'purple', badge: '7x' },
   { to: '/teacher-cockpit', labelKey: 'nav.teacherCockpit', label: 'Teacher Cockpit', iconPath: I.attendance, accent: 'blue' },
   { to: '/executive-dashboard', labelKey: 'nav.executiveDashboard', label: 'Executive Dashboard', iconPath: I.executive, accent: 'purple' },
   { to: '/financial-analytics', labelKey: 'nav.financialAnalytics', label: 'Financial Analytics', iconPath: I.financial, accent: 'green' },
@@ -261,6 +262,74 @@ export const SECONDARY_NAV: readonly NavItem[] = [
   ...ADMINISTRATION_NAV,
   ...MORE_NAV,
 ];
+
+export const WORKSPACE_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/', labelKey: 'nav.dashboard', label: 'Dashboard', iconPath: I.dashboard, end: true, accent: 'blue' },
+  { to: '/search', labelKey: 'nav.search', label: 'Search', iconPath: I.dashboard, accent: 'blue' },
+  { to: '/notifications', labelKey: 'nav.notifications', label: 'Notifications', iconPath: I.notifications, accent: 'orange' },
+  { to: '/ai-copilot', labelKey: 'nav.aiCopilot', label: 'AI Copilot', iconPath: I.ai, accent: 'rainbow' },
+];
+
+export const ACADEMIC_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/students', labelKey: 'nav.students', label: 'Students', iconPath: I.students, accent: 'blue' },
+  { to: '/groups', labelKey: 'nav.groups', label: 'Groups', iconPath: I.groups, accent: 'blue' },
+  { to: '/attendance', labelKey: 'nav.attendance', label: 'Attendance', iconPath: I.attendance, accent: 'green' },
+  { to: '/grades', labelKey: 'nav.grades', label: 'Grades', iconPath: I.grades, accent: 'purple' },
+  { to: '/academic-risk', labelKey: 'nav.earlyWarning', label: 'Academic Risk', iconPath: I.earlyWarning, accent: 'pink' },
+];
+
+export const TEACHER_STUDIO_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/teacher-cockpit', labelKey: 'nav.teacherCockpit', label: 'Teacher Cockpit', iconPath: I.attendance, end: true, accent: 'blue' },
+  { to: '/schedule', labelKey: 'nav.schedule', label: 'Schedule', iconPath: I.schedule, accent: 'blue' },
+  { to: '/homework', labelKey: 'nav.homework', label: 'Homework', iconPath: I.homework, accent: 'pink' },
+];
+
+export const FINANCE_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/payments', labelKey: 'nav.payments', label: 'Payments', iconPath: I.payments, accent: 'green' },
+  { to: '/invoices', labelKey: 'nav.invoices', label: 'Invoices', iconPath: I.invoices, accent: 'green' },
+  { to: '/expenses', labelKey: 'nav.expenses', label: 'Expenses', iconPath: I.expenses, accent: 'pink' },
+  { to: '/reconciliation', labelKey: 'nav.payrollRuns', label: 'Reconciliation', iconPath: I.payroll, accent: 'green' },
+  { to: '/financial-analytics', labelKey: 'nav.financialAnalytics', label: 'Financial Analytics', iconPath: I.financial, accent: 'green' },
+];
+
+export const CRM_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/leads', labelKey: 'nav.leads', label: 'Leads', iconPath: I.leads, accent: 'blue' },
+  { to: '/crm-analytics', labelKey: 'nav.crmAnalytics', label: 'CRM Analytics', iconPath: I.leads, accent: 'blue' },
+  { to: '/communication-history', labelKey: 'nav.chat', label: 'Communication History', iconPath: I.chat, accent: 'blue' },
+];
+
+export const STUDENT_EXPERIENCE_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/study', labelKey: 'nav.study', label: 'Study', iconPath: I.cert, accent: 'orange' },
+  { to: '/gamification', labelKey: 'nav.gamification', label: 'Gamification', iconPath: I.cert, accent: 'orange' },
+  { to: '/arena', labelKey: 'nav.arena', label: 'Arena', iconPath: I.cert, accent: 'orange' },
+];
+
+export const PEOPLE_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/teachers', labelKey: 'nav.teachers', label: 'Teachers', iconPath: I.teachers, accent: 'purple' },
+  { to: '/hr', labelKey: 'nav.hrPayroll', label: 'HR', iconPath: I.hr, accent: 'purple' },
+  { to: '/users', labelKey: 'nav.users', label: 'Users', iconPath: I.users, accent: 'blue' },
+  { to: '/branches', labelKey: 'nav.branches', label: 'Branches', iconPath: I.branches, accent: 'blue' },
+];
+
+export const PLATFORM_CONTROL_DOMAIN_NAV: readonly NavItem[] = [
+  { to: '/settings', labelKey: 'nav.settings', label: 'Settings', iconPath: I.settings, accent: 'purple' },
+  { to: '/cameras', labelKey: 'nav.cameras', label: 'Cameras', iconPath: I.cameras, accent: 'purple' },
+  { to: '/face', labelKey: 'nav.faceRecognition', label: 'Face ID', iconPath: I.face, accent: 'purple' },
+  { to: '/system-health', labelKey: 'nav.systemHealth', label: 'System Health', iconPath: I.anomaly, accent: 'pink' },
+  { to: '/observability', labelKey: 'nav.observability', label: 'Observability', iconPath: I.governance, accent: 'purple' },
+  { to: '/audit', labelKey: 'nav.audit', label: 'Audit', iconPath: I.audit, accent: 'purple' },
+];
+
+export const ENTERPRISE_DOMAINS = [
+  { id: 'workspace', items: WORKSPACE_DOMAIN_NAV },
+  { id: 'academic', items: ACADEMIC_DOMAIN_NAV },
+  { id: 'teacher', items: TEACHER_STUDIO_DOMAIN_NAV },
+  { id: 'finance', items: FINANCE_DOMAIN_NAV },
+  { id: 'crm', items: CRM_DOMAIN_NAV },
+  { id: 'student', items: STUDENT_EXPERIENCE_DOMAIN_NAV },
+  { id: 'people', items: PEOPLE_DOMAIN_NAV },
+  { id: 'platform', items: PLATFORM_CONTROL_DOMAIN_NAV },
+] as const;
 
 export interface NavSectionDef {
   readonly id: string;
@@ -311,6 +380,10 @@ export const STUDENT_ALLOWED_ROUTES = new Set<string>([
   '/grades',
   '/homework',
   '/attendance',
+  // Student Experience bo‘limi: allowlist’da yo‘qligi uchun nav’da ko‘rinmasdi
+  '/study',
+  '/gamification',
+  '/arena',
   '/chat',
   '/notifications',
   '/settings',
@@ -353,6 +426,12 @@ export const RECEPTIONIST_ALLOWED_ROUTES = new Set<string>([
 
 export function isRouteAllowedForRole(to: string, role: string | null | undefined): boolean {
   const r = (role ?? '').toUpperCase();
+  const basePath = to.split('?')[0].split('#')[0].replace(/\/$/, '') || '/';
+
+  // `/super-admin` — platforma egasi uchun eksklyuziv (route guard bilan mos).
+  // `ADMIN` ham “ADMIN”ni o‘z ichiga olgani uchun avval shu tekshiruv kerak.
+  if (basePath === '/super-admin') return r === 'PLATFORM_OWNER';
+
   if (
     r.includes('ADMIN') ||
     r === 'MANAGER' ||
@@ -362,8 +441,6 @@ export function isRouteAllowedForRole(to: string, role: string | null | undefine
   ) {
     return true;
   }
-
-  const basePath = to.split('?')[0].split('#')[0].replace(/\/$/, '') || '/';
 
   if (r === 'TEACHER' || r === 'ASSISTANT') {
     return TEACHER_ALLOWED_ROUTES.has(basePath);
@@ -1298,6 +1375,8 @@ export const Sidebar = memo(function Sidebar({
   /* ── Zero-Layout-Thrash Cursor Spotlight & Specular Rail Edge Tracker ── */
   const handlePointerEnter = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      // Touch’da spotlight ko‘rinmaydi — bekorga ish qilmaymiz.
+      if (e.pointerType === 'touch') return;
       if (reduced || reducedTransparency || !surfaceRef.current) return;
       const r = surfaceRef.current.getBoundingClientRect();
       rectRef.current = { left: r.left, top: r.top };
@@ -1326,6 +1405,7 @@ export const Sidebar = memo(function Sidebar({
 
   const handlePointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') return;
       if (reduced || reducedTransparency) return;
       spotPointRef.current = { x: e.clientX, y: e.clientY };
       if (spotRafRef.current !== null) return;
@@ -1448,7 +1528,9 @@ export const Sidebar = memo(function Sidebar({
           reducedTransparency
             ? 'bg-[var(--bg-card)]'
             : cn(
-                'bg-[var(--glass-surface-bg)] backdrop-blur-3xl backdrop-saturate-[205%]',
+                // 40 px yetarli: sidebar doimiy fixed, scroll paytida 64 px blur
+                // har kadrda qayta hisoblanadi.
+                'bg-[var(--glass-surface-bg)] backdrop-blur-2xl backdrop-saturate-[170%]',
                 'shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.45),inset_0_1px_0_0_rgba(255,255,255,0.6),8px_0_32px_-12px_rgba(0,0,0,0.08)]',
                 'dark:shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.09),inset_0_1px_0_0_rgba(255,255,255,0.14),12px_0_36px_-12px_rgba(0,0,0,0.52)]',
               ),
@@ -1457,13 +1539,18 @@ export const Sidebar = memo(function Sidebar({
         {/* ── 1. iOS 27 Dynamic Cursor Caustic Spotlight + Specular Right Rail Edge ── */}
         {!reducedTransparency && (
           <>
+            {/* PERF: gradient emas, tayyor qatlam `transform` bilan suriladi.
+                Ilgari har pointer kadrida radial-gradient markazi CSS
+                o‘zgaruvchisi orqali o‘zgarib, butun sidebar qayta bo‘yalardi. */}
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-0 -z-10 transition-opacity duration-500"
+              className="pointer-events-none absolute left-0 top-0 -z-10 h-[680px] w-[680px] rounded-full transition-opacity duration-500 will-change-transform"
               style={{
                 opacity: 'var(--sb-spot-opacity, 0)',
                 background:
-                  'radial-gradient(340px circle at var(--sb-spot-x, 50%) var(--sb-spot-y, 20%), rgba(10, 132, 255, 0.08), rgba(94, 92, 230, 0.035) 45%, transparent 75%)',
+                  'radial-gradient(circle closest-side, rgba(10, 132, 255, 0.08), rgba(94, 92, 230, 0.035) 45%, transparent 75%)',
+                transform:
+                  'translate3d(calc(var(--sb-spot-x, 50%) - 340px), calc(var(--sb-spot-y, 20%) - 340px), 0)',
               }}
             />
             <div

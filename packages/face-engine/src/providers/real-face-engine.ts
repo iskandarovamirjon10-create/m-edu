@@ -230,7 +230,9 @@ export class RealFaceEngine implements FaceEngine {
 
   async compareEmbeddings(input: ComparisonInput): Promise<number> {
     await this.ensureInitialized();
-    return input.embeddingA.cosineSimilarity(input.embeddingB);
+    const raw = input.embeddingA.cosineSimilarity(input.embeddingB);
+    if (!Number.isFinite(raw) || Number.isNaN(raw)) return 0;
+    return Math.min(1, Math.max(-1, raw));
   }
 
   async isAvailable(): Promise<boolean> {

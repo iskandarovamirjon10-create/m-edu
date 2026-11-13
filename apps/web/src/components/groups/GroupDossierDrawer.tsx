@@ -124,7 +124,7 @@ export const GroupDossierDrawer = memo(function GroupDossierDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center hover:bg-black/[0.06] dark:hover:bg-white/[0.06] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+              aria-label="Yopish" className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 rounded-full flex items-center justify-center hover:bg-black/[0.06] dark:hover:bg-white/[0.06] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18" />

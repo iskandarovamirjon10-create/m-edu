@@ -211,7 +211,7 @@ export class SmartDiscountService {
     }
 
     // Calculate total deduction with ceiling cap
-    let rawTotalDeduction = appliedDiscounts.reduce((sum, d) => sum + d.deductionAmountUz, 0);
+    const rawTotalDeduction = appliedDiscounts.reduce((sum, d) => sum + d.deductionAmountUz, 0);
     const maxAllowedDeduction = Math.round(grossTuition * (this.MAX_DISCOUNT_CAP_PERCENT / 100));
 
     const totalDeductionUz = Math.min(rawTotalDeduction, maxAllowedDeduction);

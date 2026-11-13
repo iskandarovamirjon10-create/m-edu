@@ -122,6 +122,7 @@ const en = {
   'nav.dataQuality': 'Data Quality',
   'nav.securityCenter': 'Security Center',
   'nav.executiveDashboard': 'Executive Dashboard',
+  'nav.showcase': ' Apple Innovation Suite',
   'nav.financialAnalytics': 'Financial Analytics',
   'nav.payrollAnalytics': 'Payroll Analytics',
   'nav.crmAnalytics': 'CRM Analytics',
@@ -140,7 +141,7 @@ const en = {
   'nav.audit': 'Audit Log',
   'nav.administration': 'Administration',
   'nav.resultsFound': 'results found',
-  'nav.searchPlaceholder': 'Search students, teachers, groups…',
+  'nav.searchPlaceholder': 'Quick search…',
   'nav.signIn': 'Sign In',
   'nav.createAccount': 'Create Account',
   'nav.calculator': 'Calculator',
@@ -840,6 +841,17 @@ const en = {
   'payroll.smartKpiApplied': 'Smart KPI salary and bonus applied successfully',
   'payroll.loadingKpi': 'Analyzing live teacher attendance, retention and assessment metrics...',
   'payroll.kpiError': 'Failed to load KPI metrics',
+  'auth.username': 'Username',
+  'grades.batch.deleteFailed': 'Failed to delete selected grades',
+  'homework.batch.deleteFailed': 'Failed to delete selected homework assignments',
+  'invoices.loadError': 'Failed to load invoices',
+  'invoices.payLinks.copyFailed': 'Failed to copy payment link',
+  'invoices.prorate.short': 'Prorate',
+  'payments.batchFailed': 'Failed to process payments batch',
+  'payrollAnalytics.active': 'Active',
+  'studentForm.firstNameRequired': 'First name is required',
+  'studentForm.lastNameRequired': 'Last name is required',
+  'teachers.bulk.messageUnavailable': 'Direct messaging is currently unavailable for selected teachers',
 };
 
 import { legacyEn } from './legacy-slices';
@@ -851,8 +863,9 @@ import { groupsEn } from './groups-slices';
 import { teachersEn } from './teachers-slices';
 import { tgappEn } from './tgapp-slices';
 import { migrationEn } from './migration-slices';
+import { studyEn } from './study-slices';
 
 // Legacy fills gaps → analytics fills more → curated base wins for overrides.
-export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...aiEn, ...studentsEn, ...groupsEn, ...teachersEn, ...tgappEn, ...migrationEn, ...en };
+export default { ...legacyEn, ...analyticsEn, ...pagesEn, ...aiEn, ...studentsEn, ...groupsEn, ...teachersEn, ...tgappEn, ...migrationEn, ...studyEn, ...en };
 
 

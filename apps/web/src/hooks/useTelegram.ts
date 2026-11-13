@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { TelegramUser, TelegramWebApp } from '@/types/telegram';
 
 // ============================================================================
@@ -44,6 +44,10 @@ export interface TelegramStateSnapshot {
   readonly isReady: boolean;
   readonly colorScheme: 'light' | 'dark';
   readonly platform: string;
+  readonly startParam: string | null;
+  readonly isFullscreen: boolean;
+  readonly biometricAvailable: boolean;
+  readonly biometricType: 'finger' | 'face' | 'unknown';
 }
 
 // ============================================================================
@@ -68,6 +72,10 @@ const SERVER_SNAPSHOT: TelegramStateSnapshot = Object.freeze({
   isReady: false,
   colorScheme: 'dark',
   platform: 'unknown',
+  startParam: null,
+  isFullscreen: false,
+  biometricAvailable: false,
+  biometricType: 'unknown',
 });
 
 let currentSnapshot: TelegramStateSnapshot = SERVER_SNAPSHOT;
@@ -142,6 +150,16 @@ function configureTelegramSDK(sdk: ExtendedTelegramWebApp): void {
       if (typeof sdk.isVersionAtLeast === 'function' && sdk.isVersionAtLeast('7.7')) {
         sdk.disableVerticalSwipes?.();
       }
+
+      // TMA 8.0+: To'liq ekran rejimi va orientatsiyani qulflash
+      if (typeof sdk.isVersionAtLeast === 'function' && sdk.isVersionAtLeast('8.0')) {
+        try {
+          sdk.requestFullscreen?.();
+          sdk.lockOrientation?.('portrait');
+        } catch {
+          // Fallback on unsupported desktop clients
+        }
+      }
     } catch {
       // Ignore legacy WebApp errors
     }
@@ -161,7 +179,39 @@ function configureTelegramSDK(sdk: ExtendedTelegramWebApp): void {
     };
 
     sdk.onEvent?.('themeChanged', handleThemeChanged);
+
+    // Fullscreen o'zgarishini tinglash (TMA 8.0)
+    sdk.onEvent?.('fullscreenChanged', () => {
+      updateSnapshot({ isFullscreen: !!sdk.isFullscreen });
+    });
   }
+
+  // Biometric tekshirish (TMA 7.2+)
+  let bioAvailable = false;
+  let bioType: 'finger' | 'face' | 'unknown' = 'unknown';
+  if (isRealTg && sdk.BiometricManager) {
+    try {
+      sdk.BiometricManager.init(() => {
+        if (sdk.BiometricManager?.isBiometricAvailable) {
+          updateSnapshot({
+            biometricAvailable: true,
+            biometricType: sdk.BiometricManager.biometricType || 'unknown',
+          });
+        }
+      });
+      bioAvailable = sdk.BiometricManager.isBiometricAvailable;
+      bioType = sdk.BiometricManager.biometricType || 'unknown';
+    } catch {
+      // safe fallback
+    }
+  }
+
+  const startParam =
+    sdk.initDataUnsafe?.start_param ||
+    (typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('tgWebAppStartParam') ||
+        new URLSearchParams(window.location.search).get('startapp')
+      : null);
 
   updateSnapshot({
     tg: sdk,
@@ -170,6 +220,10 @@ function configureTelegramSDK(sdk: ExtendedTelegramWebApp): void {
     isReady: true,
     colorScheme: activeScheme,
     platform: sdk.platform ?? 'unknown',
+    startParam: startParam || null,
+    isFullscreen: !!sdk.isFullscreen,
+    biometricAvailable: bioAvailable,
+    biometricType: bioType,
   });
 }
 
@@ -367,6 +421,73 @@ export function useTelegram() {
     openTelegramLink(SUPPORT_TG);
   }, [openTelegramLink]);
 
+  /**
+   * Telegram native Biometric orqali xavfsiz tasdiqlash (Face ID / Barmoq izi).
+   * Agar mavjud bo'lmasa true qaytaradi (progressive enhancement).
+   */
+  const authenticateBiometrics = useCallback(
+    async (reason = "Operatsiyani tasdiqlang"): Promise<boolean> => {
+      const sdk = currentSnapshot.tg;
+      if (!currentSnapshot.inTelegram || !sdk?.BiometricManager) {
+        return true;
+      }
+      const bio = sdk.BiometricManager;
+      if (!bio.isBiometricAvailable) return true;
+
+      return new Promise<boolean>((resolve) => {
+        try {
+          if (!bio.isAccessGranted) {
+            bio.requestAccess({ reason }, (granted) => {
+              if (!granted) return resolve(false);
+              bio.authenticate({ reason }, (authenticated) => {
+                resolve(authenticated);
+              });
+            });
+          } else {
+            bio.authenticate({ reason }, (authenticated) => {
+              resolve(authenticated);
+            });
+          }
+        } catch {
+          resolve(true);
+        }
+      });
+    },
+    [],
+  );
+
+  /**
+   * Telegram Cloud Storage integratsiyasi (kalit-qiymat saqlash)
+   */
+  const cloudStorage = useMemo(() => {
+    const cs = currentSnapshot.tg?.CloudStorage;
+    return {
+      setItem: (key: string, value: string): Promise<boolean> => {
+        return new Promise((resolve) => {
+          if (!cs) {
+            try {
+              localStorage.setItem(`tg_cloud_${key}`, value);
+              resolve(true);
+            } catch {
+              resolve(false);
+            }
+            return;
+          }
+          cs.setItem(key, value, (err, ok) => resolve(!err && ok));
+        });
+      },
+      getItem: (key: string): Promise<string | null> => {
+        return new Promise((resolve) => {
+          if (!cs) {
+            resolve(localStorage.getItem(`tg_cloud_${key}`));
+            return;
+          }
+          cs.getItem(key, (err, val) => resolve(err ? null : val ?? null));
+        });
+      },
+    };
+  }, []);
+
   return {
     tg: state.tg,
     user: state.user,
@@ -374,6 +495,12 @@ export function useTelegram() {
     isReady: state.isReady,
     colorScheme: state.colorScheme,
     platform: state.platform,
+    startParam: state.startParam,
+    isFullscreen: state.isFullscreen,
+    biometricAvailable: state.biometricAvailable,
+    biometricType: state.biometricType,
+    authenticateBiometrics,
+    cloudStorage,
     haptic,
     contactAdmin,
     openTelegramLink,

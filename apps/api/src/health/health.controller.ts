@@ -45,7 +45,7 @@ export class HealthController {
     return payload;
   }
 
-  @Get(['liveness', 'live'])
+  @Get('liveness')
   @ApiOperation({ summary: 'Kubernetes/Cloud Liveness probe — checks if process is responding' })
   liveness() {
     return {
@@ -55,7 +55,7 @@ export class HealthController {
     };
   }
 
-  @Get(['readiness', 'ready'])
+  @Get('readiness')
   @ApiOperation({ summary: 'Kubernetes/Cloud Readiness probe — checks database connection' })
   async readiness(@Res({ passthrough: true }) res: Response) {
     let database = 'down';

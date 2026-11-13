@@ -381,9 +381,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (res.status === 401) {
-    let errorDetail: any = null;
+    type ErrorDetail = { code?: string; error?: string; message?: string };
+    let errorDetail: ErrorDetail | null = null;
     try {
-      errorDetail = await res.clone().json();
+      errorDetail = (await res.clone().json()) as ErrorDetail;
     } catch {
       // ignore
     }
@@ -444,9 +445,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   // Handle transient retryable HTTP errors (502, 503, 504, 408) for retryable operations
-  if (attempt < maxRetries && !options.signal?.aborted && isRetryableStatus(res.status)) {
-    const baseDelay = options.retryDelayMs ?? 250;
-    const delay = Math.min(2000, baseDelay * Math.pow(2, attempt) + Math.random() * 100);
+  const isStartingUp = res.status === 503;
+  const effectiveMaxRetries =
+    isStartingUp && isRetryableMethod(method, Boolean(idempotencyKey))
+      ? Math.max(maxRetries, 5)
+      : maxRetries;
+  if (attempt < effectiveMaxRetries && !options.signal?.aborted && isRetryableStatus(res.status)) {
+    const baseDelay = isStartingUp ? 1000 : (options.retryDelayMs ?? 250);
+    const delay = Math.min(3000, baseDelay * Math.pow(1.5, attempt) + Math.random() * 100);
     await sleep(delay);
     return request<T>(path, { ...options, _retryAttempt: attempt + 1 });
   }
@@ -620,17 +626,17 @@ export const studentsApi = {
   removeGroup: (studentId: string, groupId: string) =>
     request(`/students/${studentId}/groups/${groupId}`, { method: 'DELETE' }),
   getParents: (studentId: string) =>
-    request<any[]>(`/students/${studentId}/parents`),
-  addParent: (studentId: string, data: any) =>
-    request<any>(`/students/${studentId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
-  updateParent: (studentId: string, parentId: string, data: any) =>
-    request<any>(`/students/${studentId}/parents/${parentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    request<unknown[]>(`/students/${studentId}/parents`),
+  addParent: (studentId: string, data: Record<string, unknown>) =>
+    request<unknown>(`/students/${studentId}/parents`, { method: 'POST', body: JSON.stringify(data) }),
+  updateParent: (studentId: string, parentId: string, data: Record<string, unknown>) =>
+    request<unknown>(`/students/${studentId}/parents/${parentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   unlinkParent: (studentId: string, parentId: string) =>
     request<{ success: boolean }>(`/students/${studentId}/parents/${parentId}`, { method: 'DELETE' }),
   freeze: (studentId: string, data: { startDate?: string; endDate?: string; reason?: string }) =>
-    request<any>(`/students/${studentId}/freeze`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>(`/students/${studentId}/freeze`, { method: 'POST', body: JSON.stringify(data) }),
   unfreeze: (studentId: string) =>
-    request<any>(`/students/${studentId}/unfreeze`, { method: 'POST' }),
+    request<unknown>(`/students/${studentId}/unfreeze`, { method: 'POST' }),
   bulkAssignGroup: (studentIds: string[], groupId: string) =>
     request<{ assignedCount: number; studentIds: string[] }>('/students/bulk-assign-group', {
       method: 'POST',
@@ -688,7 +694,7 @@ export interface TeacherAnalyticsData {
   totalStudents: number;
   groupsCount: number;
   estimatedMonthlyCompensation: number;
-  groups: any[];
+  groups: Array<{ id: string; name?: string }>;
 }
 
 export const teachersApi = {
@@ -731,7 +737,7 @@ export const teachersApi = {
       ...options,
     }),
   assignGroup: (teacherId: string, groupId: string, options: RequestOptions = {}) =>
-    request<{ success: boolean; message: string; group: any }>(`/teachers/${teacherId}/assign-group`, {
+    request<{ success: boolean; message: string; group: unknown }>(`/teachers/${teacherId}/assign-group`, {
       method: 'POST',
       body: JSON.stringify({ groupId }),
       ...options,
@@ -800,9 +806,9 @@ export const groupsApi = {
   ...crud('/groups'),
   getStats: (options: RequestOptions = {}) =>
     request<GroupStatsData>('/groups/stats', options),
-  getCapacity: (id: string) => request<any>(`/groups/${id}/capacity`),
+  getCapacity: (id: string) => request<unknown>(`/groups/${id}/capacity`),
   graduate: (id: string, data: unknown) =>
-    request<any>(`/groups/${id}/graduate`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>(`/groups/${id}/graduate`, { method: 'POST', body: JSON.stringify(data) }),
   bulkStatus: (data: { groupIds: string[]; isActive: boolean }, options: RequestOptions = {}) =>
     request<{ success: boolean; count: number; isActive: boolean; message: string }>('/groups/bulk/status', {
       method: 'POST',
@@ -824,10 +830,23 @@ export const groupsApi = {
 };
 export const scheduleApi = {
   ...crud('/schedule'),
-  getRoomUtilization: () => request<any>('/schedule/room-utilization'),
+  getRoomUtilization: () => request<unknown>('/schedule/room-utilization'),
 };
 export const paymentsApi = {
   ...crud('/payments'),
+  getSummary: (params?: Record<string, unknown>, options: RequestOptions = {}) =>
+    request<{
+      totalCount: number;
+      paidCount: number;
+      pendingCount: number;
+      failedCount: number;
+      cancelledCount: number;
+      totalCollected: number;
+      totalPending: number;
+      totalFailed: number;
+      totalCancelled: number;
+      collectionRate: number;
+    }>(`/payments/summary${buildQuery(params)}`, options),
   openCashierShift: (data: OpenCashShiftPayload, options: RequestOptions = {}) =>
     request<CashShift>('/payments/cashier/shift/open', {
       method: 'POST',
@@ -852,7 +871,7 @@ export const paymentsApi = {
       ...options,
     }),
   create: (data: unknown, options?: RequestOptions) =>
-    request<any>('/payments', {
+    request<unknown>('/payments', {
       method: 'POST',
       body: JSON.stringify(data),
       idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
@@ -896,7 +915,7 @@ export const paymentsApi = {
 export const expensesApi = {
   ...crud('/expenses'),
   create: (data: unknown, options?: RequestOptions) =>
-    request<any>('/expenses', {
+    request<unknown>('/expenses', {
       method: 'POST',
       body: JSON.stringify(data),
       idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
@@ -918,14 +937,14 @@ export const leadsApi = {
   deleteFollowUpRule: (id: string) => request(`/leads/follow-up-rules/${id}`, { method: 'DELETE' }),
   evaluateFollowUpRules: () => request('/leads/follow-up-rules/evaluate', { method: 'POST' }),
   completeFollowUp: (id: string, data?: unknown) => request(`/leads/follow-ups/${id}/complete`, { method: 'POST', body: JSON.stringify(data ?? {}) }),
-  trialAnalytics: () => request<any>('/leads/trial-analytics'),
-  getTrialAnalytics: () => request<any>('/leads/trial-analytics'),
+  trialAnalytics: () => request<unknown>('/leads/trial-analytics'),
+  getTrialAnalytics: () => request<unknown>('/leads/trial-analytics'),
   scheduleTrial: (id: string, data: unknown) =>
-    request<any>(`/leads/${id}/trial-schedule`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>(`/leads/${id}/trial-schedule`, { method: 'POST', body: JSON.stringify(data) }),
   recordTrialAttendance: (id: string, data: unknown) =>
-    request<any>(`/leads/${id}/trial-attendance`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>(`/leads/${id}/trial-attendance`, { method: 'POST', body: JSON.stringify(data) }),
   markTrialAttendance: (id: string, data: unknown) =>
-    request<any>(`/leads/${id}/trial-attendance`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>(`/leads/${id}/trial-attendance`, { method: 'POST', body: JSON.stringify(data) }),
 };
 export const usersApi = {
   ...crud('/users'),
@@ -1101,7 +1120,7 @@ export const aiApi = {
       ...options,
     }),
   generateLessonPlan: (body: { topic: string; subject?: string; level?: string; durationMinutes?: number; learningObjectives?: string[]; bloomsTaxonomyLevel?: string }, options: RequestOptions = {}) =>
-    request<any>('/ai/generate-lesson-plan', {
+    request<unknown>('/ai/generate-lesson-plan', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
@@ -1121,25 +1140,25 @@ export const aiApi = {
     },
     options: RequestOptions = {},
   ) =>
-    request<any>('/ai/generate-social-post', {
+    request<unknown>('/ai/generate-social-post', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
     }),
   generateReport: (body: { reportType: string; timeRange?: string; query?: string }, options: RequestOptions = {}) =>
-    request<any>('/ai/reports', {
+    request<unknown>('/ai/reports', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
     }),
   generateAssessmentRubric: (body: { topic: string; level?: string; scale?: string; objectives?: string[] }, options: RequestOptions = {}) =>
-    request<any>('/ai/generate-rubric', {
+    request<unknown>('/ai/generate-rubric', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
     }),
   analyzeDocument: (body: { base64: string; mimeType: string; fileName?: string; instruction?: string; analysisType?: string }, options: RequestOptions = {}) =>
-    request<any>('/ai/analyze-document', {
+    request<unknown>('/ai/analyze-document', {
       method: 'POST',
       body: JSON.stringify(body),
       ...options,
@@ -1585,10 +1604,10 @@ export const communicationApi = {
   getTimeline: (entityType: string, entityId: string) => request(`/communication/timeline${buildQuery({ entityType, entityId })}`),
   getHistory: (params?: object) => request(`/communication/history${buildQuery(params)}`),
   getStats: () => request('/communication/stats'),
-  messages: (studentId: string) => request<any>(`/communication/messages/student/${studentId}`),
-  sendMessage: (data: object) => request<any>('/communication/messages', { method: 'POST', body: JSON.stringify(data) }),
-  announcements: () => request<any>('/communication/announcements'),
-  createAnnouncement: (data: object) => request<any>('/communication/announcements', { method: 'POST', body: JSON.stringify(data) }),
+  messages: (studentId: string) => request<unknown>(`/communication/messages/student/${studentId}`),
+  sendMessage: (data: object) => request<unknown>('/communication/messages', { method: 'POST', body: JSON.stringify(data) }),
+  announcements: () => request<unknown>('/communication/announcements'),
+  createAnnouncement: (data: object) => request<unknown>('/communication/announcements', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const dataGovernanceApi = {
@@ -1642,18 +1661,18 @@ export const invoicesApi = {
     }),
   rejectRefund: (id: string, reason?: string, options?: RequestOptions) =>
     request(`/invoices/refunds/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason }), ...options }),
-  getPaymentLinks: (id: string) => request<any>(`/invoices/${id}/payment-links`),
+  getPaymentLinks: (id: string) => request<unknown>(`/invoices/${id}/payment-links`),
   proratePreview: (data: unknown) =>
-    request<any>('/invoices/prorate-preview', { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>('/invoices/prorate-preview', { method: 'POST', body: JSON.stringify(data) }),
   createProrated: (data: unknown, options?: RequestOptions) =>
-    request<any>('/invoices/prorate', {
+    request<unknown>('/invoices/prorate', {
       method: 'POST',
       body: JSON.stringify(data),
       idempotencyKey: options?.idempotencyKey || generateIdempotencyKey(),
       ...options,
     }),
   debtorStatus: (studentId: string, graceDays?: number) =>
-    request<any>(`/invoices/students/${studentId}/debtor-status${buildQuery({ graceDays })}`),
+    request<unknown>(`/invoices/students/${studentId}/debtor-status${buildQuery({ graceDays })}`),
 };
 
 export async function downloadFile(path: string, options: RequestOptions = {}): Promise<void> {
@@ -1814,18 +1833,18 @@ export const payrollApi = {
   pay: (id: string) => request(`/payroll/runs/${id}/pay`, { method: 'POST' }),
   cancel: (id: string, reason: string) => request(`/payroll/runs/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
   periodSummary: (params?: object) => request(`/payroll/period-summary${buildQuery(params)}`),
-  revenueShare: (params: any) =>
-    request<any>(`/payroll/runs/revenue-share${buildQuery(params)}`),
-  getRevenueShare: (params: any) =>
-    request<any>(`/payroll/runs/revenue-share${buildQuery(params)}`),
+  revenueShare: (params: Record<string, string | number | undefined>) =>
+    request<unknown>(`/payroll/runs/revenue-share${buildQuery(params)}`),
+  getRevenueShare: (params: Record<string, string | number | undefined>) =>
+    request<unknown>(`/payroll/runs/revenue-share${buildQuery(params)}`),
   createRevenueShare: (data: unknown) =>
-    request<any>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
   createRevenueShareRun: (data: unknown) =>
-    request<any>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>('/payroll/runs/revenue-share', { method: 'POST', body: JSON.stringify(data) }),
   getSmartKpi: (params: { teacherId: string; year?: number; month?: number }) =>
-    request<any>(`/payroll/runs/smart-kpi${buildQuery(params)}`),
+    request<unknown>(`/payroll/runs/smart-kpi${buildQuery(params)}`),
   createSmartKpiRun: (data: { teacherId: string; year: number; month: number; customBonus?: number; notes?: string }) =>
-    request<any>('/payroll/runs/smart-kpi', { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>('/payroll/runs/smart-kpi', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const performanceApi = {
@@ -1882,112 +1901,112 @@ export const relationshipsApi = {
  * ========================================================================== */
 
 export const subjectsApi = {
-  list: (params?: object) => request<any>(`/subjects${buildQuery(params)}`),
-  get: (id: string) => request<any>(`/subjects/${id}`),
-  create: (data: object) => request<any>('/subjects', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: object) => request<any>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  delete: (id: string) => request<any>(`/subjects/${id}`, { method: 'DELETE' }),
+  list: (params?: object) => request<unknown>(`/subjects${buildQuery(params)}`),
+  get: (id: string) => request<unknown>(`/subjects/${id}`),
+  create: (data: object) => request<unknown>('/subjects', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: object) => request<unknown>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<unknown>(`/subjects/${id}`, { method: 'DELETE' }),
   /** Re-activate a soft-deleted subject (same PATCH endpoint, isActive: true). */
-  restore: (id: string) => request<any>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive: true }) }),
+  restore: (id: string) => request<unknown>(`/subjects/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive: true }) }),
 };
 
 export const curriculumApi = {
-  list: (params?: object) => request<any>(`/curriculum${buildQuery(params)}`),
-  get: (id: string) => request<any>(`/curriculum/${id}`),
-  create: (data: object) => request<any>('/curriculum', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id: string, data: object) => request<any>(`/curriculum/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  addModule: (id: string, data: object) => request<any>(`/curriculum/${id}/modules`, { method: 'POST', body: JSON.stringify(data) }),
-  addTopic: (id: string, moduleId: string, data: object) => request<any>(`/curriculum/${id}/modules/${moduleId}/topics`, { method: 'POST', body: JSON.stringify(data) }),
-  addObjective: (id: string, topicId: string, data: object) => request<any>(`/curriculum/${id}/topics/${topicId}/objectives`, { method: 'POST', body: JSON.stringify(data) }),
+  list: (params?: object) => request<unknown>(`/curriculum${buildQuery(params)}`),
+  get: (id: string) => request<unknown>(`/curriculum/${id}`),
+  create: (data: object) => request<unknown>('/curriculum', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: object) => request<unknown>(`/curriculum/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  addModule: (id: string, data: object) => request<unknown>(`/curriculum/${id}/modules`, { method: 'POST', body: JSON.stringify(data) }),
+  addTopic: (id: string, moduleId: string, data: object) => request<unknown>(`/curriculum/${id}/modules/${moduleId}/topics`, { method: 'POST', body: JSON.stringify(data) }),
+  addObjective: (id: string, topicId: string, data: object) => request<unknown>(`/curriculum/${id}/topics/${topicId}/objectives`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const lessonsApi = {
   list: (params?: { groupId?: string; teacherId?: string; date?: string; from?: string; to?: string; limit?: number; page?: number }) =>
-    request<{ items: any[]; total: number; page: number; limit: number; totalPages: number }>(`/lessons${buildQuery(params)}`),
-  get: (id: string) => request<any>(`/lessons/${id}`),
+    request<{ items: unknown[]; total: number; page: number; limit: number; totalPages: number }>(`/lessons${buildQuery(params)}`),
+  get: (id: string) => request<unknown>(`/lessons/${id}`),
   updateStatus: (id: string, status: 'PLANNED' | 'CONDUCTED' | 'CANCELLED', cancellationReason?: string) =>
-    request<any>(`/lessons/${id}/status`, {
+    request<unknown>(`/lessons/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status, cancellationReason }),
     }),
   updateContent: (id: string, data: { notes?: string; room?: string }) =>
-    request<any>(`/lessons/${id}/content`, {
+    request<unknown>(`/lessons/${id}/content`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
   linkMaterial: (id: string, materialId: string) =>
-    request<any>(`/lessons/${id}/materials`, {
+    request<unknown>(`/lessons/${id}/materials`, {
       method: 'POST',
       body: JSON.stringify({ materialId }),
     }),
   unlinkMaterial: (id: string, materialId: string) =>
-    request<any>(`/lessons/${id}/materials/${materialId}`, { method: 'DELETE' }),
+    request<unknown>(`/lessons/${id}/materials/${materialId}`, { method: 'DELETE' }),
   getCopilotAnalysis: (id: string) =>
     request<LessonCopilotAnalysis>(`/lessons/${id}/copilot-analysis`),
 };
 
 export const assignmentsApi = {
-  list: (params?: object) => request<any>(`/assignments${buildQuery(params)}`),
-  get: (id: string) => request<any>(`/assignments/${id}`),
-  create: (data: object) => request<any>('/assignments', { method: 'POST', body: JSON.stringify(data) }),
-  submit: (id: string, data: object) => request<any>(`/assignments/${id}/submit`, { method: 'POST', body: JSON.stringify(data) }),
-  grade: (id: string, data: object) => request<any>(`/assignments/submissions/${id}/grade`, { method: 'PATCH', body: JSON.stringify(data) }),
+  list: (params?: object) => request<unknown>(`/assignments${buildQuery(params)}`),
+  get: (id: string) => request<unknown>(`/assignments/${id}`),
+  create: (data: object) => request<unknown>('/assignments', { method: 'POST', body: JSON.stringify(data) }),
+  submit: (id: string, data: object) => request<unknown>(`/assignments/${id}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  grade: (id: string, data: object) => request<unknown>(`/assignments/submissions/${id}/grade`, { method: 'PATCH', body: JSON.stringify(data) }),
 };
 
 export const assessmentApi = {
-  questions: (params?: object) => request<any>(`/assessment/questions${buildQuery(params)}`),
-  createQuestion: (data: object) => request<any>('/assessment/questions', { method: 'POST', body: JSON.stringify(data) }),
-  quizzes: (params?: object) => request<any>(`/assessment/quizzes${buildQuery(params)}`),
-  getQuiz: (id: string) => request<any>(`/assessment/quizzes/${id}`),
-  createQuiz: (data: object) => request<any>('/assessment/quizzes', { method: 'POST', body: JSON.stringify(data) }),
-  startAttempt: (quizId: string) => request<any>(`/assessment/quizzes/${quizId}/start`, { method: 'POST' }),
-  submitAttempt: (attemptId: string, data: object) => request<any>(`/assessment/attempts/${attemptId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
+  questions: (params?: object) => request<unknown>(`/assessment/questions${buildQuery(params)}`),
+  createQuestion: (data: object) => request<unknown>('/assessment/questions', { method: 'POST', body: JSON.stringify(data) }),
+  quizzes: (params?: object) => request<unknown>(`/assessment/quizzes${buildQuery(params)}`),
+  getQuiz: (id: string) => request<unknown>(`/assessment/quizzes/${id}`),
+  createQuiz: (data: object) => request<unknown>('/assessment/quizzes', { method: 'POST', body: JSON.stringify(data) }),
+  startAttempt: (quizId: string) => request<unknown>(`/assessment/quizzes/${quizId}/start`, { method: 'POST' }),
+  submitAttempt: (attemptId: string, data: object) => request<unknown>(`/assessment/attempts/${attemptId}/submit`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const progressApi = {
-  student360: (studentId: string) => request<any>(`/progress/student-360/${studentId}`),
+  student360: (studentId: string) => request<unknown>(`/progress/student-360/${studentId}`),
 };
 
 export const platformApi = {
-  getStatistics: () => request<any>('/platform/statistics'),
-  getOrganizations: () => request<any[]>('/platform/organizations'),
+  getStatistics: () => request<unknown>('/platform/statistics'),
+  getOrganizations: () => request<unknown[]>('/platform/organizations'),
   updateOrganizationSubscription: (orgId: string, data: object) =>
-    request<any>(`/platform/organizations/${orgId}/subscription`, {
+    request<unknown>(`/platform/organizations/${orgId}/subscription`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
   suspendOrganization: (orgId: string) =>
-    request<any>(`/platform/organizations/${orgId}/suspend`, { method: 'POST' }),
+    request<unknown>(`/platform/organizations/${orgId}/suspend`, { method: 'POST' }),
   reactivateOrganization: (orgId: string) =>
-    request<any>(`/platform/organizations/${orgId}/reactivate`, { method: 'POST' }),
-  getPlans: () => request<any[]>('/platform/plans'),
+    request<unknown>(`/platform/organizations/${orgId}/reactivate`, { method: 'POST' }),
+  getPlans: () => request<unknown[]>('/platform/plans'),
   updatePlan: (planId: string, data: object) =>
-    request<any>(`/platform/plans/${planId}`, {
+    request<unknown>(`/platform/plans/${planId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
   createInvitation: (data: { maxUses: number; expiresAt: string; metadata?: object }) =>
-    request<any>('/platform/invitations', {
+    request<unknown>('/platform/invitations', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 };
 
 export const subscriptionsApi = {
-  getPlans: () => request<any[]>('/subscriptions/plans'),
-  getCurrentSubscription: () => request<any>('/subscriptions/current'),
-  getUsage: () => request<any>('/subscriptions/usage'),
+  getPlans: () => request<unknown[]>('/subscriptions/plans'),
+  getCurrentSubscription: () => request<unknown>('/subscriptions/current'),
+  getUsage: () => request<unknown>('/subscriptions/usage'),
   changePlan: (data: { planId?: string; plan?: string; billingCycle?: string }) =>
-    request<any>('/subscriptions/change-plan', {
+    request<unknown>('/subscriptions/change-plan', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   cancelSubscription: () =>
-    request<any>('/subscriptions/cancel', { method: 'POST' }),
+    request<unknown>('/subscriptions/cancel', { method: 'POST' }),
 };
 
 export const billingApi = {
-  getInvoices: () => request<any[]>('/billing/invoices'),
+  getInvoices: () => request<unknown[]>('/billing/invoices'),
   getPaymentLinks: (invoiceNumber: string) =>
     request<{ invoiceNumber: string; amountUzs: number; paymeUrl: string; clickUrl: string }>(
       `/billing/invoices/${encodeURIComponent(invoiceNumber)}/pay-links`,
@@ -1995,8 +2014,8 @@ export const billingApi = {
 };
 
 export const calendarApi = {
-  list: (params?: object) => request<any>(`/calendar/events${buildQuery(params)}`),
-  create: (data: object) => request<any>('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
+  list: (params?: object) => request<unknown>(`/calendar/events${buildQuery(params)}`),
+  create: (data: object) => request<unknown>('/calendar/events', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ============================================================================
@@ -2005,12 +2024,12 @@ export const calendarApi = {
 
 export const retentionApi = {
   getCockpit: (query?: { tier?: string; groupId?: string; page?: number; limit?: number }) =>
-    request<any>(`/students/retention/cockpit${buildQuery(query)}`),
+    request<unknown>(`/students/retention/cockpit${buildQuery(query)}`),
   recordIntervention: (
     studentId: string,
     data: { type: string; notes: string; promisedOutcome?: string; followUpDays?: number },
   ) =>
-    request<any>(`/students/retention/${encodeURIComponent(studentId)}/intervene`, {
+    request<unknown>(`/students/retention/${encodeURIComponent(studentId)}/intervene`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2018,9 +2037,9 @@ export const retentionApi = {
 
 export const scheduleOptimizerApi = {
   auditConflicts: (query?: { branchId?: string; dayOfWeek?: string }) =>
-    request<any>(`/schedule/optimizer/conflicts${buildQuery(query)}`),
+    request<unknown>(`/schedule/optimizer/conflicts${buildQuery(query)}`),
   suggestResolution: (data: { scheduleId: string; preferredTimeOfDay?: string; preferredDays?: string[] }) =>
-    request<any>('/schedule/optimizer/suggest-resolution', {
+    request<unknown>('/schedule/optimizer/suggest-resolution', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2031,7 +2050,7 @@ export const scheduleOptimizerApi = {
     targetStartTime: string;
     targetEndTime: string;
   }) =>
-    request<any>('/schedule/optimizer/apply-resolution', {
+    request<unknown>('/schedule/optimizer/apply-resolution', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2039,18 +2058,18 @@ export const scheduleOptimizerApi = {
 
 export const smartDiscountApi = {
   evaluate: (data: { studentId: string; courseId?: string; tuitionAmount: number }) =>
-    request<any>('/payments/discounts/evaluate', {
+    request<unknown>('/payments/discounts/evaluate', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   getFamilyNetwork: (studentId: string) =>
-    request<any>(`/payments/discounts/family/${encodeURIComponent(studentId)}`),
+    request<unknown>(`/payments/discounts/family/${encodeURIComponent(studentId)}`),
   applyFamilyDiscounts: (data: {
     studentId: string;
     discountPercentTier2?: number;
     discountPercentTier3?: number;
   }) =>
-    request<any>('/payments/discounts/apply-family', {
+    request<unknown>('/payments/discounts/apply-family', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2064,7 +2083,7 @@ export const teacherKpiPayrollApi = {
     commissionRatePercent?: number;
     retentionTargetPercent?: number;
   }) =>
-    request<any>('/hr/teacher-kpi/calculate-batch', {
+    request<unknown>('/hr/teacher-kpi/calculate-batch', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2072,9 +2091,9 @@ export const teacherKpiPayrollApi = {
     periodYear: number;
     periodMonth: number;
     branchId?: string;
-    proposals: any[];
+    proposals: unknown[];
   }) =>
-    request<any>('/hr/teacher-kpi/approve-batch', {
+    request<unknown>('/hr/teacher-kpi/approve-batch', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2087,19 +2106,19 @@ export const parentSafetyGuardApi = {
     gateOrDeviceName: string;
     verificationMethod?: string;
   }) =>
-    request<any>('/parent-portal/safety/movement', {
+    request<unknown>('/parent-portal/safety/movement', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   getLivePresence: (branchId?: string) =>
-    request<any>(`/parent-portal/safety/live-presence${buildQuery({ branchId })}`),
+    request<unknown>(`/parent-portal/safety/live-presence${buildQuery({ branchId })}`),
   emergencyBroadcast: (data: {
     title: string;
     message: string;
     severity: 'HIGH' | 'CRITICAL';
     targetAudience: 'CURRENTLY_PRESENT' | 'ALL_ACTIVE_STUDENTS';
   }) =>
-    request<any>('/parent-portal/safety/emergency-broadcast', {
+    request<unknown>('/parent-portal/safety/emergency-broadcast', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
@@ -2139,37 +2158,37 @@ export interface BulkCommitResult {
 }
 
 export const iamApi = {
-  createOrganization: (data: any) =>
-    request<any>('/iam/organizations', { method: 'POST', body: JSON.stringify(data) }),
-  updateOrganization: (id: string, data: any) =>
-    request<any>(`/iam/organizations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  createOrganization: (data: Record<string, unknown>) =>
+    request<unknown>('/iam/organizations', { method: 'POST', body: JSON.stringify(data) }),
+  updateOrganization: (id: string, data: Record<string, unknown>) =>
+    request<unknown>(`/iam/organizations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   activateOrganization: (id: string) =>
-    request<any>(`/iam/organizations/${id}/activate`, { method: 'POST' }),
+    request<unknown>(`/iam/organizations/${id}/activate`, { method: 'POST' }),
   suspendOrganization: (id: string) =>
-    request<any>(`/iam/organizations/${id}/suspend`, { method: 'POST' }),
+    request<unknown>(`/iam/organizations/${id}/suspend`, { method: 'POST' }),
   getOrganizationMemberships: (id: string) =>
-    request<any[]>(`/iam/organizations/${id}/memberships`),
+    request<unknown[]>(`/iam/organizations/${id}/memberships`),
   getOrganizationStatistics: (id: string) =>
-    request<any>(`/iam/organizations/${id}/statistics`),
+    request<unknown>(`/iam/organizations/${id}/statistics`),
 
-  createAccount: (data: any) =>
-    request<any>('/iam/accounts', { method: 'POST', body: JSON.stringify(data) }),
-  updateAccount: (id: string, data: any) =>
-    request<any>(`/iam/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  createAccount: (data: Record<string, unknown>) =>
+    request<unknown>('/iam/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  updateAccount: (id: string, data: Record<string, unknown>) =>
+    request<unknown>(`/iam/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   activateAccount: (id: string) =>
-    request<any>(`/iam/accounts/${id}/activate`, { method: 'POST' }),
+    request<unknown>(`/iam/accounts/${id}/activate`, { method: 'POST' }),
   suspendAccount: (id: string) =>
-    request<any>(`/iam/accounts/${id}/suspend`, { method: 'POST' }),
+    request<unknown>(`/iam/accounts/${id}/suspend`, { method: 'POST' }),
   resetPassword: (id: string, data: { newPassword?: string; mustChangePassword?: boolean }) =>
-    request<any>(`/iam/accounts/${id}/reset-password`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown>(`/iam/accounts/${id}/reset-password`, { method: 'POST', body: JSON.stringify(data) }),
   getAccount: (id: string) =>
-    request<any>(`/iam/accounts/${id}`),
+    request<unknown>(`/iam/accounts/${id}`),
   getAccountSecurityHistory: (id: string) =>
-    request<any[]>(`/iam/accounts/${id}/security-history`),
-  assignMembership: (id: string, data: any) =>
-    request<any>(`/iam/accounts/${id}/memberships`, { method: 'POST', body: JSON.stringify(data) }),
+    request<unknown[]>(`/iam/accounts/${id}/security-history`),
+  assignMembership: (id: string, data: Record<string, unknown>) =>
+    request<unknown>(`/iam/accounts/${id}/memberships`, { method: 'POST', body: JSON.stringify(data) }),
   revokeMembership: (id: string, orgId: string) =>
-    request<any>(`/iam/accounts/${id}/memberships/${orgId}`, { method: 'DELETE' }),
+    request<unknown>(`/iam/accounts/${id}/memberships/${orgId}`, { method: 'DELETE' }),
 
   previewBulk: (records: BulkAccountRow[]) =>
     request<BulkPreviewResult>('/iam/bulk/preview', { method: 'POST', body: JSON.stringify({ records }) }),
@@ -2216,7 +2235,32 @@ export const iamApi = {
     request<{ message: string; id: string }>(`/iam/security/sessions/${sessionId}`, { method: 'DELETE' }),
 
   getSecurityEvents: (limit = 50) =>
-    request<any[]>(`/iam/security/events?limit=${limit}`),
+    request<unknown[]>(`/iam/security/events?limit=${limit}`),
+};
+
+export const api = {
+  get: <T = any>(path: string, options: RequestOptions = {}) =>
+    request<T>(path, { ...options, method: 'GET' }),
+  post: <T = any>(path: string, body?: any, options: RequestOptions = {}) =>
+    request<T>(path, {
+      ...options,
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  put: <T = any>(path: string, body?: any, options: RequestOptions = {}) =>
+    request<T>(path, {
+      ...options,
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  patch: <T = any>(path: string, body?: any, options: RequestOptions = {}) =>
+    request<T>(path, {
+      ...options,
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  delete: <T = any>(path: string, options: RequestOptions = {}) =>
+    request<T>(path, { ...options, method: 'DELETE' }),
 };
 
 export default request;

@@ -37,22 +37,24 @@ export function useCalculator() {
   };
 
   const inputDigit = useCallback((digit: string) => {
-    if (waitingForNewValue) {
-      setCurrentValue(digit);
-      setWaitingForNewValue(false);
-    } else {
-      setCurrentValue(currentValue === '0' && digit !== '.' ? digit : currentValue + digit);
-    }
-  }, [currentValue, waitingForNewValue]);
+    setCurrentValue(prev => {
+      if (waitingForNewValue) {
+        return digit;
+      }
+      return prev === '0' && digit !== '.' ? digit : prev + digit;
+    });
+    setWaitingForNewValue(false);
+  }, [waitingForNewValue]);
 
   const inputDot = useCallback(() => {
-    if (waitingForNewValue) {
-      setCurrentValue('0.');
-      setWaitingForNewValue(false);
-    } else if (currentValue.indexOf('.') === -1) {
-      setCurrentValue(currentValue + '.');
-    }
-  }, [currentValue, waitingForNewValue]);
+    setCurrentValue(prev => {
+      if (waitingForNewValue) {
+        return '0.';
+      }
+      return prev.indexOf('.') === -1 ? prev + '.' : prev;
+    });
+    setWaitingForNewValue(false);
+  }, [waitingForNewValue]);
 
   const performOperation = useCallback((nextOperator: Operator) => {
     const inputValue = currentValue;
@@ -243,7 +245,32 @@ export function useCalculator() {
     setWaitingForNewValue(true);
   }, [currentValue]);
 
+  const calculateProrate = useCallback((attended: number, total = 12) => {
+    const val = parseFloat(currentValue);
+    if (isNaN(val) || total <= 0 || attended < 0) return;
+    const perLesson = val / total;
+    const result = formatNumber(Math.round(perLesson * attended));
+    setHistory(prev => [{
+      id: Date.now().toString(),
+      expression: `${val} ÷ ${total} × ${attended} dars`,
+      result
+    }, ...prev]);
+    setCurrentValue(result);
+    setWaitingForNewValue(true);
+  }, [currentValue]);
 
+  const calculateTeacherShare = useCallback((sharePct: number) => {
+    const val = parseFloat(currentValue);
+    if (isNaN(val) || sharePct < 0) return;
+    const result = formatNumber(Math.round((val * sharePct) / 100));
+    setHistory(prev => [{
+      id: Date.now().toString(),
+      expression: `${val} × ${sharePct}% (ulush)`,
+      result
+    }, ...prev]);
+    setCurrentValue(result);
+    setWaitingForNewValue(true);
+  }, [currentValue]);
 
   return {
     currentValue,
@@ -267,5 +294,7 @@ export function useCalculator() {
     calculateSquareRoot,
     calculateReciprocal,
     convertCurrency,
+    calculateProrate,
+    calculateTeacherShare,
   };
 }

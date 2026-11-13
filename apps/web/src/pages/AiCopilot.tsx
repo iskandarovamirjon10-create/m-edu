@@ -193,16 +193,6 @@ const IconPaperclip = memo(function IconPaperclip({ size = 14 }: { size?: number
   );
 });
 
-const IconMic = memo(function IconMic({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" x2="12" y1="19" y2="22" />
-    </svg>
-  );
-});
-
 const IconClose = memo(function IconClose({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -506,12 +496,12 @@ export function AiCopilot() {
   const [isLessonStudioOpen, setIsLessonStudioOpen] = useState(false);
 
   /* ── New Senior UX States: Smart Dock, File Staging & Voice ───── */
-  const [dockCategory, setDockCategory] = useState<DockFilterCategory>('all');
+  const [dockCategory] = useState<DockFilterCategory>('all');
   const [canScrollDockLeft, setCanScrollDockLeft] = useState(false);
   const [canScrollDockRight, setCanScrollDockRight] = useState(true);
   const [stagedFiles, setStagedFiles] = useState<StagedAttachment[]>([]);
   const [fileFeedbackToast, setFileFeedbackToast] = useState<string | null>(null);
-  const [isListeningVoice, setIsListeningVoice] = useState(false);
+  const [isListeningVoice] = useState(false);
 
   const openSuperStudio = useCallback((tab?: StudioTabId) => {
     setSuperStudioInitialTab(tab);
@@ -535,6 +525,7 @@ export function AiCopilot() {
   const showToast = useCallback((msg: string) => {
     setFileFeedbackToast(msg);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (dockScrollFrameRef.current) cancelAnimationFrame(dockScrollFrameRef.current);
     toastTimerRef.current = setTimeout(() => setFileFeedbackToast(null), 3400);
   }, []);
 
@@ -656,13 +647,20 @@ export function AiCopilot() {
     };
   }, []);
 
-  /* ── Quick Dock Horizontal Scroll Telemetry & Controls ────────── */
+  /* ── Quick Dock Horizontal Scroll Telemetry & Controls (RAF debounced) ── */
+  const dockScrollFrameRef = useRef<number | null>(null);
   const updateDockScrollState = useCallback(() => {
-    const el = dockScrollRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanScrollDockLeft(scrollLeft > 6);
-    setCanScrollDockRight(scrollLeft + clientWidth < scrollWidth - 6);
+    if (dockScrollFrameRef.current) return;
+    dockScrollFrameRef.current = requestAnimationFrame(() => {
+      dockScrollFrameRef.current = null;
+      const el = dockScrollRef.current;
+      if (!el) return;
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      const left = scrollLeft > 6;
+      const right = scrollLeft + clientWidth < scrollWidth - 6;
+      setCanScrollDockLeft((prev) => (prev !== left ? left : prev));
+      setCanScrollDockRight((prev) => (prev !== right ? right : prev));
+    });
   }, []);
 
   useEffect(() => {
@@ -687,12 +685,51 @@ export function AiCopilot() {
         if (latestConvReqRef.current !== id) return;
         const now = Date.now();
         const safeWire = Array.isArray(wire) ? wire : [];
-        const ui: AiUiMessage[] = safeWire.map((message, index) => ({
-          id: `msg-${id}-${index}`,
-          role: message.role,
-          content: message.content || '',
-          createdAt: now - (safeWire.length - index) * 60_000,
-        }));
+        const ui: AiUiMessage[] = safeWire.map((message, index) => {
+          const createdAt = message.createdAt
+            ? new Date(message.createdAt).getTime()
+            : now - (safeWire.length - index) * 60_000;
+          const timestamp = message.createdAt
+            ? new Date(message.createdAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : undefined;
+
+          // Reconstruct rich tool activities from durable toolCalls and toolResult
+          const toolCallsList = Array.isArray(message.toolCalls) ? (message.toolCalls as any[]) : [];
+          const reconstructedActivities = toolCallsList.map((call: any, callIdx: number) => ({
+            id: call.id || `call-${message.id || id}-${callIdx}`,
+            toolName: call.name || call.function?.name || 'unknown',
+            args:
+              call.arguments ||
+              (call.function?.arguments
+                ? typeof call.function.arguments === 'string'
+                  ? JSON.parse(call.function.arguments)
+                  : call.function.arguments
+                : {}),
+            status: (message.toolResult ? (message.toolResult.ok ? 'success' : 'error') : 'done') as any,
+            result: message.toolResult,
+          }));
+
+          const toolActivities =
+            message.toolActivities ||
+            (reconstructedActivities.length > 0 ? reconstructedActivities : undefined);
+
+          return {
+            id: message.id || `msg-${id}-${index}`,
+            role: message.role,
+            content: message.content || '',
+            status: message.status,
+            createdAt,
+            timestamp,
+            actionId: message.actionId,
+            toolCalls: message.toolCalls,
+            toolResult: message.toolResult,
+            toolActivities,
+            activities: toolActivities,
+          };
+        });
         hydrate(ui, safeWire, id);
       } catch {
         if (latestConvReqRef.current === id) {
@@ -786,57 +823,6 @@ export function AiCopilot() {
       setIsMobileContextOpen((prev) => !prev);
     }
   }, [isDesktop, focusMode]);
-
-  /* ── Web Speech API Live Voice Dictation (`uz-UZ`) ────────────── */
-  const handleToggleVoiceDictation = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    if (isListeningVoice) {
-      recognitionRef.current?.stop?.();
-      setIsListeningVoice(false);
-      return;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognitionApi = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionApi) {
-      showToast('Brauzeringiz ovozli kiritishni qo‘llab-quvvatlamaydi');
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognitionApi();
-      recognition.lang = 'uz-UZ';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        setIsListeningVoice(true);
-        showToast('🎙️ Gapiring... Ovoz matnga aylantirilmoqda');
-      };
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      recognition.onresult = (event: any) => {
-        const transcript = event.results?.[0]?.[0]?.transcript?.trim();
-        if (transcript && canSend) {
-          handleSendWithStagedFiles(transcript);
-        }
-      };
-
-      recognition.onerror = () => {
-        setIsListeningVoice(false);
-        showToast('Ovozni aniqlashda xatolik yuz berdi');
-      };
-
-      recognition.onend = () => {
-        setIsListeningVoice(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
-      setIsListeningVoice(false);
-    }
-  }, [isListeningVoice, canSend, handleSendWithStagedFiles, showToast]);
 
   /* ── Staged File Ingestion (Drag & Drop + File Picker) ────────── */
   const ingestFiles = useCallback(
@@ -1284,7 +1270,10 @@ export function AiCopilot() {
       <main
         aria-label="AI Copilot conversation"
         aria-busy={busy || Boolean(loadingConvId)}
-        className="relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden"
+        className={cn(
+          'relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden transition-all duration-500',
+          (busy || isListeningVoice) && 'apple-intelligence-aura',
+        )}
       >
         <AiCopilotHeader
           online={online}
@@ -1372,7 +1361,7 @@ export function AiCopilot() {
                   }
                   transition={SPRING_GEL}
                   onClick={() => setFocusMode(false)}
-                  className="cp-badge cp-badge--accent cp-hover-lift pointer-events-auto cursor-pointer px-3.5 py-1.5 min-h-[40px] sm:min-h-[32px] inline-flex items-center text-xs shadow-[var(--cp-shadow-2)] backdrop-blur-2xl touch-manipulation"
+                  className="cp-badge cp-badge--accent cp-hover-lift pointer-events-auto cursor-pointer px-3.5 py-1.5 min-h-10 sm:min-h-[32px] inline-flex items-center text-xs shadow-[var(--cp-shadow-2)] backdrop-blur-2xl touch-manipulation"
                   title="Diqqat rejimidan chiqish (⌘.)"
                 >
                   <span>Diqqat rejimi faol</span>
@@ -1425,7 +1414,7 @@ export function AiCopilot() {
                         'Biriktirilgan fayl(lar)ni chuqur tahlil qilib, asosiy ko‘rsatkichlar, xulosalar va amaliy tavsiyalarni chiqarib ber.',
                       )
                     }
-                    className="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs transition-all active:scale-95"
+                    className="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-3 py-1.5 min-h-[38px] tap-extend text-[11px] font-bold text-white shadow-xs transition-all active:scale-95"
                   >
                     ⚡ Chuqur tahlil qilish
                   </button>
@@ -1437,14 +1426,14 @@ export function AiCopilot() {
                         'Ushbu fayl ma’lumotlari asosida tartibli jadval va qisqa rahbariyat hisobotini shakllantirib ber.',
                       )
                     }
-                    className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-200 transition-all"
+                    className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-50 px-3 py-1.5 min-h-[38px] tap-extend text-[11px] font-semibold text-indigo-700 dark:text-indigo-200 transition-all"
                   >
                     📊 Jadval & Hisobot
                   </button>
                   <button
                     type="button"
                     onClick={() => setStagedFiles([])}
-                    className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-500 hover:text-rose-600 transition-colors"
+                    className="rounded-lg px-2.5 py-1.5 min-h-[38px] tap-extend text-[11px] font-medium text-zinc-500 hover:text-rose-600 transition-colors"
                   >
                     Tozalash
                   </button>
@@ -1471,7 +1460,7 @@ export function AiCopilot() {
                         setStagedFiles((prev) => prev.filter((item) => item.id !== file.id))
                       }
                       aria-label={`${file.name} faylini olib tashlash`}
-                      className="rounded-full p-1 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
+                      className="rounded-full p-1.5 min-h-[36px] min-w-[36px] tap-extend flex items-center justify-center text-zinc-400 hover:bg-rose-500/10 hover:text-rose-500 transition-colors"
                     >
                       <IconClose size={12} />
                     </button>
@@ -1482,84 +1471,17 @@ export function AiCopilot() {
           )}
         </AnimatePresence>
 
-        {/* ── Spatial Quick Dock Pro (Category Filter + Scroll Chevrons + Vector Icons) ── */}
-        <div className="relative z-10 shrink-0 px-3 pb-2 space-y-1.5">
-          {/* Micro Category Bar + Utility Triggers */}
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <div
-              role="tablist"
-              aria-label="Tezkor amallar toifalari"
-              className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface-glass)] p-0.5 backdrop-blur-xl"
-            >
-              {(
-                [
-                  { id: 'all', label: 'Barchasi' },
-                  { id: 'studios', label: 'AI Studiyalar (5)' },
-                  { id: 'analytics', label: 'Analitika (8)' },
-                ] as const
-              ).map((tab) => {
-                const active = dockCategory === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setDockCategory(tab.id)}
-                    className={cn(
-                      'rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all',
-                      active
-                        ? 'bg-indigo-600 text-white shadow-2xs'
-                        : 'text-[color:var(--cp-text-secondary)] hover:text-[color:var(--cp-text)]',
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Right Utility Pills: File Attach & Voice Dictation */}
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                title="Fayl biriktirish (.txt, .csv, .md, .json)"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface-glass)] hover:border-indigo-500/40 px-2.5 py-1 text-[11px] font-semibold text-[color:var(--cp-text-secondary)] hover:text-[color:var(--cp-text)] transition-all active:scale-95"
-              >
-                <IconPaperclip size={12} />
-                <span className="hidden sm:inline">Fayl</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleToggleVoiceDictation}
-                title="Ovozli so‘rov yuborish (O‘zbek tilida)"
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-[11px] font-semibold transition-all active:scale-95',
-                  isListeningVoice
-                    ? 'border-rose-500 bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/30'
-                    : 'border-[color:var(--cp-hairline)] bg-[color:var(--cp-surface-glass)] hover:border-indigo-500/40 text-[color:var(--cp-text-secondary)] hover:text-[color:var(--cp-text)]',
-                )}
-              >
-                <IconMic size={12} />
-                <span className="hidden sm:inline">
-                  {isListeningVoice ? 'Tinglanmoqda...' : 'Ovoz'}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Scrollable Dock Strip with Floating Left/Right Chevrons */}
+        {/* ── Spatial Quick Dock (Clean Minimal Single-Tier) ── */}
+        <div className="relative z-10 shrink-0 px-3 pb-1.5">
           <div className="relative flex items-center">
             {canScrollDockLeft && (
               <button
                 type="button"
                 onClick={() => scrollDockBy(-260)}
                 aria-label="Chapga surish"
-                className="hidden sm:flex absolute left-0 z-20 h-8 w-8 items-center justify-center rounded-full border border-[color:var(--cp-hairline-strong)] bg-white/90 dark:bg-zinc-900/90 text-[color:var(--cp-text)] shadow-md backdrop-blur-xl hover:scale-105 active:scale-95 transition-all"
+                className="hidden sm:flex absolute left-0 z-20 h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-full border border-[color:var(--cp-hairline-strong)] bg-white/95 dark:bg-zinc-900/95 text-[color:var(--cp-text)] shadow-sm backdrop-blur-xl hover:scale-105 active:scale-95 transition-all"
               >
-                <IconChevronLeft size={15} />
+                <IconChevronLeft size={13} />
               </button>
             )}
 
@@ -1575,34 +1497,42 @@ export function AiCopilot() {
                 <>
                   <motion.button
                     type="button"
+                whileTap={isMotionReduced ? undefined : { scaleX: 1.04, scaleY: 0.93 }}
+                transition={SPRING_GEL}
+                onClick={() => openSuperStudio()}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all min-h-[34px] touch-manipulation',
+                  'border-indigo-500/40 bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15',
+                  'text-indigo-700 shadow-2xs hover:border-indigo-500/70',
+                  'dark:border-indigo-400/45 dark:from-indigo-500/25 dark:via-purple-500/20 dark:to-pink-500/20 dark:text-indigo-200 dark:hover:border-indigo-400',
+                )}
+              >
+                <span className="flex h-4 w-4 items-center justify-center rounded-md bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">
+                  <IconSparklePrism size={11} />
+                </span>
+                <span>AI Super Studio</span>
+              </motion.button>
+
+                                    <motion.button
+                    type="button"
                     whileTap={
                       isMotionReduced ? undefined : { scaleX: 1.04, scaleY: 0.93 }
                     }
                     transition={SPRING_GEL}
-                    onClick={() => openSuperStudio()}
-                    className={cn(
-                      'flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition-all min-h-[42px] sm:min-h-[36px] touch-manipulation',
-                      'border-indigo-500/40 bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15',
-                      'text-indigo-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_2px_8px_-2px_rgba(99,102,241,0.22)]',
-                      'hover:border-indigo-500/70 hover:text-indigo-950',
-                      'dark:border-indigo-400/45 dark:from-indigo-500/25 dark:via-purple-500/20 dark:to-pink-500/20',
-                      'dark:text-indigo-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] dark:hover:border-indigo-400 dark:hover:text-white',
-                    )}
+                    onClick={() => openSuperStudio('scenario')}
+                    className="cp-dock__chip flex items-center gap-1.5 border-amber-500/35 text-amber-700 hover:border-amber-500/65 dark:border-amber-400/40 dark:text-amber-300 min-h-10 sm:min-h-[36px] touch-manipulation"
                   >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">
-                      <IconSparklePrism size={13} />
-                    </span>
-                    <span>AI Super Studio</span>
+                    <IconDiagnosticPulse size={14} />
+                    <span>What-If Ssenariy</span>
                   </motion.button>
-
-                  <motion.button
+<motion.button
                     type="button"
                     whileTap={
                       isMotionReduced ? undefined : { scaleX: 1.04, scaleY: 0.93 }
                     }
                     transition={SPRING_GEL}
                     onClick={() => openSuperStudio('diagnostic')}
-                    className="cp-dock__chip flex items-center gap-1.5 border-emerald-500/35 text-emerald-700 hover:border-emerald-500/65 dark:border-emerald-400/40 dark:text-emerald-300 min-h-[42px] sm:min-h-[36px] touch-manipulation"
+                    className="cp-dock__chip flex items-center gap-1.5 border-emerald-500/35 text-emerald-700 hover:border-emerald-500/65 dark:border-emerald-400/40 dark:text-emerald-300 min-h-10 sm:min-h-[36px] touch-manipulation"
                   >
                     <IconDiagnosticPulse size={14} />
                     <span>360° Diagnostika</span>
@@ -1615,7 +1545,7 @@ export function AiCopilot() {
                     }
                     transition={SPRING_GEL}
                     onClick={() => openSuperStudio('quiz')}
-                    className="cp-dock__chip flex items-center gap-1.5 border-violet-500/35 text-violet-700 hover:border-violet-500/65 dark:border-violet-400/40 dark:text-violet-300 min-h-[42px] sm:min-h-[36px] touch-manipulation"
+                    className="cp-dock__chip flex items-center gap-1.5 border-violet-500/35 text-violet-700 hover:border-violet-500/65 dark:border-violet-400/40 dark:text-violet-300 min-h-10 sm:min-h-[36px] touch-manipulation"
                   >
                     <IconBloomTest size={14} />
                     <span>Bloom Test</span>
@@ -1628,7 +1558,7 @@ export function AiCopilot() {
                     }
                     transition={SPRING_GEL}
                     onClick={() => setIsSocialStudioOpen(true)}
-                    className="cp-dock__chip flex items-center gap-1.5 border-rose-500/35 text-rose-700 hover:border-rose-500/65 dark:border-rose-400/40 dark:text-rose-300 min-h-[42px] sm:min-h-[36px] touch-manipulation"
+                    className="cp-dock__chip flex items-center gap-1.5 border-rose-500/35 text-rose-700 hover:border-rose-500/65 dark:border-rose-400/40 dark:text-rose-300 min-h-10 sm:min-h-[36px] touch-manipulation"
                   >
                     <IconMegaphoneStudio size={14} />
                     <span>SMM E’lon</span>
@@ -1641,7 +1571,7 @@ export function AiCopilot() {
                     }
                     transition={SPRING_GEL}
                     onClick={() => setIsLessonStudioOpen(true)}
-                    className="cp-dock__chip flex items-center gap-1.5 border-sky-500/35 text-sky-700 hover:border-sky-500/65 dark:border-sky-400/40 dark:text-sky-300 min-h-[42px] sm:min-h-[36px] touch-manipulation"
+                    className="cp-dock__chip flex items-center gap-1.5 border-sky-500/35 text-sky-700 hover:border-sky-500/65 dark:border-sky-400/40 dark:text-sky-300 min-h-10 sm:min-h-[36px] touch-manipulation"
                   >
                     <IconLessonBook size={14} />
                     <span>Dars Rejasi V2</span>
@@ -1663,7 +1593,7 @@ export function AiCopilot() {
                     }
                     transition={SPRING_GEL}
                     onClick={() => handleSendWithStagedFiles(action.prompt)}
-                    className="cp-dock__chip disabled:opacity-45 min-h-[42px] sm:min-h-[36px] touch-manipulation"
+                    className="cp-dock__chip disabled:opacity-45 min-h-10 sm:min-h-[36px] touch-manipulation"
                   >
                     <span aria-hidden="true" className="text-[color:var(--cp-accent)]">
                       {action.icon}
@@ -1679,7 +1609,7 @@ export function AiCopilot() {
                 }
                 transition={SPRING_GEL}
                 onClick={() => setCommandOpen(true)}
-                className="cp-dock__chip min-h-[42px] sm:min-h-[36px] touch-manipulation"
+                className="cp-dock__chip min-h-10 sm:min-h-[36px] touch-manipulation"
                 aria-label="Barcha buyruqlar (⌘K)"
               >
                 <span aria-hidden="true" className="text-[color:var(--cp-accent)]">
@@ -1695,7 +1625,7 @@ export function AiCopilot() {
                 type="button"
                 onClick={() => scrollDockBy(260)}
                 aria-label="O‘ngga surish"
-                className="hidden sm:flex absolute right-0 z-20 h-8 w-8 items-center justify-center rounded-full border border-[color:var(--cp-hairline-strong)] bg-white/90 dark:bg-zinc-900/90 text-[color:var(--cp-text)] shadow-md backdrop-blur-xl hover:scale-105 active:scale-95 transition-all"
+                className="hidden sm:flex absolute right-0 z-20 h-9 w-9 min-h-[44px] min-w-[44px] tap-extend items-center justify-center rounded-full border border-[color:var(--cp-hairline-strong)] bg-white/90 dark:bg-zinc-900/90 text-[color:var(--cp-text)] shadow-md backdrop-blur-xl hover:scale-105 active:scale-95 transition-all"
               >
                 <IconChevronRight size={15} />
               </button>

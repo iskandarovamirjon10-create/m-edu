@@ -328,7 +328,7 @@ export function ImportExportPage() {
               setViewMode('migration');
             }}
             className={cn(
-              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 min-h-[40px]',
+              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 min-h-10',
               viewMode === 'migration'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                 : 'text-white/60 hover:text-white'
@@ -346,7 +346,7 @@ export function ImportExportPage() {
               setViewMode('classic');
             }}
             className={cn(
-              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 min-h-[40px]',
+              'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 min-h-10',
               viewMode === 'classic'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
                 : 'text-white/60 hover:text-white'
@@ -417,7 +417,10 @@ export function ImportExportPage() {
 
                   <input
                     ref={fileInput}
+                    id="import-file-input"
+                    name="import-file-input"
                     type="file"
+                    aria-label="Faylni yuklash"
                     accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                     onChange={(e) => {
                       const f = e.target.files?.[0];

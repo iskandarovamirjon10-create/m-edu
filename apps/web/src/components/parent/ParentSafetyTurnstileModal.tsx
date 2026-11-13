@@ -23,6 +23,33 @@ interface ParentSafetyTurnstileModalProps {
   branchId?: string;
 }
 
+interface PresenceStudent {
+  studentId?: string;
+  studentName?: string;
+  entryTime?: string;
+  minutesInside?: number;
+}
+
+interface LivePresence {
+  studentsInside?: PresenceStudent[];
+  currentlyInsideCount?: number;
+}
+
+interface QuickStudentOption {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface MovementResult {
+  studentName?: string;
+  notifiedParentsCount?: number;
+}
+
+interface EmergencyResult {
+  notifiedCount?: number;
+}
+
 export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProps> = ({
   isOpen,
   onClose,
@@ -52,17 +79,18 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
     data: presenceData,
     isLoading: isPresenceLoading,
     refetch: refetchPresence,
-  } = useQuery({
+  } = useQuery<LivePresence>({
     queryKey: ['live-presence', branchId],
-    queryFn: () => parentSafetyGuardApi.getLivePresence(branchId),
+    queryFn: () => parentSafetyGuardApi.getLivePresence(branchId) as Promise<LivePresence>,
     enabled: isOpen,
     refetchInterval: 10_000, // 10s auto refresh for live campus monitoring
   });
 
   // Students list for testing/dispatching
-  const { data: studentsData } = useQuery({
+  const { data: studentsData } = useQuery<{ items?: QuickStudentOption[] }>({
     queryKey: ['students-quick-list'],
-    queryFn: () => studentsApi.list({ limit: 50 }),
+    queryFn: () =>
+      studentsApi.list({ limit: 50 }) as Promise<{ items?: QuickStudentOption[] }>,
     enabled: isOpen && activeTab === 'DISPATCH',
   });
 
@@ -74,19 +102,19 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
         direction,
         gateOrDeviceName: gateName,
         verificationMethod,
-      }),
-    onSuccess: (res: any) => {
+      }) as Promise<MovementResult>,
+    onSuccess: (res: MovementResult) => {
       playSuccess();
       toast.success(
-        `${res.studentName} harakati muvaffaqiyatli qayd etildi! ${
-          res.notifiedParentsCount > 0
+        `${res.studentName ?? ''} harakati muvaffaqiyatli qayd etildi! ${
+          (res.notifiedParentsCount ?? 0) > 0
             ? `${res.notifiedParentsCount} ta ota-onaga Telegram orqali xabar yuborildi.`
             : "Ota-onaga xabar yetkazildi."
         }`
       );
       queryClient.invalidateQueries({ queryKey: ['live-presence'] });
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || "Turniket harakatini qayd etishda xatolik yuz berdi");
     },
@@ -100,28 +128,24 @@ export const ParentSafetyTurnstileModal: React.FC<ParentSafetyTurnstileModalProp
         message: emergencyMessage,
         severity: emergencySeverity,
         targetAudience: emergencyTarget,
-      }),
-    onSuccess: (res: any) => {
+      }) as Promise<EmergencyResult>,
+    onSuccess: (res: EmergencyResult) => {
       playSuccess();
       toast.success(
-        `Favqulodda xabarnoma ${res.notifiedCount} nafar talabaning ota-onalariga zudlik bilan yetkazildi!`
+        `Favqulodda xabarnoma ${res.notifiedCount ?? 0} nafar talabaning ota-onalariga zudlik bilan yetkazildi!`
       );
       setEmergencyMessage('');
       setActiveTab('PRESENCE');
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       playError();
       toast.error(err?.message || "Xabarnomani tarqatishda xatolik yuz berdi");
     },
   });
 
-  const students: any[] = (
-    (studentsData as any)?.items ||
-    (studentsData as any)?.data ||
-    (Array.isArray(studentsData) ? studentsData : [])
-  ) as any[];
-  const presentStudents = presenceData?.studentsInside || [];
-  const insideCount = presenceData?.currentlyInsideCount || 0;
+  const students: QuickStudentOption[] = studentsData?.items ?? [];
+  const presentStudents = presenceData?.studentsInside ?? [];
+  const insideCount = presenceData?.currentlyInsideCount ?? 0;
 
   const handleSendMovement = (e: React.FormEvent) => {
     e.preventDefault();

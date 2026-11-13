@@ -55,9 +55,7 @@ export function ArenaTournamentsHub() {
 
   const groupsList = useMemo<RealGroupItem[]>(() => {
     if (!groupsData) return [];
-    if (Array.isArray(groupsData)) return groupsData;
-    if (Array.isArray((groupsData as any).items)) return (groupsData as any).items;
-    return [];
+    return Array.isArray(groupsData) ? groupsData : groupsData.items;
   }, [groupsData]);
 
   // Aggregate real group statistics

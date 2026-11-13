@@ -35,10 +35,9 @@ const SENSITIVE_PATTERNS = [
   /apiKey[^"]*"[^"]*"/gi,
   /token[^"]*"[^"]*"/gi,
   /secret[^"]*"[^"]*"/gi,
-  /embedding/gi,
-  /templateData/gi,
-  /face_encoding/gi,
-  /biometric/gi,
+  // Redact assignments or values attached to biometric embeddings / template keys,
+  // without erasing the bare words "biometric" or "embedding" in natural sentences.
+  /\b(?:embedding|templateData|face_encoding)\b\s*[:=]\s*\S+/gi,
   // Authorization: Bearer <token> — the keyword pattern alone would only
   // redact the word "Bearer" and leave the token visible.
   /\b(?:authorization|Authorization)\s*[:=]\s*Bearer\s+\S+/gi,

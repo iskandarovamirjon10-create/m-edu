@@ -246,14 +246,12 @@ function patch(partial: UiStatePatch): void {
   state = Object.freeze({ ...state, ...partial });
 
   if (import.meta.env?.DEV) {
-    /* eslint-disable no-console */
     console.debug(
       '%c[ui.store]%c transition',
       'color:#007AFF;font-weight:700',
       'color:#94A3B8',
       { prev: previousState, next: state, patch: partial },
     );
-    /* eslint-enable no-console */
   }
 
   notify();

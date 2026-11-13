@@ -124,14 +124,54 @@ export function cropBoxForLiveness(
 }
 
 /**
+ * Cache for oriented dimensions to avoid redundant sharp(imageBuffer).metadata()
+ * calls across multiple faces in the same frame.
+ */
+const metadataDimensionsCache = new WeakMap<Buffer, { srcW: number; srcH: number }>();
+
+/**
  * Softmax over an array of logits.
+ * Implemented iteratively to avoid call stack overflow on large arrays,
+ * with numerical stability via max-subtraction and finite-number guards.
  */
 export function softmax(values: ArrayLike<number>): number[] {
-  const arr = Array.from(values);
-  const max = Math.max(...arr);
-  const exps = arr.map(v => Math.exp(v - max));
-  const sum = exps.reduce((a, b) => a + b, 0);
-  return exps.map(v => v / sum);
+  const len = values.length;
+  if (len === 0) return [];
+  if (len === 1) return [1.0];
+
+  let max = -Infinity;
+  for (let i = 0; i < len; i++) {
+    const v = values[i];
+    if (Number.isFinite(v) && v > max) {
+      max = v;
+    }
+  }
+
+  // Fallback if all values are non-finite or empty
+  if (!Number.isFinite(max)) {
+    const uniform = 1 / len;
+    return new Array(len).fill(uniform);
+  }
+
+  const exps = new Float64Array(len);
+  let sum = 0;
+  for (let i = 0; i < len; i++) {
+    const val = values[i];
+    const expVal = Number.isFinite(val) ? Math.exp(val - max) : 0;
+    exps[i] = expVal;
+    sum += expVal;
+  }
+
+  if (sum <= 0 || !Number.isFinite(sum)) {
+    const uniform = 1 / len;
+    return new Array(len).fill(uniform);
+  }
+
+  const out = new Array<number>(len);
+  for (let i = 0; i < len; i++) {
+    out[i] = exps[i] / sum;
+  }
+  return out;
 }
 
 export class RealLivenessChecker {
@@ -225,14 +265,22 @@ export class RealLivenessChecker {
 
     const sharp = (await import('sharp')).default;
     const { boundingBox } = input.face;
-    // Oriented dimensions: the detector auto-applies EXIF rotation, so bbox
-    // coordinates are in the rotated frame. metadata() returns pre-rotation
-    // size — swap W/H for orientations that transpose axes.
-    const rawMeta = await sharp(input.imageBuffer).metadata();
-    const orientation = rawMeta.orientation ?? 1;
-    const swapsAxes = orientation >= 5 && orientation <= 8;
-    const srcW = (swapsAxes ? rawMeta.height : rawMeta.width) || 0;
-    const srcH = (swapsAxes ? rawMeta.width : rawMeta.height) || 0;
+    // Oriented dimensions: check cache first to avoid re-parsing Sharp metadata
+    // if multiple faces are processed for the same input frame.
+    let dims = metadataDimensionsCache.get(input.imageBuffer);
+    if (!dims) {
+      const rawMeta = await sharp(input.imageBuffer).metadata();
+      const orientation = rawMeta.orientation ?? 1;
+      const swapsAxes = orientation >= 5 && orientation <= 8;
+      dims = {
+        srcW: (swapsAxes ? rawMeta.height : rawMeta.width) || 0,
+        srcH: (swapsAxes ? rawMeta.width : rawMeta.height) || 0,
+      };
+      if (dims.srcW > 0 && dims.srcH > 0) {
+        metadataDimensionsCache.set(input.imageBuffer, dims);
+      }
+    }
+    const { srcW, srcH } = dims;
 
     if (srcW === 0 || srcH === 0) {
       return {

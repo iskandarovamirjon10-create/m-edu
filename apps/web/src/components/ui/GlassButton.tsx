@@ -262,7 +262,7 @@ function getSpinnerSize(size: GlassButtonSize): 'sm' | 'md' {
 const IS_DEV: boolean = (() => {
   try {
     // Vite / ESM
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV) return true;
+    if (import.meta.env?.DEV) return true;
   } catch {  }
   try {
     // Node / CJS
@@ -274,7 +274,6 @@ const IS_DEV: boolean = (() => {
 
 function devWarn(condition: boolean, message: string): void {
   if (IS_DEV && condition && typeof console !== 'undefined') {
-    // eslint-disable-next-line no-console
     console.warn(`[GlassButton] ${message}`);
   }
 }
