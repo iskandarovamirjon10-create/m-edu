@@ -181,6 +181,8 @@ const AiCopilotPage            = lazyPage(() => import('@/pages/AiCopilot'), 'de
 const ParentPortalPage         = lazyPage(() => import('@/pages/ParentPortal'), 'ParentPortalPage');
 const ExecutiveDashboardPage   = lazyPage(() => import('@/pages/ExecutiveDashboard'), 'ExecutiveDashboardPage');
 const ShowcasePage             = lazyPage(() => import('@/pages/Showcase'), 'Showcase');
+const KioskPage                = lazyPage(() => import('@/pages/Kiosk'), 'Kiosk');
+const CommandCenterTVPage      = lazyPage(() => import('@/pages/CommandCenterTV'), 'CommandCenterTV');
 const AutomationEnginePage     = lazyPage(() => import('@/pages/AutomationEngine'), 'AutomationEnginePage');
 const TelegramPage             = lazyPage(() => import('@/pages/Telegram'), 'TelegramPage');
 const TelegramWebAppPage       = lazyPage(() => import('@/pages/TelegramWebApp'), 'TelegramWebAppPage');
@@ -229,6 +231,9 @@ const PRELOAD_MAP: Record<string, PreloadableComponent<any>> = {
   '/ai-copilot': AiCopilotPage,
   '/executive-dashboard': ExecutiveDashboardPage,
   '/showcase': ShowcasePage,
+  '/kiosk': KioskPage,
+  '/command-center': CommandCenterTVPage,
+  '/tv': CommandCenterTVPage,
   '/settings': SettingsPage,
   '/settings/billing': BillingSettingsPage,
   '/super-admin': SuperAdminPage,
@@ -312,6 +317,9 @@ export const routeConfig: RouteConfig[] = [
   { path: '/tg-app', element: <TelegramWebAppPage />, type: 'none', title: 'Telegram WebApp Hub' },
   { path: '/verify', element: <CertificateVerifyPage />, type: 'none', title: 'Verify Certificate', titleKey: 'certificates.verifyTitle' },
   { path: '/verify/:code', element: <CertificateVerifyPage />, type: 'none', title: 'Verify Certificate', titleKey: 'certificates.verifyTitle' },
+  { path: '/kiosk', element: <KioskPage />, type: 'protected', title: 'Smart Kiosk', roles: STAFF_ROLES },
+  { path: '/tv', element: <CommandCenterTVPage />, type: 'protected', title: 'Command Center TV', roles: STAFF_ROLES },
+  { path: '/command-center', element: <CommandCenterTVPage />, type: 'protected', title: 'Command Center TV', roles: STAFF_ROLES },
 
   /* ── Protected Application Workspace (AppLayout) ── */
   {
@@ -411,6 +419,9 @@ export const routeConfig: RouteConfig[] = [
       { path: 'telegram', element: <TelegramPage />, title: 'Telegram Hub', titleKey: 'nav.telegram' },
       { path: 'executive-dashboard', element: <ExecutiveDashboardPage />, title: 'Executive Dashboard', titleKey: 'nav.executiveDashboard', roles: ADMIN_ROLES },
       { path: 'showcase', element: <ShowcasePage />, title: ' Apple Innovation Suite', titleKey: 'nav.showcase', roles: STAFF_ROLES },
+      { path: 'kiosk', element: <KioskPage />, title: 'Reception Smart Kiosk', roles: STAFF_ROLES },
+      { path: 'command-center', element: <CommandCenterTVPage />, title: 'Live Command Center TV', roles: STAFF_ROLES },
+      { path: 'tv', element: <CommandCenterTVPage />, title: 'Live Command Center TV', roles: STAFF_ROLES },
       { path: 'innovations', element: <Navigate to="/showcase" replace /> },
       { path: 'executive', element: <Navigate to="/executive-dashboard" replace /> },
       { path: 'automation', element: <AutomationEnginePage />, title: 'Automation Engine', titleKey: 'nav.automation', roles: ADMIN_ROLES },

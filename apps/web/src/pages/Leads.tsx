@@ -56,6 +56,7 @@ import { queryKeys } from '@/lib/query-keys.factory';
 import { AuroraMesh } from '@/components/ui/AuroraMesh';
 import { LeadPipelineKanbanStudio } from '@/components/leads/LeadPipelineKanbanStudio';
 import { LeadCourseAdvisorModal } from '@/components/leads/LeadCourseAdvisorModal';
+import { LeadCallingScriptModal } from '@/components/leads/LeadCallingScriptModal';
 import { SmartOmnichannelFollowup } from '@/components/leads/SmartOmnichannelFollowup';
 
 /* ============================================================================
@@ -1010,6 +1011,7 @@ export function LeadsPage() {
     'list',
   );
   const [isCourseAdvisorOpen, setIsCourseAdvisorOpen] = useState(false);
+  const [callingScriptTarget, setCallingScriptTarget] = useState<Lead | null>(null);
   const [isBatchBusy, setIsBatchBusy] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -1055,7 +1057,8 @@ export function LeadsPage() {
       deleteTarget ||
       trialTarget ||
       attendanceTarget ||
-      isCourseAdvisorOpen,
+      isCourseAdvisorOpen ||
+      callingScriptTarget !== null,
   );
 
   useEffect(() => {
@@ -2040,6 +2043,28 @@ export function LeadsPage() {
                 </span>
               </GlassButton>
 
+              <GlassButton
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  soundRef.current?.playPop?.();
+                  const firstLead = leadList[0];
+                  if (firstLead) {
+                    setCallingScriptTarget(firstLead);
+                  } else {
+                    push('info', "Qo'ng'iroq qilish uchun avval birorta lid tanlang yoki qo'shing");
+                  }
+                }}
+                title="AI Qo'ng'iroq Skripti & CRM Telefoniya"
+                className="border-indigo-500/30 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 dark:text-indigo-400"
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                  <Icon paths={I.phone} size={13} strokeWidth={2.2} />
+                  <span className="hidden sm:inline">AI Qo'ng'iroq</span>
+                </span>
+              </GlassButton>
+
               <LayoutGroup id="leads-view-switcher">
                 <div className="inline-flex items-center rounded-xl bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
                   {(
@@ -2528,6 +2553,17 @@ export function LeadsPage() {
                             </GlassButton>
                           </>
                         )}
+
+                        {/* AI Calling Script Button */}
+                        <button
+                          type="button"
+                          onClick={() => setCallingScriptTarget(lead)}
+                          aria-label="AI Qo'ng'iroq Skripti"
+                          title="AI Qo'ng'iroq Skripti & CRM Telefoniya"
+                          className="inline-flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-600 transition-colors hover:bg-indigo-500/20 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-400"
+                        >
+                          <Icon paths={I.phone} size={14} strokeWidth={2.1} />
+                        </button>
 
                         {/* Sidecar Split-View Trigger */}
                         <button
@@ -3319,6 +3355,38 @@ export function LeadsPage() {
       <LeadCourseAdvisorModal
         isOpen={isCourseAdvisorOpen}
         onClose={() => setIsCourseAdvisorOpen(false)}
+      />
+
+      <LeadCallingScriptModal
+        lead={
+          callingScriptTarget
+            ? {
+                id: callingScriptTarget.id,
+                name: formatLeadName(callingScriptTarget),
+                phone: callingScriptTarget.phone || '',
+                courseName:
+                  (callingScriptTarget as any).course?.name ||
+                  callingScriptTarget.notes ||
+                  'Dasturlash / Til',
+                stage: callingScriptTarget.stage,
+                source: callingScriptTarget.source,
+                createdAt: callingScriptTarget.createdAt,
+              }
+            : null
+        }
+        isOpen={callingScriptTarget !== null}
+        onClose={() => setCallingScriptTarget(null)}
+        onAdvanceStage={(leadId, nextStage, notes) => {
+          updateStage.mutate({
+            id: leadId,
+            stage:
+              nextStage === 'TRIAL'
+                ? 'TRIAL_LESSON'
+                : nextStage === 'LOST'
+                  ? 'LOST'
+                  : 'CONTACTED',
+          });
+        }}
       />
 
       {toastNode}

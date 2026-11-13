@@ -19,6 +19,7 @@ import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { openSidecar, type QuickLookData } from '@/stores/ui.store';
 import { ExecutivePDFStudio } from '@/components/pdf-studio';
 import { CashierZReportModal } from '@/components/payments/CashierZReportModal';
+import { ExpressPosTerminalModal } from '@/components/payments/ExpressPosTerminalModal';
 import { PosThermalReceiptModal } from '@/components/payments/PosThermalReceiptModal';
 import { AiDebtReminderModal } from '@/components/payments/AiDebtReminderModal';
 import { PaymentsAnalyticsTab } from '@/components/payments/PaymentsAnalyticsTab';
@@ -350,6 +351,7 @@ const I = {
     'M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z',
     'M12 12l4.5-4.5',
   ],
+  zap: ['M13 2L3 14h9l-1 8 10-12h-9l1-8z'],
 } as const satisfies Record<string, readonly string[]>;
 
 function Icon({
@@ -930,6 +932,7 @@ export function PaymentsPage() {
   const [aiDebtTarget, setAiDebtTarget] = useState<Payment | null>(null);
   const [pdfStudioOpen, setPdfStudioOpen] = useState(false);
   const [zReportModalOpen, setZReportModalOpen] = useState(false);
+  const [expressPosOpen, setExpressPosOpen] = useState(false);
   const [splitCalcOpen, setSplitCalcOpen] = useState(false);
   const [isBatchPending, setIsBatchPending] = useState(false);
 
@@ -1518,6 +1521,9 @@ export function PaymentsPage() {
       } else if (key === 'n') {
         e.preventDefault();
         handleOpenModal();
+      } else if (key === 'x') {
+        e.preventDefault();
+        setExpressPosOpen(true);
       } else if (e.key === '/') {
         e.preventDefault();
         searchInputRef.current?.focus();
@@ -1762,6 +1768,24 @@ export function PaymentsPage() {
                   <Icon paths={I.keyboard} size={15} strokeWidth={2} />
                 </motion.button>
               </div>
+
+              {/* Express POS Terminal Button */}
+              <motion.button
+                type="button"
+                onClick={() => setExpressPosOpen(true)}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.96 }}
+                transition={SPRING.snappy}
+                title="Express POS Terminal (X)"
+                aria-label="Express POS Terminal"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-3.5 text-xs font-bold text-white shadow-md shadow-orange-500/20 hover:from-amber-600 hover:to-orange-600 sm:text-sm"
+              >
+                <Icon paths={I.zap} size={15} strokeWidth={2.4} />
+                <span>⚡ Express Kassa</span>
+                <kbd className="hidden rounded border border-white/30 bg-white/20 px-1 py-0.2 font-mono text-[9px] lg:inline-block">
+                  X
+                </kbd>
+              </motion.button>
 
               {/* Primary CTA */}
               <motion.div
@@ -3233,6 +3257,15 @@ export function PaymentsPage() {
         open={zReportModalOpen}
         onClose={() => setZReportModalOpen(false)}
         onShiftClosed={() => void refetchPayments()}
+      />
+
+      {/* Express POS Fast-Checkout Terminal Modal */}
+      <ExpressPosTerminalModal
+        isOpen={expressPosOpen}
+        onClose={() => setExpressPosOpen(false)}
+        onSuccess={() => {
+          void refetchPayments();
+        }}
       />
     </motion.div>
   );
