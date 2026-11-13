@@ -741,7 +741,7 @@ const KpiTile = memo(function KpiTile({
           : undefined
       }
       className={cn(
-        'group relative flex items-center gap-3.5 overflow-hidden rounded-2xl border px-4 py-3.5 backdrop-blur-2xl transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+        'group relative flex items-center gap-2.5 overflow-hidden rounded-2xl border p-2.5 sm:gap-3.5 sm:p-3.5 backdrop-blur-2xl transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
         onClick && 'cursor-pointer select-none',
         active
           ? 'bg-white/95 ring-2 dark:bg-surface-900/95'
@@ -764,7 +764,7 @@ const KpiTile = memo(function KpiTile({
       />
 
       <div
-        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105"
+        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105 sm:h-11 sm:w-11"
         style={{
           background: active ? c.gradient : c.bg,
           color: active ? '#FFFFFF' : c.fg,
@@ -904,7 +904,7 @@ const QuickStatusDock = memo(function QuickStatusDock({
 }) {
   return (
     <div
-      className="hidden items-center gap-0.5 rounded-xl border border-black/[0.06] bg-black/[0.025] p-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 xl:inline-flex dark:border-white/[0.08] dark:bg-white/[0.03]"
+      className="inline-flex items-center gap-0.5 rounded-xl border border-black/[0.06] bg-black/[0.025] p-0.5 transition-opacity duration-150 dark:border-white/[0.08] dark:bg-white/[0.03]"
       onClick={(e) => e.stopPropagation()}
       role="group"
       aria-label={t('attendance.selectStatus')}
@@ -921,7 +921,7 @@ const QuickStatusDock = memo(function QuickStatusDock({
             title={t(`attendance.${st.toLowerCase()}`)}
             aria-label={t(`attendance.${st.toLowerCase()}`)}
             className={cn(
-              'flex h-6 w-6 items-center justify-center rounded-lg text-[10px] font-bold transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+              'flex h-7 w-7 min-h-[28px] min-w-[28px] items-center justify-center rounded-lg text-[10px] font-bold transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-6 sm:w-6',
               isCurrent
                 ? 'scale-100 shadow-xs'
                 : 'opacity-65 hover:scale-110 hover:opacity-100',
@@ -2024,7 +2024,7 @@ export function AttendancePage() {
           APPLE iOS 27 LIQUID GLASS HERO HEADER
       ============================================================ */}
       <motion.div variants={cardVariants}>
-        <div className={cn(LIQUID_SURFACE, 'rounded-3xl p-6 sm:p-7')}>
+        <div className={cn(LIQUID_SURFACE, 'rounded-2xl p-4 sm:rounded-3xl sm:p-6')}>
           <TopSpecular inset="inset-x-10" />
           <div
             aria-hidden="true"
@@ -2035,14 +2035,14 @@ export function AttendancePage() {
             className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-500/10"
           />
 
-          <div className="relative flex flex-col items-start gap-5 lg:flex-row lg:items-center">
+          <div className="relative flex flex-col items-start gap-3.5 lg:flex-row lg:items-center lg:gap-5">
             {/* Squircle Calendar Hero Tile */}
             <motion.div
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               whileHover={{ scale: 1.05, rotate: -2 }}
               transition={SPRING.smooth}
-              className="relative flex h-[3.75rem] w-[3.75rem] shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ring-1 ring-black/5 dark:ring-white/15"
+              className="relative hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ring-1 ring-black/5 sm:flex sm:h-[3.75rem] sm:w-[3.75rem] dark:ring-white/15"
               style={{
                 background: 'linear-gradient(135deg, #007AFF 0%, #4F46E5 100%)',
                 boxShadow:
@@ -2057,39 +2057,39 @@ export function AttendancePage() {
                     'linear-gradient(180deg, rgba(255,255,255,0.42), transparent 55%)',
                 }}
               />
-              <Icon paths={I.calendarCheck} size={28} strokeWidth={2.1} className="relative" />
+              <Icon paths={I.calendarCheck} size={24} strokeWidth={2.1} className="relative sm:scale-115" />
             </motion.div>
 
             {/* Title & Live Status Chips */}
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-emerald-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-emerald-400">
-                  <Icon paths={I.sparkles} size={11} strokeWidth={2.5} />
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-emerald-600 sm:px-2.5 sm:py-1 sm:text-[10.5px] sm:tracking-[0.14em] dark:text-emerald-400">
+                  <Icon paths={I.sparkles} size={10} strokeWidth={2.5} />
                   {t('attendance.badge')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-blue-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] dark:text-blue-400">
-                  <Icon paths={I.layers} size={11} strokeWidth={2.5} />
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-blue-600 sm:px-2.5 sm:py-1 sm:text-[10.5px] sm:tracking-[0.14em] dark:text-blue-400">
+                  <Icon paths={I.layers} size={10} strokeWidth={2.5} />
                   {totalRecords}{' '}
                   {totalRecords === 1 ? t('attendance.countOne') : t('attendance.countMany')}
                 </span>
                 {overallTotal > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-emerald-600 sm:px-2.5 sm:py-1 sm:text-[10.5px] sm:tracking-[0.14em] dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                     {overallRate}% {t('executive.attendanceRate')}
                   </span>
                 )}
               </div>
 
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#1D1D1F] sm:text-4xl dark:text-[#F5F5F7]">
+              <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-[#1D1D1F] sm:text-3xl lg:text-4xl dark:text-[#F5F5F7]">
                 {t('attendance.title')}
               </h1>
-              <p className="mt-1 text-[13.5px] font-medium text-[#64748B] dark:text-slate-400">
+              <p className="mt-0.5 text-xs font-normal text-[#64748B] sm:text-[13.5px] dark:text-slate-400">
                 {t('attendance.pageSubtitle')}
               </p>
             </div>
 
             {/* Action Cluster */}
-            <div className="flex w-full flex-wrap items-center justify-start gap-2.5 lg:w-auto lg:justify-end">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2 pt-1 sm:pt-0 lg:w-auto lg:justify-end">
               {/* Secondary Tools Pill Group */}
               <div className="flex items-center gap-1 rounded-xl border border-black/[0.06] bg-black/[0.03] p-1 shadow-xs backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
                 {/* Live Refresh Button */}
@@ -2101,11 +2101,11 @@ export function AttendancePage() {
                   transition={SPRING.snappy}
                   title={t('attendance.refresh')}
                   aria-label={t('attendance.refresh')}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-900 sm:h-9 sm:w-9 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
                 >
                   <Icon
                     paths={I.refresh}
-                    size={15}
+                    size={14}
                     strokeWidth={2.1}
                     className={attendance.isFetching ? 'animate-spin text-blue-500' : ''}
                   />
@@ -2121,7 +2121,7 @@ export function AttendancePage() {
                     transition={SPRING.snappy}
                     title="CSV"
                     aria-label="CSV export"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-black/5 hover:text-slate-900 sm:h-9 sm:px-2.5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
                   >
                     <Icon paths={I.download} size={13} strokeWidth={2.2} />
                     <span className="hidden sm:inline">CSV</span>
@@ -2140,7 +2140,7 @@ export function AttendancePage() {
                   transition={SPRING.snappy}
                   title={`${t('attendance.registerSheetTitle')} (V)`}
                   aria-label="Vedomost A4"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 sm:h-9 sm:px-2.5 dark:text-violet-300 dark:hover:bg-violet-500/15"
                 >
                   <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
                   <span className="hidden sm:inline">Vedomost</span>
@@ -2161,7 +2161,7 @@ export function AttendancePage() {
                   transition={SPRING.snappy}
                   title={`${t('attendance.aiAnalysis')} (I)`}
                   aria-label={t('attendance.aiAnalysis')}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/15"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-500/10 sm:h-9 sm:px-2.5 dark:text-purple-300 dark:hover:bg-purple-500/15"
                 >
                   <Icon paths={I.sparkles} size={13} strokeWidth={2.2} />
                   <span className="hidden sm:inline">{t('attendance.aiAnalysis')}</span>
@@ -2180,7 +2180,7 @@ export function AttendancePage() {
                 transition={SPRING.snappy}
                 title={`${t('attendance.expressHint')} (E)`}
                 aria-label={t('attendance.express')}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 text-xs font-bold text-indigo-700 shadow-xs transition-colors hover:bg-indigo-500/20 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300"
+                className="inline-flex h-8.5 items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-700 shadow-xs transition-colors hover:bg-indigo-500/20 sm:h-10 sm:px-3.5 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300"
               >
                 <span className="text-sm">⚡</span>
                 <span>{t('attendance.express')}</span>
@@ -2199,10 +2199,10 @@ export function AttendancePage() {
                   onClick={handleOpenRecordModal}
                   aria-label={t('attendance.record')}
                   data-action="primary"
-                  className="h-10 min-h-10 rounded-xl px-4 text-xs font-semibold shadow-[var(--shadow-brand)] sm:text-sm"
+                  className="h-8.5 min-h-[34px] rounded-xl px-3 text-xs font-semibold shadow-[var(--shadow-brand)] sm:h-10 sm:min-h-10 sm:px-4 sm:text-sm"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <Icon paths={I.plus} size={15} strokeWidth={2.5} />
+                  <span className="inline-flex items-center gap-1.5 sm:gap-2">
+                    <Icon paths={I.plus} size={14} strokeWidth={2.5} />
                     <span>{t('attendance.record')}</span>
                     <kbd
                       aria-hidden="true"
@@ -2295,71 +2295,81 @@ export function AttendancePage() {
               KPI STATS + INTERACTIVE STATUS FILTERING + DISTRIBUTION BAR
           ============================================================ */}
           {analyticsQuery.data && (
-            <div className="space-y-3">
+            <div className="space-y-2.5 sm:space-y-3">
               <motion.div
                 variants={containerVariants}
-                className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+                className="flex gap-2.5 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 lg:grid-cols-5 no-scrollbar"
               >
-                <KpiTile
-                  label={t('executive.attendanceRate')}
-                  value={overallRate}
-                  icon={I.calendarCheck}
-                  tone={overallRate >= 80 ? 'emerald' : overallRate >= 60 ? 'orange' : 'red'}
-                  percent
-                  active={status === ''}
-                  onClick={() => {
-                    setStatus('');
-                    setPage(1);
-                  }}
-                  secondary={t('attendance.trendPresent', {
-                    present: overallPresent,
-                    total: overallTotal,
-                  })}
-                />
-                <KpiTile
-                  label={t('attendance.present')}
-                  value={statusCounts.present}
-                  icon={I.checkCircle}
-                  tone="emerald"
-                  active={status === 'PRESENT'}
-                  onClick={() => {
-                    setStatus((prev) => (prev === 'PRESENT' ? '' : 'PRESENT'));
-                    setPage(1);
-                  }}
-                />
-                <KpiTile
-                  label={t('attendance.absent')}
-                  value={statusCounts.absent}
-                  icon={I.xCircle}
-                  tone="red"
-                  active={status === 'ABSENT'}
-                  onClick={() => {
-                    setStatus((prev) => (prev === 'ABSENT' ? '' : 'ABSENT'));
-                    setPage(1);
-                  }}
-                />
-                <KpiTile
-                  label={t('attendance.late')}
-                  value={statusCounts.late}
-                  icon={I.clock}
-                  tone="orange"
-                  active={status === 'LATE'}
-                  onClick={() => {
-                    setStatus((prev) => (prev === 'LATE' ? '' : 'LATE'));
-                    setPage(1);
-                  }}
-                />
-                <KpiTile
-                  label={t('attendance.excused')}
-                  value={statusCounts.excused}
-                  icon={I.shield}
-                  tone="blue"
-                  active={status === 'EXCUSED'}
-                  onClick={() => {
-                    setStatus((prev) => (prev === 'EXCUSED' ? '' : 'EXCUSED'));
-                    setPage(1);
-                  }}
-                />
+                <div className="min-w-[135px] flex-1 sm:min-w-0">
+                  <KpiTile
+                    label={t('executive.attendanceRate')}
+                    value={overallRate}
+                    icon={I.calendarCheck}
+                    tone={overallRate >= 80 ? 'emerald' : overallRate >= 60 ? 'orange' : 'red'}
+                    percent
+                    active={status === ''}
+                    onClick={() => {
+                      setStatus('');
+                      setPage(1);
+                    }}
+                    secondary={t('attendance.trendPresent', {
+                      present: overallPresent,
+                      total: overallTotal,
+                    })}
+                  />
+                </div>
+                <div className="min-w-[125px] flex-1 sm:min-w-0">
+                  <KpiTile
+                    label={t('attendance.present')}
+                    value={statusCounts.present}
+                    icon={I.checkCircle}
+                    tone="emerald"
+                    active={status === 'PRESENT'}
+                    onClick={() => {
+                      setStatus((prev) => (prev === 'PRESENT' ? '' : 'PRESENT'));
+                      setPage(1);
+                    }}
+                  />
+                </div>
+                <div className="min-w-[125px] flex-1 sm:min-w-0">
+                  <KpiTile
+                    label={t('attendance.absent')}
+                    value={statusCounts.absent}
+                    icon={I.xCircle}
+                    tone="red"
+                    active={status === 'ABSENT'}
+                    onClick={() => {
+                      setStatus((prev) => (prev === 'ABSENT' ? '' : 'ABSENT'));
+                      setPage(1);
+                    }}
+                  />
+                </div>
+                <div className="min-w-[125px] flex-1 sm:min-w-0">
+                  <KpiTile
+                    label={t('attendance.late')}
+                    value={statusCounts.late}
+                    icon={I.clock}
+                    tone="orange"
+                    active={status === 'LATE'}
+                    onClick={() => {
+                      setStatus((prev) => (prev === 'LATE' ? '' : 'LATE'));
+                      setPage(1);
+                    }}
+                  />
+                </div>
+                <div className="min-w-[125px] flex-1 sm:min-w-0">
+                  <KpiTile
+                    label={t('attendance.excused')}
+                    value={statusCounts.excused}
+                    icon={I.shield}
+                    tone="blue"
+                    active={status === 'EXCUSED'}
+                    onClick={() => {
+                      setStatus((prev) => (prev === 'EXCUSED' ? '' : 'EXCUSED'));
+                      setPage(1);
+                    }}
+                  />
+                </div>
               </motion.div>
 
               <TelemetryDistributionBar
@@ -2831,14 +2841,7 @@ export function AttendancePage() {
                       </div>
 
                       {/* Right: Direct Status Micro-Dock + 1-Click Status Badge + Action Buttons */}
-                      <div className="flex w-full shrink-0 items-center justify-between gap-2.5 border-t border-black/[0.04] pt-2 sm:w-auto sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.04]">
-                        <QuickStatusDock
-                          currentStatus={a.status}
-                          onSelectStatus={(st) => handleSetDirectStatus(a, st)}
-                          disabled={isRowPending}
-                          t={t}
-                        />
-
+                      <div className="flex w-full shrink-0 items-center justify-between gap-2 border-t border-black/[0.04] pt-2 sm:w-auto sm:justify-end sm:border-0 sm:pt-0 dark:border-white/[0.04]">
                         <StatusBadge
                           status={a.status}
                           label={t(`attendance.${a.status.toLowerCase()}`)}
@@ -2846,8 +2849,15 @@ export function AttendancePage() {
                           isUpdating={isRowPending}
                         />
 
+                        <QuickStatusDock
+                          currentStatus={a.status}
+                          onSelectStatus={(st) => handleSetDirectStatus(a, st)}
+                          disabled={isRowPending}
+                          t={t}
+                        />
+
                         <div
-                          className="flex shrink-0 items-center gap-1.5"
+                          className="flex shrink-0 items-center gap-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <motion.button
