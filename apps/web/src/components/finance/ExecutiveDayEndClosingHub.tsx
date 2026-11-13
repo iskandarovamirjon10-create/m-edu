@@ -213,10 +213,16 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
       } catch {
-        hashHex = Math.random().toString(36).substring(2, 18);
+        const arr = new Uint8Array(16);
+        window.crypto?.getRandomValues?.(arr);
+        hashHex = Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
       }
+    } else if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+      const arr = new Uint8Array(16);
+      window.crypto.getRandomValues(arr);
+      hashHex = Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
     } else {
-      hashHex = Math.random().toString(36).substring(2, 18);
+      hashHex = Date.now().toString(16);
     }
 
     const fullHash = `SHA256-Z-${timestamp.slice(0, 10)}-${hashHex.slice(0, 16)}`;

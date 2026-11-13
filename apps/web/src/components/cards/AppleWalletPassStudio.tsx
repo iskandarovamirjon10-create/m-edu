@@ -151,7 +151,12 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
     const timer = setInterval(() => {
       setTotpCountdown((prev) => {
         if (prev <= 1) {
-          const rand = Math.floor(100000 + Math.random() * 900000).toString();
+          const arr = new Uint32Array(1);
+          if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+            window.crypto.getRandomValues(arr);
+          }
+          const num = arr[0] ? (arr[0] % 900000) + 100000 : Math.floor(100000 + Math.random() * 900000);
+          const rand = num.toString();
           setTotpToken(`${rand.slice(0, 3)}-${rand.slice(3)}`);
           return 30;
         }

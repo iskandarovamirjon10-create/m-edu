@@ -145,8 +145,17 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
       }
     },
     onSuccess: (res: any) => {
+      let rcpSuffix = '';
+      if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+        const arr = new Uint32Array(1);
+        window.crypto.getRandomValues(arr);
+        rcpSuffix = String((arr[0] % 900000) + 100000);
+      } else {
+        rcpSuffix = String(Date.now()).slice(-6);
+      }
+
       const receipt = {
-        receiptNumber: res?.id ? `RCP-${String(res.id).slice(0, 8).toUpperCase()}` : `RCP-${Math.floor(100000 + Math.random() * 900000)}`,
+        receiptNumber: res?.id ? `RCP-${String(res.id).slice(0, 8).toUpperCase()}` : `RCP-${rcpSuffix}`,
         studentName: selectedStudent?.name || "O'quvchi",
         groupName: selectedStudent?.groupName || 'Guruh',
         studentId: selectedStudent?.id || '',
