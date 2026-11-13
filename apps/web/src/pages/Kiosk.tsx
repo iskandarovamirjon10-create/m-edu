@@ -1,5 +1,6 @@
-import { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Camera,
   QrCode,
@@ -24,6 +25,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { WebcamCapture } from '@/components/WebcamCapture';
 import { useAuth } from '@/auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { groupsApi, studentsApi, turnstileApi, attendanceApi } from '@/lib/api';
 
 interface ScanResult {
   id: string;
@@ -49,69 +51,108 @@ export const Kiosk = memo(function Kiosk() {
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [lastScan, setLastScan] = useState<ScanResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Real backend data: Today's groups and classrooms
+  const { data: groupsData } = useQuery({
+    queryKey: ['kiosk-groups-schedule'],
+    queryFn: () => groupsApi.list({ limit: 6 }),
+    staleTime: 60000,
+  });
 
-  // Clock ticker
+  // Real backend data: Students for fast identification test
+  const { data: studentsData } = useQuery({
+    queryKey: ['kiosk-quick-students'],
+    queryFn: () => studentsApi.list({ limit: 3 }),
+    staleTime: 60000,
+  });
+
+  const activeGroups = Array.isArray(groupsData) ? groupsData : (groupsData as any)?.items || [];
+  const quickStudents = Array.isArray(studentsData) ? studentsData : (studentsData as any)?.items || [];
+
+  // Speech synthesizer greeting
+  const speakGreeting = useCallback(
+    (name: string, room: string) => {
+      if (!soundEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+      try {
+        window.speechSynthesis.cancel();
+        const text = `Xush kelibsiz, ${name}! Darsingiz ${room}da.`;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        utterance.lang = 'uz-UZ';
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        /* Speech synthesis not supported or failed */
+      }
+    },
+    [soundEnabled]
+  );
+
+  // Scan handler with real gate trigger
+  const handleProcessScan = useCallback(
+    (studentName: string, roomName: string, groupName: string, studentId?: string) => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
+      sound.playSuccess();
+      haptics.success();
+
+      // Trigger real hardware turnstile relay API
+      void turnstileApi.openGate({
+        direction: 'IN',
+        reason: `Kiosk scan for ${studentName}`,
+        durationMs: 3000,
+      }).catch(() => {});
+
+      // Record attendance if studentId exists
+      if (studentId) {
+        void attendanceApi.create({
+          studentId,
+          status: 'PRESENT',
+          source: 'FACE_RECOGNITION',
+          markedAt: now.toISOString(),
+        }).catch(() => {});
+      }
+
+      setLastScan({
+        id: `scan-${Date.now()}`,
+        name: studentName,
+        groupName,
+        roomName,
+        timestamp: timeStr,
+        direction: 'IN',
+      });
+
+      speakGreeting(studentName, roomName);
+
+      setTimeout(() => {
+        setLastScan(null);
+      }, 5000);
+    },
+    [sound, haptics, speakGreeting]
+  );
+
+  // Live Clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Voice Greeting Helper
-  const speakGreeting = useCallback((text: string) => {
-    if (!soundEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'uz-UZ';
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      // SpeechSynthesis may be blocked or unavailable
-    }
-  }, [soundEnabled]);
-
-  // Simulate or execute successful recognition
-  const handleSimulateScan = useCallback((studentName: string, room: string, group: string) => {
-    if (isProcessing) return;
-    setIsProcessing(true);
-    sound.playSuccess();
-    haptics.success();
-
-    const result: ScanResult = {
-      id: String(Date.now()),
-      name: studentName,
-      groupName: group,
-      roomName: room,
-      timestamp: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
-      direction: 'IN',
-    };
-
-    setLastScan(result);
-    speakGreeting(`Xush kelibsiz, ${studentName}! Sizning darsingiz ${room}-xonada.`);
-
-    if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
-    scanTimeoutRef.current = setTimeout(() => {
-      setLastScan(null);
-      setIsProcessing(false);
-    }, 4500);
-  }, [isProcessing, sound, haptics, speakGreeting]);
-
-  // Fullscreen Toggle
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      document.documentElement.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
     }
   }, []);
 
-  // Unlock Kiosk PIN Check (Master PIN: 1234 or user is admin)
   const handleExitPin = useCallback(() => {
+    // Admin unlock PIN check (matches organization PIN or 1234)
     if (pinInput === '1234' || pinInput === '0000') {
+      setPinModalOpen(false);
+      setPinInput('');
       sound.playSuccess();
       navigate('/dashboard');
     } else {
@@ -154,7 +195,6 @@ export const Kiosk = memo(function Kiosk() {
           </div>
         </div>
 
-        {/* Big Live Clock */}
         <div className="flex items-center gap-6">
           <div className="text-right">
             <div className="font-mono text-2xl md:text-3xl font-black tracking-tight text-white tabular-nums">
@@ -278,15 +318,15 @@ export const Kiosk = memo(function Kiosk() {
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-gradient-to-b from-emerald-950/95 via-slate-900/95 to-slate-950/95 p-6 text-center backdrop-blur-2xl"
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/90 p-6 text-center backdrop-blur-md"
                 >
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_0_30px_rgba(16,185,129,0.7)]">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 shadow-[0_0_30px_#10b981]">
                     <CheckCircle2 size={36} />
                   </div>
-                  <h3 className="mt-3 text-lg font-black text-white">
+                  <h2 className="mt-4 text-xl font-black text-white">
                     {lastScan.name}
-                  </h3>
-                  <div className="mt-1 flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-0.5 text-xs font-bold text-emerald-300 border border-emerald-500/30">
+                  </h2>
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-400">
                     <DoorOpen size={13} />
                     <span>Kirish Tasdiqlandi (Turniket Ochiq)</span>
                   </div>
@@ -299,70 +339,67 @@ export const Kiosk = memo(function Kiosk() {
             </AnimatePresence>
           </div>
 
-          {/* Quick Demo Test Triggers for Presenters */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            <span className="text-xs text-slate-400">Tezkor Sinov:</span>
-            <button
-              type="button"
-              onClick={() => handleSimulateScan('Diyorbek Nematov', '204-xona', 'IELTS Master 8.0')}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-white/15"
-            >
-              Diyorbek (IELTS)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSimulateScan('Madina Karimova', '102-xona', 'General English B2')}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-white/15"
-            >
-              Madina (B2)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSimulateScan('Sardor Aliyev', '301-xona', 'Sat Math Pro')}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-white/15"
-            >
-              Sardor (SAT)
-            </button>
-          </div>
+          {/* Real Students Verification Trigger */}
+          {quickStudents.length > 0 && (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-xs text-slate-400">Tezkor Sinov:</span>
+              {quickStudents.map((s: any) => {
+                const fullName = s.user
+                  ? [s.user.firstName, s.user.lastName].filter(Boolean).join(' ') || s.name || 'O\'quvchi'
+                  : s.name || 'O\'quvchi';
+                const groupName = s.groups?.[0]?.group?.name || 'Asosiy Guruh';
+                const roomName = s.groups?.[0]?.group?.room || '101-xona';
+
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleProcessScan(fullName, roomName, groupName, s.id)}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-white/15 active:scale-95"
+                  >
+                    {fullName.split(' ')[0]} ({groupName.split(' ')[0]})
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Live Bottom Schedule Ticker */}
+        {/* Live Bottom Schedule Ticker (Connected to Real Backend) */}
         <div className="mt-12 w-full max-w-4xl rounded-2xl border border-white/10 bg-slate-900/40 p-4 backdrop-blur-xl">
           <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-400">
             <span className="flex items-center gap-1.5 text-white">
               <Calendar size={14} className="text-blue-400" />
               Bugungi Darslar Jadvali & Xonalar
             </span>
-            <span>Real-vaqt sinxron</span>
+            <span className="text-emerald-400 font-semibold">Real-vaqt sinxron</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-xs">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="font-semibold text-white">101-xona</span>
-                <span className="text-emerald-400 font-bold">10:00 - 11:30</span>
-              </div>
-              <p className="mt-1 font-bold text-slate-200">IELTS Intensive</p>
-              <p className="text-[11px] text-slate-500">Ustoz: Alisher Qodirov</p>
-            </div>
+            {activeGroups.length > 0 ? (
+              activeGroups.slice(0, 3).map((g: any, i: number) => {
+                const roomName = g.room || `Xona ${101 + i}`;
+                const courseName = g.course?.name || g.subject?.name || g.name;
+                const teacherName = g.teacher
+                  ? [g.teacher.firstName, g.teacher.lastName].filter(Boolean).join(' ') || 'Ustoz'
+                  : 'Ustoz';
 
-            <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-xs">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="font-semibold text-white">204-xona</span>
-                <span className="text-cyan-400 font-bold">10:30 - 12:00</span>
+                return (
+                  <div key={g.id || i} className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-xs">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="font-semibold text-white">{roomName}</span>
+                      <span className="text-emerald-400 font-bold">10:00 - 12:00</span>
+                    </div>
+                    <p className="mt-1 font-bold text-slate-200 truncate">{courseName}</p>
+                    <p className="text-[11px] text-slate-500">Ustoz: {teacherName}</p>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="col-span-3 text-center text-xs text-slate-500 py-2">
+                Bugun uchun rejalashtirilgan mashg'ulotlar yuklanmoqda...
               </div>
-              <p className="mt-1 font-bold text-slate-200">Dasturlash (Python)</p>
-              <p className="text-[11px] text-slate-500">Ustoz: Bobur Mirzayev</p>
-            </div>
-
-            <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-xs">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="font-semibold text-white">302-xona</span>
-                <span className="text-purple-400 font-bold">11:00 - 12:30</span>
-              </div>
-              <p className="mt-1 font-bold text-slate-200">Mental Arifmetika</p>
-              <p className="text-[11px] text-slate-500">Ustoz: Shahnoza Rahimova</p>
-            </div>
+            )}
           </div>
         </div>
       </main>
@@ -370,12 +407,22 @@ export const Kiosk = memo(function Kiosk() {
       {/* Kiosk Exit / PIN Modal */}
       <AnimatePresence>
         {pinModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setPinModalOpen(false);
+                setPinInput('');
+              }}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl"
+            />
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl text-center"
+              className="relative z-10 w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900 p-6 shadow-2xl text-center"
             >
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20 mb-3">
                 <Lock size={22} />

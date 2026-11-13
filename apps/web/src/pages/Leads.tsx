@@ -3377,15 +3377,26 @@ export function LeadsPage() {
         isOpen={callingScriptTarget !== null}
         onClose={() => setCallingScriptTarget(null)}
         onAdvanceStage={(leadId, nextStage, notes) => {
+          const targetStage =
+            nextStage === 'TRIAL'
+              ? 'TRIAL_LESSON'
+              : nextStage === 'LOST'
+                ? 'LOST'
+                : 'CONTACTED';
           updateStage.mutate({
             id: leadId,
-            stage:
-              nextStage === 'TRIAL'
-                ? 'TRIAL_LESSON'
-                : nextStage === 'LOST'
-                  ? 'LOST'
-                  : 'CONTACTED',
+            stage: targetStage,
           });
+          if (notes) {
+            void leadsApi.update(leadId, { notes }).catch(() => {});
+            void leadsApi
+              .addActivity(leadId, {
+                type: 'CALL',
+                title: "AI Yordamchisi orqali qo'ng'iroq",
+                description: notes,
+              })
+              .catch(() => {});
+          }
         }}
       />
 

@@ -1820,6 +1820,26 @@ export function Student360Page() {
   const riskC = TONE[riskTone];
   const sparkSeed = nameHash(student.name);
 
+  // Real Attendance Streak calculation from telemetry history
+  const realStreak = useMemo(() => {
+    const history = profile.attendanceHistory;
+    if (!history || history.length === 0) return attendance.present || 0;
+    const sorted = [...history].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    let streak = 0;
+    for (const record of sorted) {
+      if (record.status === 'PRESENT') {
+        streak += 1;
+      } else if (record.status === 'EXCUSED') {
+        continue;
+      } else {
+        break;
+      }
+    }
+    return streak > 0 ? streak : attendance.present || 0;
+  }, [profile.attendanceHistory, attendance.present]);
+
   /* ── Main content ────────────────────────────────────────── */
   return (
     <div className="relative">
@@ -2096,12 +2116,12 @@ export function Student360Page() {
               studentId: String(student.id || id || 'STU-001'),
               studentName: String(student.name || 'O\'quvchi'),
               groupName: String((student as any).groupName || 'Asosiy Guruh'),
-              attendanceRate: Math.round(attendance.rate ?? 95),
-              attendanceStreakDays: Math.max(3, Math.round((attendance.rate ?? 90) / 10 * 1.5)),
-              academicMastery: Math.round(academic.overallMastery ?? 85),
-              homeworkRate: Math.round(academic.quizzes.avgScore ?? 88),
-              completedHomeworks: academic.quizzes.passedAttempts ?? 12,
-              totalHomeworks: Math.max(academic.quizzes.totalAttempts ?? 14, 12),
+              attendanceRate: Math.round(attendance.rate ?? 100),
+              attendanceStreakDays: realStreak,
+              academicMastery: Math.round(academic.overallMastery ?? 0),
+              homeworkRate: Math.round(academic.quizzes.avgScore ?? 0),
+              completedHomeworks: academic.quizzes.passedAttempts ?? 0,
+              totalHomeworks: Math.max(academic.quizzes.totalAttempts ?? 0, academic.quizzes.passedAttempts ?? 0),
             }}
           />
         </motion.div>
