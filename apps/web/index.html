@@ -45,9 +45,9 @@
         align-items: center;
         justify-content: center;
         background: radial-gradient(circle at 50% 48%, #ffffff 0%, #f6f8fd 45%, #e9eef8 100%);
-        transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-                    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-                    filter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    filter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         overflow: hidden;
       }
       html.dark #boot-splash, html.oled #boot-splash {
@@ -110,7 +110,7 @@
         width: 114px;
         height: 114px;
         border-radius: 36px;
-        border: 1.5px solid rgba(139, 92, 246, 0.25);
+        border: 1px solid rgba(139, 92, 246, 0.35);
         box-shadow: 0 0 20px rgba(99, 102, 241, 0.18);
         animation: boot-pulse-ring 3.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
         pointer-events: none;
@@ -180,7 +180,7 @@
         font-size: 16px;
         font-weight: 800;
         letter-spacing: 0.32em;
-        text-indent: 0.32em;
+        margin-right: -0.32em;
         color: #0f172a;
         text-transform: uppercase;
         background: linear-gradient(180deg, #0f172a 0%, #334155 100%);
@@ -200,8 +200,8 @@
         font-size: 9px;
         font-weight: 700;
         letter-spacing: 0.38em;
-        text-indent: 0.38em;
-        color: #6366f1;
+        margin-right: -0.38em;
+        color: #4f46e5;
         text-transform: uppercase;
         opacity: 0.95;
       }
@@ -215,7 +215,7 @@
       .boot-splash__bar {
         position: relative;
         width: 148px;
-        height: 3.5px;
+        height: 4px;
         margin-top: 6px;
         overflow: hidden;
         border-radius: 999px;
@@ -264,6 +264,18 @@
       @keyframes boot-bar-slide {
         0% { transform: translateX(-130%); }
         100% { transform: translateX(280%); }
+      }
+
+      .boot-splash__sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -317,18 +329,23 @@
             root.setAttribute('data-theme', 'light');
             root.style.colorScheme = 'light';
           }
+          var lang = localStorage.getItem('medu-lang') || 'uz';
+          if (lang) {
+            root.setAttribute('lang', lang);
+          }
         } catch (e) {}
       })();
     </script>
     <div id="root"></div>
-    <div id="boot-splash" aria-hidden="true">
+    <div id="boot-splash" role="status" aria-live="polite" aria-busy="true" aria-label="M-EDU platformasi yuklanmoqda">
+      <span class="boot-splash__sr-only">M-EDU ta'lim platformasi yuklanmoqda... Loading M-EDU ecosystem...</span>
       <div class="boot-splash__glow"></div>
       <div class="boot-splash__container">
         <div class="boot-splash__badge-wrapper">
           <div class="boot-splash__aura"></div>
           <div class="boot-splash__ring"></div>
           <div class="boot-splash__mark">
-            <svg class="boot-splash__logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg class="boot-splash__logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
               <path d="M6 24V8.5C6 7.67 6.67 7 7.5 7H9.2C9.8 7 10.35 7.35 10.6 7.9L16 16.8L21.4 7.9C21.65 7.35 22.2 7 22.8 7H24.5C25.33 7 26 7.67 26 8.5V24C26 24.55 25.55 25 25 25H22.8C22.25 25 21.8 24.55 21.8 24V14.5L17.4 21.4C17.1 21.9 16.58 22.2 16 22.2C15.42 22.2 14.9 21.9 14.6 21.4L10.2 14.5V24C10.2 24.55 9.75 25 9.2 25H7C6.45 25 6 24.55 6 24Z" fill="currentColor"/>
             </svg>
             <div class="boot-splash__shine"></div>
@@ -345,8 +362,8 @@
     </div>
     <noscript>
       <style>#boot-splash { display: none !important; }</style>
-      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#334155">
-        <p>M-EDU requires JavaScript to run. Please enable JavaScript in your browser.</p>
+      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#334155;text-align:center;padding:20px;">
+        <p>M-EDU platformasidan foydalanish uchun brauzeringizda JavaScript-ni yoqing.<br /><span style="font-size:0.875rem;color:#64748b;">M-EDU requires JavaScript to run. Please enable JavaScript in your browser.</span></p>
       </div>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>

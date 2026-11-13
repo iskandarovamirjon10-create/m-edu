@@ -36,6 +36,7 @@
 @layer reset, tokens, base, typography, glass, components, motion, focus, utilities, print;
 
 @import './design-tokens.css';
+@import './liquid-glass.css';
 @import './copilot.css';
 
 @tailwind base;
@@ -380,13 +381,19 @@
   .glass-subtle,
   .glass {
     position: relative;
-    background: linear-gradient(180deg, var(--mat-bg-3) 0%, var(--mat-bg-2) 100%);
-    -webkit-backdrop-filter: var(--glass-backdrop-2);
-    backdrop-filter: var(--glass-backdrop-2);
-    border: var(--hairline) solid var(--glass-border);
+    background: linear-gradient(
+      180deg,
+      rgb(var(--liquid-tint) / calc(var(--liquid-tint-alpha) * 1.25)) 0%,
+      rgb(var(--liquid-tint) / var(--liquid-tint-alpha)) 100%
+    );
+    -webkit-backdrop-filter: blur(var(--liquid-blur-regular)) saturate(var(--liquid-saturate)) contrast(var(--liquid-contrast));
+    backdrop-filter: blur(var(--liquid-blur-regular)) saturate(var(--liquid-saturate)) contrast(var(--liquid-contrast));
+    border: var(--hairline) solid rgb(255 255 255 / 0.38);
     box-shadow:
-      var(--inset-top-light),
-      inset 0 -1px 0 0 rgb(255 255 255 / calc(var(--rim) * 0.45)),
+      inset 0 1px 0 rgb(255 255 255 / 0.82),
+      inset 0 -1px 0 rgb(255 255 255 / 0.45),
+      inset 1px 0 0 rgb(0 0 0 / 0.08),
+      inset -1px 0 0 rgb(0 0 0 / 0.08),
       var(--shadow-2);
     transition:
       background var(--dur-normal) var(--ease-standard),
@@ -407,20 +414,21 @@
     overflow: hidden;
     isolation: isolate;
     border-radius: var(--radius-2xl);
-    background:
-      radial-gradient(120% 100% at 0% 0%, var(--glass-caustic-1) 0%, transparent 55%),
-      radial-gradient(120% 100% at 100% 100%, var(--glass-caustic-2) 0%, transparent 55%),
-      linear-gradient(160deg,
-        var(--glass-tint-top) 0%,
-        var(--glass-tint-mid) 52%,
-        var(--glass-tint-bottom) 100%);
-    -webkit-backdrop-filter: var(--glass-backdrop-3) contrast(var(--liquid-glass-contrast));
-    backdrop-filter: var(--glass-backdrop-3) contrast(var(--liquid-glass-contrast));
-    border: var(--hairline) solid var(--glass-border);
+    background: linear-gradient(
+      160deg,
+      rgb(var(--liquid-tint) / calc(var(--liquid-tint-alpha) * 1.3)) 0%,
+      rgb(var(--liquid-tint) / var(--liquid-tint-alpha)) 52%,
+      rgb(var(--liquid-tint) / calc(var(--liquid-tint-alpha) * 1.1)) 100%
+    );
+    -webkit-backdrop-filter: blur(var(--liquid-blur-regular)) saturate(var(--liquid-saturate)) contrast(var(--liquid-contrast));
+    backdrop-filter: blur(var(--liquid-blur-regular)) saturate(var(--liquid-saturate)) contrast(var(--liquid-contrast));
+    border: var(--hairline) solid rgb(255 255 255 / 0.36);
     box-shadow:
-      var(--inset-top-strong),
-      inset 1px 0 0 0 rgb(255 255 255 / calc(var(--rim) * 0.55)),
-      inset 0 -1px 0 0 color-mix(in srgb, var(--c-blue) 9%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 -1px 0 rgb(255 255 255 / 0.55),
+      inset 1px 0 0 rgb(0 0 0 / 0.1),
+      inset -1px 0 0 rgb(0 0 0 / 0.1),
+      inset 0 14px 22px -18px rgb(255 255 255 / 0.55),
       var(--shadow-3);
     transition:
       background var(--dur-normal) var(--ease-standard),
@@ -458,7 +466,7 @@
     background: linear-gradient(115deg,
       transparent 22%,
       rgb(255 255 255 / calc(var(--rim) * 0.4)) 48%,
-      color-mix(in srgb, var(--c-teal) 14%, transparent) 54%,
+      rgb(255 255 255 / 0.3) 54%,
       transparent 76%);
     transform: translate3d(-125%, 0, 0);
     transition: none;
@@ -470,12 +478,12 @@
     .glass-card--interactive:hover,
     .liquid-glass-card:hover,
     .vision-card:hover {
-      border-color: var(--primary-border);
+      border-color: rgb(255 255 255 / 0.62);
       box-shadow:
-        var(--inset-top-strong),
-        inset 0 -1px 0 0 color-mix(in srgb, var(--c-blue) 15%, transparent),
+        inset 0 1px 0 rgb(255 255 255 / 0.95),
+        inset 0 -1px 0 rgb(255 255 255 / 0.62),
         var(--shadow-4),
-        0 20px 44px -8px color-mix(in srgb, var(--c-blue) 14%, transparent);
+        0 20px 44px -8px rgb(0 0 0 / 0.16);
     }
     .glass-card--interactive:hover::before,
     .liquid-glass-card:hover::before,
@@ -514,14 +522,18 @@
     isolation: isolate;
     border-radius: var(--radius-3xl);
     background:
-      radial-gradient(100% 80% at 50% 0%, color-mix(in srgb, var(--c-blue) calc(var(--tint-pct) - 4%), transparent), transparent 65%),
-      linear-gradient(170deg, var(--mat-bg-5) 0%, var(--mat-bg-4) 100%);
-    -webkit-backdrop-filter: var(--glass-backdrop-4) contrast(var(--liquid-glass-contrast));
-    backdrop-filter: var(--glass-backdrop-4) contrast(var(--liquid-glass-contrast));
-    border: var(--hairline) solid var(--glass-border);
+      radial-gradient(110% 80% at 50% -10%, rgb(255 255 255 / 0.24), transparent 62%),
+      linear-gradient(
+        170deg,
+        rgb(var(--liquid-tint) / calc(var(--liquid-tint-alpha) * 1.35)) 0%,
+        rgb(var(--liquid-tint) / var(--liquid-tint-alpha)) 100%
+      );
+    -webkit-backdrop-filter: blur(var(--liquid-blur-regular)) saturate(var(--liquid-saturate)) contrast(var(--liquid-contrast));
+    backdrop-filter: blur(var(--liquid-blur-regular)) saturate(var(--liquid-saturate)) contrast(var(--liquid-contrast));
+    border: var(--hairline) solid rgb(255 255 255 / 0.42);
     box-shadow:
-      var(--inset-top-strong),
-      inset 0 -1px 0 0 color-mix(in srgb, var(--c-blue) 9%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 -1px 0 rgb(255 255 255 / 0.5),
       var(--shadow-6);
     transition:
       box-shadow var(--dur-normal) var(--ease-standard),

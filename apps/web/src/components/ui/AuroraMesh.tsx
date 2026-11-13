@@ -50,29 +50,21 @@ export const AuroraMesh = memo(function AuroraMesh({
   className = '',
 }: AuroraMeshProps) {
   const v = VARIANTS[variant] ?? VARIANTS.default;
-  const reduced = usePrefersReducedMotion();
 
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none transform-gpu [contain:strict] ${className}`}
+      className={`pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none [contain:strict] ${className}`}
       style={opacity !== undefined ? { opacity } : undefined}
     >
       <div
-        className={`absolute -left-[10%] -top-[15%] h-[560px] w-[560px] rounded-full bg-gradient-to-br ${v.orb1} blur-[120px] transform-gpu will-change-transform ${reduced ? '' : 'animate-[orb-drift_38s_ease-in-out_infinite]'}`}
+        className={`absolute -left-[10%] -top-[15%] h-[560px] w-[560px] rounded-full bg-gradient-to-br ${v.orb1} blur-[80px] pointer-events-none`}
       />
       <div
-        className={`absolute -right-[10%] top-[30%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl ${v.orb2} blur-[120px] transform-gpu will-change-transform ${reduced ? '' : 'animate-[orb-drift_44s_ease-in-out_infinite_reverse]'}`}
+        className={`absolute -right-[10%] top-[30%] h-[520px] w-[520px] rounded-full bg-gradient-to-bl ${v.orb2} blur-[80px] pointer-events-none`}
       />
       <div
-        className={`absolute bottom-[-15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr ${v.orb3} blur-[110px] transform-gpu will-change-transform ${reduced ? '' : 'animate-[orb-drift_50s_ease-in-out_infinite]'}`}
-      />
-      <div
-        className="absolute inset-0 opacity-[0.015] dark:opacity-[0.025]"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-        }}
+        className={`absolute bottom-[-15%] left-[25%] h-[480px] w-[480px] rounded-full bg-gradient-to-tr ${v.orb3} blur-[80px] pointer-events-none`}
       />
     </div>
   );

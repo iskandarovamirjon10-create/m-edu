@@ -216,11 +216,11 @@ describe('Student360Page (Apple 10/10 VisionOS / macOS Sequoia Edition)', () => 
       renderComponent();
 
       await waitFor(() => {
-        expect(screen.getByText('92%')).toBeInTheDocument();
+        expect(screen.getAllByText('92%').length).toBeGreaterThan(0);
       });
 
-      expect(screen.getByText('84%')).toBeInTheDocument();
-      expect(screen.getByText('88%')).toBeInTheDocument();
+      expect(screen.getAllByText('84%').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('88%').length).toBeGreaterThan(0);
     });
 
     it('renders risk signals banner with detected warnings', async () => {

@@ -85,6 +85,7 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
       },
     ]
   );
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (activities.length > 0) {
@@ -125,18 +126,23 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
         name?: string;
         group?: string;
         time?: string;
+        photoUrl?: string;
+        type?: 'CHECK_IN' | 'LESSON_ACTIVE' | 'EMERGENCY_LOCK' | 'FEE_ALERT';
+        title?: string;
+        subtitle?: string;
       }>;
       const detail = customEvent.detail;
       if (!detail) return;
 
       const newActivity: LiveActivityItem = {
         id: `turnstile-${detail.id || Date.now()}`,
-        type: 'CHECK_IN',
-        title: 'Turniketdan muvaffaqiyatli o‘tdi',
-        subtitle: `${detail.name || "O'quvchi"} · Turniket Gate-1`,
+        type: detail.type || 'CHECK_IN',
+        title: detail.title || 'Turniketdan muvaffaqiyatli o‘tdi',
+        subtitle: detail.subtitle || `${detail.name || "O'quvchi"} · Turniket Gate-1`,
         timestamp: detail.time || new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
         studentName: detail.name || "O'quvchi",
         groupName: detail.group || 'Asosiy Guruh',
+        photoUrl: detail.photoUrl,
       };
 
       haptics.success();
@@ -152,7 +158,7 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
   }, [haptics, sound]);
 
   // Interactive Live Attendance check-in trigger
-  const handleSimulateCheckIn = useCallback(() => {
+  const handleSimulateCheckIn = useCallback((type: 'CHECK_IN' | 'LESSON_ACTIVE' | 'FEE_ALERT' = 'CHECK_IN') => {
     haptics.medium();
     sound.playSuccess();
 
@@ -169,19 +175,60 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
 
     const timeNow = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-    const newActivity: LiveActivityItem = {
-      id: `live-${Date.now()}`,
-      type: 'CHECK_IN',
-      title: 'Turniket & Face ID Kirish',
-      subtitle: `${targetName} · Biometrik moslik: 99.8%`,
-      timestamp: timeNow,
-      studentName: targetName,
-      groupName: targetGroup,
-      photoUrl,
-    };
+    let newActivity: LiveActivityItem;
+    if (type === 'LESSON_ACTIVE') {
+      newActivity = {
+        id: `live-lesson-${Date.now()}`,
+        type: 'LESSON_ACTIVE',
+        title: 'Jonli Dars Jarayoni',
+        subtitle: `${targetGroup} · Frontend & React Mastery`,
+        timestamp: timeNow,
+        groupName: targetGroup,
+        progress: 68,
+      };
+    } else if (type === 'FEE_ALERT') {
+      newActivity = {
+        id: `live-fee-${Date.now()}`,
+        type: 'FEE_ALERT',
+        title: 'To‘lov Muddati Eslatmasi',
+        subtitle: `${targetName} · Oylik kurs to‘lovi yaqinlashmoqda`,
+        timestamp: timeNow,
+        studentName: targetName,
+        groupName: targetGroup,
+      };
+    } else {
+      newActivity = {
+        id: `live-${Date.now()}`,
+        type: 'CHECK_IN',
+        title: 'Turniket & Face ID Kirish',
+        subtitle: `${targetName} · Biometrik moslik: 99.8%`,
+        timestamp: timeNow,
+        studentName: targetName,
+        groupName: targetGroup,
+        photoUrl,
+      };
+    }
+
+    // Sync across browser window so floating cameras and widgets reflect the simulation
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('medu:attendance-logged', {
+          detail: {
+            id: newActivity.id,
+            name: targetName,
+            group: targetGroup,
+            time: timeNow,
+            photoUrl,
+            type: newActivity.type,
+            title: newActivity.title,
+            subtitle: newActivity.subtitle,
+          },
+        })
+      );
+    }
 
     setActiveList((prev) => [newActivity, ...prev.slice(0, 3)]);
-  }, [haptics, sound]);
+  }, [haptics, sound, realStudentsList]);
 
   const handleDismiss = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -205,15 +252,36 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Keynote Test Button */}
-          <button
-            type="button"
-            onClick={handleSimulateCheckIn}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/30 text-[10.5px] font-bold transition shadow-sm"
-          >
-            <span className="text-xs">⚡</span>
-            <span>Turniket Sinovi (Test Tap)</span>
-          </button>
+          {/* Keynote Test Buttons */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleSimulateCheckIn('CHECK_IN')}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/30 text-[10.5px] font-bold transition shadow-sm"
+              title="Turniket orqali kirish sinovi"
+            >
+              <span>⚡</span>
+              <span>Turniket</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSimulateCheckIn('LESSON_ACTIVE')}
+              className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-sky-500/10 text-sky-500 hover:bg-sky-500/20 border border-sky-500/30 text-[10.5px] font-bold transition shadow-sm"
+              title="Jonli dars jarayoni sinovi"
+            >
+              <span>▶</span>
+              <span>Dars</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSimulateCheckIn('FEE_ALERT')}
+              className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30 text-[10.5px] font-bold transition shadow-sm"
+              title="To‘lov eslatmasi sinovi"
+            >
+              <span>💳</span>
+              <span>To‘lov</span>
+            </button>
+          </div>
 
           <span className="rounded-full bg-black/5 px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--text-secondary)] dark:bg-white/10">
             iOS 27 Dynamic
@@ -238,6 +306,8 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
               const isCheckIn = item.type === 'CHECK_IN';
               const isLesson = item.type === 'LESSON_ACTIVE';
               const isEmergency = item.type === 'EMERGENCY_LOCK';
+              const isFeeAlert = item.type === 'FEE_ALERT';
+              const hasValidPhoto = item.photoUrl && !failedImages[item.id];
 
               return (
                 <motion.div
@@ -253,9 +323,11 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
                     'backdrop-blur-3xl backdrop-saturate-[210%]',
                     isEmergency
                       ? 'border-rose-500/50 bg-[#1d080c]/90 text-white shadow-[0_16px_36px_-8px_rgba(244,63,94,0.4)]'
+                      : isFeeAlert
+                      ? 'border-amber-500/40 bg-amber-500/10 text-slate-900 shadow-[0_18px_40px_-10px_rgba(245,158,11,0.22)] dark:border-amber-500/30 dark:bg-[#1c1508]/90 dark:text-amber-100'
                       : isCheckIn
-                        ? 'border-emerald-500/40 bg-white/[0.85] text-slate-900 shadow-[0_18px_40px_-10px_rgba(16,185,129,0.22)] dark:border-emerald-500/30 dark:bg-[#081812]/90 dark:text-white'
-                        : 'border-white/60 bg-white/[0.8] text-slate-900 shadow-[0_18px_40px_-10px_rgba(0,122,255,0.18)] dark:border-white/10 dark:bg-[#0c1220]/90 dark:text-white',
+                      ? 'border-emerald-500/40 bg-white/[0.85] text-slate-900 shadow-[0_18px_40px_-10px_rgba(16,185,129,0.22)] dark:border-emerald-500/30 dark:bg-[#081812]/90 dark:text-white'
+                      : 'border-white/60 bg-white/[0.8] text-slate-900 shadow-[0_18px_40px_-10px_rgba(0,122,255,0.18)] dark:border-white/10 dark:bg-[#0c1220]/90 dark:text-white',
                   )}
                 >
                   {/* Top Specular Liquid Bevel */}
@@ -264,11 +336,12 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
                   <div className="flex items-center justify-between gap-3.5">
                     {/* Left Icon or Student Avatar */}
                     <div className="flex items-center gap-3.5 min-w-0">
-                      {item.photoUrl ? (
+                      {hasValidPhoto ? (
                         <div className="relative shrink-0">
                           <img
                             src={item.photoUrl}
                             alt={item.studentName || 'Student'}
+                            onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
                             className="h-11 w-11 rounded-2xl object-cover ring-2 ring-emerald-400/60 shadow-md"
                           />
                           <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-black text-white ring-2 ring-white dark:ring-black">
@@ -278,15 +351,17 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
                       ) : (
                         <div
                           className={cn(
-                            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-white shadow-md',
+                            'flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-black text-white shadow-md text-base',
                             isEmergency
                               ? 'bg-gradient-to-tr from-rose-600 to-red-500'
+                              : isFeeAlert
+                              ? 'bg-gradient-to-tr from-amber-500 to-orange-500'
                               : isCheckIn
-                                ? 'bg-gradient-to-tr from-emerald-500 to-teal-400'
-                                : 'bg-gradient-to-tr from-[#007AFF] to-[#5856D6]',
+                              ? 'bg-gradient-to-tr from-emerald-500 to-teal-400'
+                              : 'bg-gradient-to-tr from-[#007AFF] to-[#5856D6]',
                           )}
                         >
-                          {isEmergency ? '!' : isCheckIn ? '✓' : '▶'}
+                          {isEmergency ? '!' : isFeeAlert ? '💳' : isCheckIn ? '✓' : '▶'}
                         </div>
                       )}
 

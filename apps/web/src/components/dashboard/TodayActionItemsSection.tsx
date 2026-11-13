@@ -12,6 +12,7 @@ import type { DashboardStats } from '@/lib/types';
 import { formatCurrency } from '@/lib/format';
 import { cn, Icon, Shimmer } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 
 interface TodayActionItemsSectionProps {
   stats: DashboardStats;
@@ -57,6 +58,7 @@ interface PaymentWarningItem {
 export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps) {
   const [filter, setFilter] = useState<TaskType>('ALL');
   const sound = usePremiumSound();
+  const cardRef = useDashboardGlassCard<HTMLDivElement>();
 
   const { data: warningsData, isLoading } = useQuery({
     queryKey: ['early-warning', 'payment-overdue'],
@@ -131,12 +133,11 @@ export function TodayActionItemsSection({ stats }: TodayActionItemsSectionProps)
   );
 
   return (
-    <div className="vision-card relative isolate overflow-hidden flex h-full flex-col p-5 sm:p-6 backdrop-blur-2xl">
-      {/* Top specular hairline */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/25"
-      />
+    <div
+      ref={cardRef}
+      className="lgx lgx--clear relative isolate flex h-full flex-col rounded-[2rem] p-5 sm:p-6"
+    >
+      <DashboardGlassLayers />
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.06] pb-3.5 dark:border-white/[0.08]">
         <div className="flex items-center gap-2.5">

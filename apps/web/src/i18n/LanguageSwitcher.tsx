@@ -250,7 +250,7 @@ export const LanguageSwitcher = memo(function LanguageSwitcher({
           isPill
             ? 'h-11 sm:h-10 min-h-[44px] sm:min-h-[40px] gap-2 px-3.5 rounded-full'
             : 'h-11 w-11 sm:h-9 sm:w-9 min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] rounded-full'
-        } border border-black/[0.08] dark:border-white/[0.14] bg-white/70 dark:bg-[#1C1C1E]/70 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08),inset_0_1px_1.5px_rgba(255,255,255,0.9)] dark:shadow-[0_2px_12px_-2px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.18)] backdrop-blur-2xl text-[#48484A] dark:text-[#EBEBF5]/90 transition-all duration-200 hover:text-[#1D1D1F] dark:hover:text-white hover:border-[#007AFF]/50 dark:hover:border-[#0A84FF]/50 focus-visible:ring-2 focus-visible:ring-[#007AFF] focus-visible:ring-offset-2 ${className}`}
+        } border border-white/20 dark:border-white/10 bg-white/[0.08] dark:bg-white/[0.05] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1),inset_0_1px_1px_rgba(255,255,255,0.4)] backdrop-blur-md text-[var(--text-primary)] transition-all duration-200 hover:bg-white/[0.14] dark:hover:bg-white/[0.09] hover:border-white/30 focus-visible:ring-2 focus-visible:ring-[#007AFF] ${className}`}
         title={t('nav.language') || 'Language'}
       >
         {/* Specular Top Rim */}

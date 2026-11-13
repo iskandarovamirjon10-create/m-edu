@@ -1,0 +1,891 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * M-EDU LIQUID GLASS — optical material engine (v2.0 PRO / iOS 27)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * v2.0 PRO Upgrades:
+ *   1. Inverse Caustic Pool — light entering at (--lgx-glint-x/y) refracts
+ *      through the volume and pools on the opposite inner edge (100% - glint).
+ *   2. Vector-Tracked Fresnel Rim — combines the measured top/bottom meniscus
+ *      with a live radial hotspot that follows pointer/gyro coordinates.
+ *   3. OKLCH Crown-Glass Dispersion — perceptual wide-gamut spectral fringe
+ *      whose phase angle shifts dynamically with surface normal (--lgx-nx/ny).
+ *   4. Apple CoreAnimation Springs — true viscoelastic `linear()` spring
+ *      curves for press, tilt, and fluid dock-lens deformation.
+ *   5. Dual-Zone Specular — sharp surface reflection + diffused subsurface
+ *      anisotropic sheen.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer glass {
+  /* ── Shared Physics & Optical Tokens ──────────────────────────────────── */
+  :root {
+    --lgx-spring-fluid: linear(
+      0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%,
+      1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%,
+      1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%,
+      0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1
+    );
+    --lgx-spring-snappy: cubic-bezier(0.22, 1, 0.36, 1);
+    --lgx-refract-filter: url(#lgx-refraction);
+  }
+
+  /* ── Material root ────────────────────────────────────────────────────── */
+  .lgx {
+    --lgx-radius: 1.5rem;
+    --lgx-blur: var(--liquid-blur-regular, 16px);
+    --lgx-sat: var(--liquid-saturate, 195%);
+    --lgx-bright: var(--liquid-brightness, 1.03);
+    --lgx-contrast: var(--liquid-contrast, 1.06);
+    --lgx-tint-a: var(--liquid-tint-alpha, 0.13);
+
+    /* Written at runtime from the sampled backdrop colour. */
+    --lgx-tint: 255 255 255;
+    --lgx-ink: 15 17 21;
+    --lgx-lum: 0.7;
+
+    /* Written by the physics hook. */
+    --lgx-nx: 0;
+    --lgx-ny: 0;
+    --lgx-glint-x: 50%;
+    --lgx-glint-y: 0%;
+    --lgx-tilt-x: 0deg;
+    --lgx-tilt-y: 0deg;
+    --lgx-motion: 0;
+    --lgx-press: 0;
+    --lgx-ripple-x: 50%;
+    --lgx-ripple-y: 50%;
+
+    /* Computed inverse coordinates for internal caustic focusing */
+    --lgx-caustic-x: calc(100% - var(--lgx-glint-x));
+    --lgx-caustic-y: calc(100% - var(--lgx-glint-y));
+    --lgx-light-angle: calc(135deg + (var(--lgx-nx) * 38deg) - (var(--lgx-ny) * 24deg));
+
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--lgx-radius);
+    border: 1px solid rgb(255 255 255 / 0.28);
+
+    /* Multi-stop refractive body: clearer center, denser meniscus edges */
+    background:
+      radial-gradient(
+        85% 85% at var(--lgx-caustic-x) var(--lgx-caustic-y),
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 1.45)) 0%,
+        transparent 65%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 1.4)) 0%,
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 0.82)) 46%,
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 1.25)) 100%
+      );
+
+    /* 3D optical slab: crisp Apple visionOS specular crest + soft elevation */
+    box-shadow:
+      inset 0 1px 1px 0 rgb(255 255 255 / 0.75),
+      inset 0 -1px 1px 0 rgb(255 255 255 / 0.2),
+      0 4px 16px -4px rgb(0 0 0 / 0.06),
+      0 16px 36px -12px rgb(0 0 0 / 0.12);
+
+    -webkit-backdrop-filter:
+      blur(var(--lgx-blur)) saturate(var(--lgx-sat))
+      brightness(var(--lgx-bright)) contrast(var(--lgx-contrast));
+    backdrop-filter:
+      blur(var(--lgx-blur)) saturate(var(--lgx-sat))
+      brightness(var(--lgx-bright)) contrast(var(--lgx-contrast));
+
+    transform:
+      perspective(1100px)
+      rotateX(var(--lgx-tilt-x))
+      rotateY(var(--lgx-tilt-y))
+      translateZ(0);
+    transform-style: flat;
+    will-change: auto;
+    transition:
+      transform 420ms var(--lgx-spring-fluid),
+      box-shadow 320ms var(--lgx-spring-snappy),
+      border-color 280ms ease,
+      background 280ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .lgx:hover,
+  .lgx[data-lgx-press='true'] {
+    will-change: transform;
+    transform-style: preserve-3d;
+  }
+
+  /* Fast-path during active scrolling: drops SVG displacement & heavy passes for 120fps fluidity */
+  body.is-scrolling .lgx,
+  .lgx[data-lgx-scrolling='true'] {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* During scroll: lens elements use a lightweight blur-only path (no displacement) */
+  body.is-scrolling .lgx[data-lgx-lens='true'],
+  .lgx[data-lgx-lens='true'][data-lgx-scrolling='true'] {
+    -webkit-backdrop-filter: blur(8px) saturate(180%) !important;
+    backdrop-filter: blur(8px) saturate(180%) !important;
+  }
+
+  body.is-scrolling .lgx__dispersion,
+  body.is-scrolling .lgx__noise,
+  .lgx[data-lgx-scrolling='true'] .lgx__dispersion,
+  .lgx[data-lgx-scrolling='true'] .lgx__noise {
+    opacity: 0 !important;
+    visibility: hidden !important;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+   * REAL LIQUID GLASS — SVG displacement lens active
+   *
+   * When `useLiquidGlassLens` attaches a per-element canvas displacement map,
+   * it sets `data-lgx-lens="true"`. At that point we MUST reduce blur so the
+   * physical refraction (pixel shifting) is not hidden behind a fog wall.
+   *
+   * The rule:   blur = refraction_zone_width / 4
+   * Dock/pill   bezel ≈ 16px  → blur ≈ 3px
+   * Panel       bezel ≈ 20px  → blur ≈ 4px
+   *
+   * WITHOUT this reduction, the lens filter is there but invisible — the user
+   * sees only frosted glass (glassmorphism). With it, they see the background
+   * content physically BENT at the edges, like water or thick crystal.
+   * ══════════════════════════════════════════════════════════════════════════ */
+  .lgx[data-lgx-lens='true'] {
+    /* Blur drops to near-zero so displacement dominates visually.
+       The displacement map already includes the per-pixel vector field that
+       bends the backdrop; heavy blur would erase that bending. */
+    --lgx-blur-lens: 3px;
+
+    /* Background nearly transparent — depth comes from LIGHT, not opacity */
+    --lgx-tint-a: 0.06;
+
+    -webkit-backdrop-filter:
+      saturate(var(--lgx-sat))
+      brightness(var(--lgx-bright))
+      contrast(var(--lgx-contrast))
+      blur(var(--lgx-blur-lens));
+    backdrop-filter:
+      var(--lgx-refract-filter)
+      saturate(var(--lgx-sat))
+      brightness(var(--lgx-bright))
+      contrast(var(--lgx-contrast))
+      blur(var(--lgx-blur-lens));
+  }
+
+  /* ── Thickness / Inner Volume & Inverse Caustics ─────────────────────── */
+  .lgx__layer {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .lgx__depth {
+    /* Light enters at glint-x/y and pools at caustic-x/y on the opposite rim */
+    background:
+      radial-gradient(
+        115% 85% at var(--lgx-glint-x) -18%,
+        rgb(255 255 255 / 0.38) 0%,
+        transparent 56%
+      ),
+      radial-gradient(
+        90% 70% at var(--lgx-caustic-x) 115%,
+        rgb(255 255 255 / 0.28) 0%,
+        rgb(var(--lgx-tint) / 0.36) 35%,
+        transparent 68%
+      );
+    box-shadow:
+      inset 0 0 12px 1.5px rgb(255 255 255 / 0.18),
+      inset 0 14px 28px -16px rgb(255 255 255 / 0.78),
+      inset 0 -14px 26px -18px rgb(0 0 0 / 0.28);
+  }
+
+  /* ── Moving Specular (Dual-zone "Wet Quartz" Highlight) ──────────────── */
+  .lgx__specular {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.95;
+    mix-blend-mode: plus-lighter;
+    background:
+      /* Primary tight optical hot-spot */
+      radial-gradient(
+        28% 38% at var(--lgx-glint-x) var(--lgx-glint-y),
+        rgb(255 255 255 / 0.42) 0%,
+        rgb(255 255 255 / 0.14) 42%,
+        transparent 75%
+      ),
+      /* Secondary wide subsurface sheen */
+      radial-gradient(
+        65% 85% at var(--lgx-glint-x) var(--lgx-glint-y),
+        rgb(255 255 255 / 0.16) 0%,
+        transparent 68%
+      ),
+      /* Anisotropic surface crown */
+      linear-gradient(
+        var(--lgx-light-angle),
+        rgb(255 255 255 / 0.18) 0%,
+        transparent 38%,
+        transparent 72%,
+        rgb(255 255 255 / 0.06) 100%
+      );
+  }
+
+  /* Razor-sharp top meniscus glint that shifts horizontally with the light */
+  .lgx__specular::after {
+    content: '';
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: 0;
+    height: 1.25px;
+    background: radial-gradient(
+      45% 100% at var(--lgx-glint-x) 0%,
+      rgb(255 255 255 / 1) 0%,
+      rgb(255 255 255 / 0.45) 45%,
+      transparent 100%
+    );
+    filter: blur(0.2px);
+  }
+
+  /* ── Dispersion (OKLCH Wide-Gamut Spectral Fringe in Motion) ─────────── */
+  .lgx__dispersion {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    padding: 1.5px;
+    /* Dynamic angle rotates with pointer/scroll velocity vector */
+    background: conic-gradient(
+      from var(--lgx-light-angle) at var(--lgx-glint-x) var(--lgx-glint-y),
+      oklch(0.72 0.22 25 / 0.72) 0deg,
+      oklch(0.84 0.18 85 / 0.56) 55deg,
+      oklch(0.86 0.19 155 / 0.48) 115deg,
+      oklch(0.78 0.18 230 / 0.68) 180deg,
+      oklch(0.68 0.24 295 / 0.62) 245deg,
+      oklch(0.74 0.23 345 / 0.66) 310deg,
+      oklch(0.72 0.22 25 / 0.72) 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: clamp(0, calc(var(--lgx-motion) * 0.28 + var(--lgx-press) * 0.22), 0.45);
+    mix-blend-mode: screen;
+    filter: blur(0.35px);
+    transition: opacity 220ms ease-out;
+  }
+
+  /* ── Vector-Tracked 1.25px Fresnel Rim ───────────────────────────────── */
+  .lgx__rim {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.25px;
+    pointer-events: none;
+    z-index: 3;
+    /* Combines live pointer-tracked Fresnel hotspot with Control Center top/bottom rim */
+    background:
+      radial-gradient(
+        60% 60% at var(--lgx-glint-x) var(--lgx-glint-y),
+        rgb(255 255 255 / 0.98) 0%,
+        rgb(255 255 255 / 0.35) 35%,
+        transparent 70%
+      ),
+      radial-gradient(
+        50% 50% at var(--lgx-caustic-x) var(--lgx-caustic-y),
+        rgb(255 255 255 / 0.55) 0%,
+        transparent 65%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.92) 0%,
+        rgb(255 255 255 / 0.16) 11%,
+        rgb(255 255 255 / 0.04) 48%,
+        rgb(255 255 255 / 0.10) 82%,
+        rgb(255 255 255 / 0.68) 100%
+      );
+    opacity: 0.94;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+  }
+
+  /* ── Frosted micro-grain ────────────────────────────────────────────── */
+  .lgx__noise {
+    display: none;
+  }
+
+  /* ── Touch ripple / viscoelastic gel wave ────────────────────────────── */
+  .lgx__ripple {
+    position: absolute;
+    left: var(--lgx-ripple-x);
+    top: var(--lgx-ripple-y);
+    width: 7rem;
+    height: 7rem;
+    margin: -3.5rem 0 0 -3.5rem;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    background: radial-gradient(
+      circle,
+      rgb(255 255 255 / 0.62) 0%,
+      rgb(var(--lgx-tint) / 0.34) 38%,
+      rgb(255 255 255 / 0.12) 56%,
+      transparent 74%
+    );
+    filter: blur(2px);
+    mix-blend-mode: plus-lighter;
+  }
+
+  /* ── Press state: Viscoelastic liquid compression ────────────────────── */
+  .lgx[data-lgx-press='true'] {
+    --lgx-blur: calc(var(--liquid-blur-regular, 16px) + 2px);
+    --lgx-sat: 210%;
+    transform:
+      perspective(1100px)
+      rotateX(var(--lgx-tilt-x))
+      rotateY(var(--lgx-tilt-y))
+      scale3d(0.988, 0.992, 1)
+      translateZ(-4px);
+    box-shadow:
+      inset 0 1.5px 1px 0 rgb(255 255 255 / 0.9),
+      inset 0 -1px 0.5px 0 rgb(255 255 255 / 0.4),
+      0 4px 12px -4px rgb(0 0 0 / 0.1);
+  }
+
+  /* ── Clear variant: Apple's ultra-clear visionOS chrome ──────────────── */
+  .lgx--clear {
+    --lgx-blur: var(--liquid-blur-clear, 4px);
+    --lgx-sat: 210%;
+    --lgx-tint-a: var(--liquid-tint-alpha-clear, 0.07);
+    --lgx-bright: 1.05;
+    --lgx-contrast: 1.08;
+  }
+
+  /* ── Mobile Nav Drawer: Vertical full-height Liquid Glass slab ───────── */
+  /*
+   * A drawer is a tall slab that slides in from the left edge. Its optical
+   * character differs from a floating panel:
+   *   • No top/bottom shadow — it fills the full viewport height.
+   *   • A strong right-edge specular wall (the slab's "face" faces right).
+   *   • The adaptive tint is sampled from the page content to the right,
+   *     so the glass always reads as belonging to — not floating above — the app.
+   *   • Background is kept near-clear (tint-a 0.08) so the page content
+   *     bleeds through as coloured light rather than a muddy wash.
+   */
+  .lgx--drawer {
+    --lgx-blur: 3px;
+    --lgx-sat: 200%;
+    --lgx-tint-a: 0.03;
+    --lgx-bright: 1.05;
+    --lgx-contrast: 1.06;
+
+    background:
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.08) 0%,
+        rgb(255 255 255 / 0.02) 50%,
+        rgb(255 255 255 / 0.05) 100%
+      );
+
+    box-shadow:
+      inset 0 1px 0.5px 0 rgb(255 255 255 / 0.7),
+      inset -1px 0 0.5px rgb(255 255 255 / 0.4),
+      inset 0 -1px 0.5px rgb(255 255 255 / 0.3),
+      4px 0 24px -6px rgb(0 0 0 / 0.18),
+      12px 0 48px -12px rgb(0 0 0 / 0.25);
+
+    border: 1px solid rgb(255 255 255 / 0.28);
+    border-left: none; /* Flush against the left safe-area edge */
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx--drawer {
+    --lgx-tint-a: 0.1;
+    --lgx-bright: 1.09;
+    --lgx-sat: 210%;
+
+    border-color: rgb(255 255 255 / 0.14);
+    box-shadow:
+      inset 0 1px 0.5px 0 rgb(255 255 255 / 0.46),
+      inset 0 -1px 0.5px 0 rgb(255 255 255 / 0.22),
+      inset -1px 0 0.5px rgb(255 255 255 / 0.32),
+      inset -12px 0 24px -16px rgb(255 255 255 / 0.14),
+      inset 1px 0 1px 0 rgb(255 255 255 / 0.07),
+      inset 0 0 0 0.75px rgb(255 255 255 / 0.1),
+      inset 0 18px 28px -18px rgb(255 255 255 / 0.22),
+      inset 0 -20px 30px -20px rgb(0 0 0 / 0.65),
+      6px 0 32px -8px rgb(0 0 0 / 0.5),
+      16px 0 56px -16px rgb(0 0 0 / 0.68),
+      0 1px 3px rgb(0 0 0 / 0.42);
+  }
+
+
+  .lgx.lgx--sidebar {
+    --lgx-radius: 0px;
+    border: 0;
+    border-right: 1px solid rgb(255 255 255 / 0.48);
+    box-shadow:
+      inset -1.5px 0 0.5px rgb(255 255 255 / 0.72),
+      inset -12px 0 24px -16px rgb(255 255 255 / 0.45),
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      12px 0 48px -16px rgb(0 0 0 / 0.2);
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx.lgx--sidebar {
+    border-right-color: rgb(255 255 255 / 0.14);
+    box-shadow:
+      inset -1px 0 0.5px rgb(255 255 255 / 0.26),
+      inset -12px 0 24px -16px rgb(255 255 255 / 0.12),
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      16px 0 56px -16px rgb(0 0 0 / 0.68);
+  }
+
+  /* ── Clear control variant: Convex "Liquid Drop" Capsule ─────────────── */
+  .lgx--control {
+    --lgx-blur: 6px;
+    --lgx-sat: 190%;
+    --lgx-tint-a: 0.09;
+    --lgx-radius: 999px;
+    background:
+      radial-gradient(
+        80% 120% at var(--lgx-caustic-x) 110%,
+        rgb(255 255 255 / 0.35) 0%,
+        transparent 60%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 1.5)) 0%,
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 0.75)) 52%,
+        rgb(var(--lgx-tint) / calc(var(--lgx-tint-a) * 1.35)) 100%
+      );
+    box-shadow:
+      inset 0 1.25px 0.5px rgb(255 255 255 / 0.92),
+      inset 0 -1px 0.5px rgb(255 255 255 / 0.45),
+      inset 0 12px 20px -12px rgb(255 255 255 / 0.92),
+      inset 0 -8px 16px -12px rgb(0 0 0 / 0.14),
+      0 2px 6px -1px rgb(0 0 0 / 0.14),
+      0 12px 28px -10px rgb(0 0 0 / 0.28);
+  }
+
+  .lgx--control::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(
+      76% 135% at var(--lgx-glint-x) -35%,
+      rgb(255 255 255 / 0.68) 0%,
+      rgb(255 255 255 / 0.14) 46%,
+      transparent 68%
+    );
+  }
+
+  /* ── Dark & OLED Themes: Pure obsidian crystal, zero muddy tint ──────── */
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx {
+    --lgx-ink: 255 255 255;
+    --lgx-bright: 1.08;
+    --lgx-sat: 205%;
+    border-color: rgb(255 255 255 / 0.15);
+    box-shadow:
+      inset 0 1px 0.5px 0 rgb(255 255 255 / 0.52),
+      inset 0 -1px 0.5px 0 rgb(255 255 255 / 0.26),
+      inset 1px 0 1px 0 rgb(255 255 255 / 0.08),
+      inset -1px 0 1px 0 rgb(255 255 255 / 0.08),
+      inset 0 0 0 0.75px rgb(255 255 255 / 0.1),
+      inset 0 18px 28px -18px rgb(255 255 255 / 0.24),
+      inset 0 -20px 30px -20px rgb(0 0 0 / 0.68),
+      0 1px 3px rgb(0 0 0 / 0.45),
+      0 18px 44px -16px rgb(0 0 0 / 0.7),
+      0 40px 88px -36px rgb(0 0 0 / 0.82);
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx__depth {
+    background:
+      radial-gradient(
+        115% 85% at var(--lgx-glint-x) -18%,
+        rgb(255 255 255 / 0.16) 0%,
+        transparent 56%
+      ),
+      radial-gradient(
+        90% 70% at var(--lgx-caustic-x) 115%,
+        rgb(255 255 255 / 0.12) 0%,
+        rgb(var(--lgx-tint) / 0.32) 38%,
+        transparent 68%
+      );
+    box-shadow:
+      inset 0 0 10px 1px rgb(255 255 255 / 0.08),
+      inset 0 14px 26px -18px rgb(255 255 255 / 0.28),
+      inset 0 -14px 26px -18px rgb(0 0 0 / 0.62);
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx__rim {
+    background:
+      radial-gradient(
+        55% 55% at var(--lgx-glint-x) var(--lgx-glint-y),
+        rgb(255 255 255 / 0.78) 0%,
+        rgb(255 255 255 / 0.22) 38%,
+        transparent 70%
+      ),
+      radial-gradient(
+        45% 45% at var(--lgx-caustic-x) var(--lgx-caustic-y),
+        rgb(255 255 255 / 0.34) 0%,
+        transparent 65%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.72) 0%,
+        rgb(255 255 255 / 0.14) 12%,
+        rgb(255 255 255 / 0.03) 48%,
+        rgb(255 255 255 / 0.07) 80%,
+        rgb(255 255 255 / 0.42) 100%
+      );
+    opacity: 0.92;
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx__specular {
+    mix-blend-mode: screen;
+    opacity: 0.78;
+    background:
+      radial-gradient(
+        30% 42% at var(--lgx-glint-x) var(--lgx-glint-y),
+        rgb(255 255 255 / 0.34) 0%,
+        rgb(255 255 255 / 0.09) 42%,
+        transparent 74%
+      ),
+      linear-gradient(
+        var(--lgx-light-angle),
+        rgb(255 255 255 / 0.14) 0%,
+        transparent 42%
+      );
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+   * MOBILE DOCK — PURE LIQUID GLASS (Suyuqlik Shisha — Crystal Water Slab)
+   * 
+   * Glassmorphism (blur) EMAS, balki haqiqiy suyuq shisha:
+   *  - Tiniq suv kabi shaffof (loyqa blur yo'q)
+   *  - 3D sirt tarangligi meniski (convex liquid meniscus)
+   *  - Qirralarda yorug'lik sinishi (Snell refraktsiyasi)
+   * ══════════════════════════════════════════════════════════════════════════ */
+  .lgx-dock {
+    --lgx-radius: 999px;
+    --lgx-blur: 2px;
+    --lgx-sat: 210%;
+    --lgx-bright: 1.08;
+    --lgx-contrast: 1.05;
+    --lgx-tint-a: 0.04;
+    border-radius: 999px;
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 0.45);
+    background:
+      radial-gradient(
+        120% 100% at 50% 0%,
+        rgb(255 255 255 / 0.22) 0%,
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.12) 0%,
+        rgb(255 255 255 / 0.02) 50%,
+        rgb(255 255 255 / 0.08) 100%
+      );
+    box-shadow:
+      /* Qavariq suv sirtidagi o'tkir nurli qirra (top meniscus specular highlight) */
+      inset 0 1.5px 0.75px 0 rgb(255 255 255 / 0.95),
+      /* Pastki optik akslanish (internal total reflection) */
+      inset 0 -1.5px 1px 0 rgb(255 255 255 / 0.6),
+      /* Suv meniskining 3D qalinligi (curved liquid volume) */
+      inset 0 12px 20px -10px rgb(255 255 255 / 0.5),
+      inset 0 -14px 22px -12px rgb(0 0 0 / 0.25),
+      /* Suv tomchisining yumshoq soyasi */
+      0 8px 32px -8px rgb(0 0 0 / 0.22),
+      0 20px 48px -16px rgb(0 0 0 / 0.28);
+    backdrop-filter:
+      var(--lgx-refract-filter)
+      saturate(210%)
+      brightness(1.08)
+      contrast(1.05)
+      blur(2px);
+    -webkit-backdrop-filter:
+      saturate(210%)
+      brightness(1.08)
+      contrast(1.05)
+      blur(2px);
+  }
+
+  /* Traveling Liquid Droplet Lens (Harakatlanuvchi Suyuq Tomchi) */
+  .lgx-dock__lens {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 0.5rem) / var(--lgx-tabs, 5));
+    border-radius: 999px;
+    z-index: 2;
+    pointer-events: none;
+    /* Oq bo'yoq emas! Tiniq suyuqlik linzasi */
+    background:
+      radial-gradient(
+        60% 60% at 50% 15%,
+        rgb(255 255 255 / 0.65) 0%,
+        rgb(255 255 255 / 0.15) 50%,
+        transparent 80%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.25) 0%,
+        rgb(255 255 255 / 0.05) 50%,
+        rgb(255 255 255 / 0.18) 100%
+      );
+    border: 1px solid rgb(255 255 255 / 0.85);
+    box-shadow:
+      /* Suyuq linzaning 3D qabariqligi */
+      inset 0 1.5px 0.5px 0 rgb(255 255 255 / 1),
+      inset 0 -1px 0.5px 0 rgb(255 255 255 / 0.7),
+      inset 0 8px 14px -6px rgb(255 255 255 / 0.6),
+      inset 0 -8px 12px -6px rgb(0 0 0 / 0.15),
+      0 4px 14px -2px rgb(0 0 0 / 0.16),
+      0 2px 6px 0 rgb(0 122 255 / 0.2);
+    backdrop-filter: contrast(1.15) brightness(1.12);
+    -webkit-backdrop-filter: contrast(1.15) brightness(1.12);
+    transform-origin: 50% 50%;
+    transition:
+      scale 380ms var(--lgx-spring-fluid),
+      transform 420ms var(--lgx-spring-fluid);
+  }
+
+  /* Bosilganda suyuqlik kabi cho'zilish va deformatsiya */
+  .lgx-dock[data-lgx-press='true'] .lgx-dock__lens {
+    scale: 1.12 0.88;
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx-dock {
+    border-color: rgb(255 255 255 / 0.25);
+    background:
+      radial-gradient(
+        120% 100% at 50% 0%,
+        rgb(255 255 255 / 0.14) 0%,
+        transparent 60%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.06) 0%,
+        rgb(255 255 255 / 0.01) 50%,
+        rgb(255 255 255 / 0.04) 100%
+      );
+    box-shadow:
+      inset 0 1.5px 0.5px rgb(255 255 255 / 0.7),
+      inset 0 -1px 0.5px rgb(255 255 255 / 0.3),
+      inset 0 12px 22px -10px rgb(255 255 255 / 0.3),
+      inset 0 -16px 24px -12px rgb(0 0 0 / 0.65),
+      0 12px 36px -10px rgb(0 0 0 / 0.55),
+      0 24px 60px -16px rgb(0 0 0 / 0.7);
+  }
+
+  :is(.dark, [data-theme='dark'], [data-theme='oled']) .lgx-dock__lens {
+    border-color: rgb(255 255 255 / 0.55);
+    background:
+      radial-gradient(
+        60% 60% at 50% 15%,
+        rgb(255 255 255 / 0.35) 0%,
+        rgb(255 255 255 / 0.06) 50%,
+        transparent 80%
+      ),
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.15) 0%,
+        rgb(255 255 255 / 0.02) 50%,
+        rgb(255 255 255 / 0.08) 100%
+      );
+    box-shadow:
+      inset 0 1.5px 0.5px 0 rgb(255 255 255 / 0.8),
+      inset 0 -1px 0.5px 0 rgb(255 255 255 / 0.4),
+      inset 0 8px 14px -6px rgb(255 255 255 / 0.3),
+      inset 0 -8px 12px -6px rgb(0 0 0 / 0.5),
+      0 4px 16px -2px rgb(0 0 0 / 0.6),
+      0 2px 8px 0 rgb(0 122 255 / 0.3);
+  }
+
+  /* Liquid stretch deformation when pressed/dragged */
+  .lgx-dock[data-lgx-press='true'] .lgx-dock__lens {
+    scale: 1.075 0.915;
+  }
+
+  .lgx-dock__lens::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      115% 95% at 35% -15%,
+      rgb(255 255 255 / 0.95) 0%,
+      rgb(255 255 255 / 0.22) 44%,
+      transparent 68%
+    );
+  }
+
+  /* ── Dock Tabs & Optical Loupe Magnification ─────────────────────────── */
+  .lgx-dock__tab {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    min-height: 3.25rem;
+    width: 100%;
+    touch-action: manipulation;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.28rem;
+    border-radius: 999px;
+    padding: 0.25rem;
+    color: rgb(var(--lgx-ink) / 0.56);
+    transition:
+      color 180ms ease,
+      transform 340ms var(--lgx-spring-fluid);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .lgx-dock__tab:hover {
+      color: rgb(var(--lgx-ink) / 0.84);
+    }
+  }
+
+  .lgx-dock__tab[data-active='true'],
+  .lgx-dock__tab[aria-current='page'] {
+    color: rgb(var(--lgx-ink));
+  }
+
+  .lgx-dock__icon {
+    display: inline-flex;
+    transform: translateZ(0) scale(1);
+    transition:
+      transform 380ms var(--lgx-spring-fluid),
+      filter 220ms ease;
+    filter: drop-shadow(0 1px 1px rgb(255 255 255 / 0.35));
+  }
+
+  .lgx-dock__tab[data-active='true'] .lgx-dock__icon,
+  .lgx-dock__tab[aria-current='page'] .lgx-dock__icon {
+    transform: translateZ(4px) scale(1.16) translateY(-1px);
+    filter:
+      drop-shadow(0 2px 4px rgb(0 0 0 / 0.14))
+      drop-shadow(0 1px 1px rgb(255 255 255 / 0.45));
+  }
+
+  .lgx-dock__label {
+    max-width: 5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10.5px;
+    line-height: 1;
+    letter-spacing: -0.012em;
+    font-weight: 500;
+    transition: transform 340ms var(--lgx-spring-fluid);
+  }
+
+  .lgx-dock__tab[data-active='true'] .lgx-dock__label,
+  .lgx-dock__tab[aria-current='page'] .lgx-dock__label {
+    font-weight: 650;
+    transform: scale(1.03);
+  }
+
+  /* ── Reduced transparency / contrast / low tier ──────────────────────── */
+  @media (prefers-reduced-transparency: reduce) {
+    .lgx,
+    .lgx[data-lgx-lens='true'],
+    .lgx[data-lgx-lens='true'][data-lgx-scrolling='true'] {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: var(--bg-elevated, #fff);
+      color: var(--text-primary);
+    }
+    .lgx__depth,
+    .lgx__specular,
+    .lgx__dispersion,
+    .lgx__rim,
+    .lgx__noise,
+    .lgx__ripple {
+      display: none;
+    }
+    .lgx-dock__lens {
+      background: var(--bg-card, #fff);
+      border-color: var(--border-medium, rgb(0 0 0 / 0.12));
+    }
+  }
+
+  @media (prefers-contrast: more) {
+    .lgx {
+      border-width: 2px;
+      border-color: var(--border-strong, #000);
+    }
+    .lgx__dispersion {
+      display: none;
+    }
+  }
+
+  [data-glass-tier='minimal'] .lgx[data-lgx-lens='true'],
+  .lgx[data-lgx-lens='true'][data-lgx-low-power='true'] {
+    backdrop-filter:
+      blur(var(--lgx-blur)) saturate(var(--lgx-sat))
+      brightness(var(--lgx-bright)) contrast(var(--lgx-contrast));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lgx {
+      transform: none;
+      transition: none;
+    }
+    .lgx__dispersion {
+      opacity: 0;
+    }
+    .lgx-dock__lens,
+    .lgx-dock__icon,
+    .lgx-dock__tab,
+    .lgx-dock__label {
+      transition: none;
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * KPI caustic breath — organic optical focus oscillation
+ * ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes lgx-breathe {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.44;
+  }
+  50% {
+    transform: scale(1.22) rotate(3deg);
+    opacity: 0.68;
+  }
+}
+
+.kpi-caustic {
+  animation: lgx-breathe 8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi-caustic { animation: none; }
+}

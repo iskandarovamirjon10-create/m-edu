@@ -23,6 +23,10 @@ import { isTeacherRole, isParentRole, isStudentRole } from '@/lib/roles';
 import { SchoolLaunchWizardStudio } from '@/components/onboarding/SchoolLaunchWizardStudio';
 
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import {
+  DashboardGlassLayers,
+  useDashboardGlassCard,
+} from '@/components/dashboard/DashboardGlass';
 import { KPIGrid } from '@/components/dashboard/KPIGrid';
 import { RevenueSection } from '@/components/dashboard/RevenueSection';
 import { AttendanceSection } from '@/components/dashboard/AttendanceSection';
@@ -373,6 +377,7 @@ export function DashboardPage() {
   const { user } = useAuth();
   const sound = usePremiumSound();
   const reduced = usePrefersReducedMotion();
+  const kioskCardRef = useDashboardGlassCard<HTMLDivElement>({ dispersion: 4 });
 
   const tabParam = searchParams.get('tab');
   const initialTab: DashboardTabId = isValidDashboardTab(tabParam)
@@ -606,9 +611,6 @@ export function DashboardPage() {
       animate="visible"
       className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] min-w-0 mx-auto space-y-5 sm:space-y-6 px-3 sm:px-6 lg:px-8 pt-1 sm:pt-2 pb-[max(6rem,env(safe-area-inset-bottom))]"
     >
-      {/* Ambient Corporate Aurora Mesh */}
-      <AuroraMesh variant="corporate" opacity={0.65} />
-
       {/* 1. Executive Header */}
       <motion.div
         variants={SECTION_VARIANTS}
@@ -839,7 +841,7 @@ export function DashboardPage() {
             <motion.section
               variants={SECTION_VARIANTS}
               aria-label={dict.analyticsRegionLabel}
-              className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]"
+              className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr] [content-visibility:auto] [contain-intrinsic-size:auto_450px]"
             >
               <RevenueSection initialData={stats.monthlyRevenue ?? []} />
               <AttendanceSection
@@ -851,7 +853,7 @@ export function DashboardPage() {
             <motion.section
               variants={SECTION_VARIANTS}
               aria-label={dict.activityRegionLabel}
-              className="grid grid-cols-1 gap-6 xl:grid-cols-2"
+              className="grid grid-cols-1 gap-6 xl:grid-cols-2 [content-visibility:auto] [contain-intrinsic-size:auto_450px]"
             >
               <RecentPayments payments={stats.recentPayments ?? []} />
               <FollowUpsSection followUps={stats.upcomingFollowUps ?? []} />
@@ -897,12 +899,11 @@ export function DashboardPage() {
           >
             <LiveFaceCamera />
 
-            <div className="vision-card relative isolate overflow-hidden flex flex-col p-6 backdrop-blur-2xl">
-              {/* Top Specular Highlight Border */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/25"
-              />
+            <div
+              ref={kioskCardRef}
+              className="lgx lgx--clear relative isolate flex flex-col rounded-[2rem] p-6"
+            >
+              <DashboardGlassLayers />
 
               {/* Kiosk Card Header */}
               <div className="flex items-center justify-between gap-2.5 border-b border-black/[0.06] pb-3.5 dark:border-white/[0.08]">
@@ -990,13 +991,7 @@ export function DashboardPage() {
                 </div>
               </div>
 
-            <div className="vision-card relative isolate mt-6 flex flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/70 p-5 shadow-[0_12px_32px_-16px_rgba(15,23,42,0.16),inset_0_1.5px_1.5px_rgba(255,255,255,0.92)] backdrop-blur-2xl dark:border-white/[0.10] dark:bg-white/[0.04] dark:shadow-[0_16px_40px_-18px_rgba(0,0,0,0.7)]">
-              {/* Top specular meniscus */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/30"
-              />
-
+            <div className="relative isolate mt-6 flex flex-1 flex-col overflow-hidden rounded-[1.5rem] border border-white/30 bg-white/30 p-5 dark:border-white/[0.08] dark:bg-white/[0.04]">
               <h4 className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[var(--text-tertiary)]">
                 {dict.quickLinksHeading}
               </h4>

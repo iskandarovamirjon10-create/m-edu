@@ -24,6 +24,7 @@ import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { fireExecutiveConfetti } from '@/lib/executiveConfetti';
 import { api } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
+import { triggerPrint } from '@/lib/printEngine';
 
 export interface PaymentChannelReconciliation {
   id: string;
@@ -52,10 +53,10 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
   const { user } = useAuth();
 
   const cashierName = propCashierName || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Mas\'ul xodim';
-  const branchName = propBranchName || user?.organizationName || 'Asosiy Filial';
+  const branchName = propBranchName || user?.organization?.name || user?.memberships?.[0]?.organizationName || 'Asosiy Filial';
 
   // Live real-time Z-Report reconciliation summary from backend
-  const { data: zReportData, isLoading, refetch } = useQuery({
+  const { data: zReportData, refetch } = useQuery({
     queryKey: ['executive-z-report-summary'],
     queryFn: async () => {
       try {
@@ -69,6 +70,24 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
   });
 
   const [channels, setChannels] = useState<PaymentChannelReconciliation[]>([]);
+
+  // Restore freeze state if already locked today
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const todayKey = `medu_zreport_frozen_${new Date().toISOString().slice(0, 10)}`;
+      const saved = localStorage.getItem(todayKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.hash) {
+          setIsFrozen(true);
+          setFreezeHash(parsed.hash);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
 
   useEffect(() => {
     if (zReportData?.byMethod) {
@@ -203,6 +222,13 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
       totalActualRevenue,
       totalTransactions,
       totalDiscrepancy,
+      channels: channels.map((c) => ({
+        id: c.id,
+        category: c.category,
+        system: c.systemAmount,
+        actual: c.actualAmount,
+        status: c.status,
+      })),
     });
 
     let hashHex = '';
@@ -222,18 +248,27 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
       window.crypto.getRandomValues(arr);
       hashHex = Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
     } else {
-      hashHex = Date.now().toString(16);
+      hashHex = Date.now().toString(16) + Math.random().toString(16).slice(2, 10);
     }
 
-    const fullHash = `SHA256-Z-${timestamp.slice(0, 10)}-${hashHex.slice(0, 16)}`;
+    const fullHash = `SHA256-Z-${timestamp.slice(0, 10)}-${hashHex.slice(0, 16).toUpperCase()}`;
 
     try {
       await api.post('/payments/cashier/z-report/close', {
-        countedCash: channels.find(c => c.id === 'ch-cash')?.actualAmount ?? totalActualRevenue,
+        countedCash: channels.find((c) => c.id === 'ch-cash')?.actualAmount ?? totalActualRevenue,
         discrepancyNote: totalDiscrepancy !== 0 ? `Farq aniqlandi: ${totalDiscrepancy.toLocaleString('uz-UZ')} UZS` : undefined,
       });
     } catch {
       // Offline or simulation fallback
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        const todayKey = `medu_zreport_frozen_${timestamp.slice(0, 10)}`;
+        localStorage.setItem(todayKey, JSON.stringify({ hash: fullHash, timestamp, totalActualRevenue }));
+      }
+    } catch {
+      // Ignore quota error
     }
 
     setFreezeHash(fullHash);
@@ -254,9 +289,10 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
   const handlePrint = useCallback(() => {
     haptics.light();
     sound.playTick();
-    if (typeof window !== 'undefined') {
-      window.print();
-    }
+    triggerPrint({
+      type: 'z-report',
+      title: `Z_Hisobot_${new Date().toISOString().slice(0, 10)}`,
+    });
   }, [haptics, sound]);
 
   const formatUZS = (val: number) =>
@@ -508,9 +544,9 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
               <div>🏢 Filial: {branchName}</div>
               <div>👤 Kassir: {cashierName}</div>
               <div className="pt-2 text-zinc-400">─── Tushumlar ───</div>
-              <div>💵 Naqd: {formatUZS(channels[0]?.actualAmount || 0)}</div>
-              <div>💳 Terminallar (Uzcard/Humo): {formatUZS((channels[1]?.actualAmount || 0) + (channels[2]?.actualAmount || 0))}</div>
-              <div>📱 Onlayn (Click/Payme/Uzum): {formatUZS((channels[3]?.actualAmount || 0) + (channels[4]?.actualAmount || 0) + (channels[5]?.actualAmount || 0))}</div>
+              <div>💵 Naqd: {formatUZS(channels.find((c) => c.category === 'CASH')?.actualAmount || 0)}</div>
+              <div>💳 POS Terminallar (Uzcard/Humo): {formatUZS(channels.find((c) => c.category === 'POS_TERMINAL')?.actualAmount || 0)}</div>
+              <div>📱 Onlayn & Bank O‘tkazmalari: {formatUZS(channels.filter((c) => c.category === 'ONLINE_GATEWAY').reduce((sum, c) => sum + c.actualAmount, 0))}</div>
               <div className="pt-1 text-emerald-400 font-bold">JAMI SOF TUSHUM: {formatUZS(totalActualRevenue)}</div>
               <div className="text-zinc-500 text-[10px] pt-1">Muhr: {freezeHash || 'DRAFT-WAITING-SEAL'}</div>
             </div>
@@ -525,6 +561,7 @@ export const ExecutiveDayEndClosingHub = memo(function ExecutiveDayEndClosingHub
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
+            data-printable="thermal"
             className="mt-6 p-6 rounded-2xl bg-white text-zinc-900 font-mono text-xs max-w-sm mx-auto shadow-2xl border border-zinc-200"
           >
             <div className="text-center border-b border-dashed border-zinc-300 pb-3 mb-3">

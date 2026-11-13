@@ -24,11 +24,11 @@ const POPOVER_SPRING = { type: 'spring' as const, stiffness: 420, damping: 28 };
 export const SoundControlMenu = memo(function SoundControlMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { isMuted, volume, haptics, setVolume, setHaptics, toggleMute } = useAudioSettings();
+  const { isMuted, volume, haptics, setMuted, setVolume, setHaptics, toggleMute } = useAudioSettings();
   const sound = usePremiumSound();
   const hapticTrigger = useHaptics();
 
-  // Close on outside click
+  // Close on outside click or Escape key
   useEffect(() => {
     if (!isOpen) return;
     const handleOutside = (e: MouseEvent) => {
@@ -36,21 +36,49 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
     window.addEventListener('mousedown', handleOutside);
-    return () => window.removeEventListener('mousedown', handleOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen]);
 
   const handleTestChime = () => {
-    hapticTrigger.tap();
+    hapticTrigger.light();
+    if (isMuted) {
+      setMuted(false);
+    }
     sound.play('payment');
+  };
+
+  const handleToggleMute = () => {
+    hapticTrigger.light();
+    toggleMute();
+  };
+
+  const handleVolumeStep = (delta: number) => {
+    hapticTrigger.light();
+    if (isMuted) {
+      setMuted(false);
+    }
+    const next = Math.round(Math.max(0, Math.min(1, volume + delta)) * 100) / 100;
+    setVolume(next);
   };
 
   return (
     <div ref={containerRef} className="relative inline-block">
       <button
         type="button"
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
         onClick={() => {
-          hapticTrigger.tap();
+          hapticTrigger.light();
           setIsOpen((prev) => !prev);
         }}
         aria-label={isMuted ? 'Ovoz o‘chirilgan' : `Ovoz faol (${Math.round(volume * 100)}%)`}
@@ -66,13 +94,11 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
         )}
       >
         {isMuted || volume === 0 ? (
-          // Volume Muted Icon
+          // Volume Muted / X Icon (Proper Speaker Mute, NOT Microphone)
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="1" y1="1" x2="23" y2="23" />
-            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0a7 7 0 0 1-.11 1.23" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+            <line x1="23" y1="9" x2="17" y2="15" />
+            <line x1="17" y1="9" x2="23" y2="15" />
           </svg>
         ) : volume < 0.5 ? (
           // Volume Low
@@ -83,7 +109,7 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
         ) : (
           // Volume High
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 5" />
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
           </svg>
@@ -113,7 +139,8 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400">
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 5" />
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                   </svg>
                 </span>
@@ -125,7 +152,7 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
 
               <button
                 type="button"
-                onClick={toggleMute}
+                onClick={handleToggleMute}
                 className={cn(
                   'px-2 py-1 rounded-lg text-[11px] font-semibold transition-all',
                   isMuted
@@ -148,12 +175,13 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setVolume(Math.max(0, volume - 0.1))}
-                  className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleVolumeStep(-0.05)}
+                  disabled={volume <= 0 && !isMuted}
+                  className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 transition-colors"
                   aria-label="Pasaytirish"
                 >
                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 5" />
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                   </svg>
                 </button>
                 <input
@@ -162,21 +190,22 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
                   max="1"
                   step="0.05"
                   value={isMuted ? 0 : volume}
-                  disabled={isMuted}
                   onChange={(e) => {
-                    const next = parseFloat(e.target.value);
+                    const next = Math.round(parseFloat(e.target.value) * 100) / 100;
+                    if (isMuted) setMuted(false);
                     setVolume(next);
                   }}
-                  className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-zinc-200 dark:bg-zinc-700 accent-sky-500 disabled:opacity-40"
+                  className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-zinc-200 dark:bg-zinc-700 accent-sky-500"
                 />
                 <button
                   type="button"
-                  onClick={() => setVolume(Math.min(1, volume + 0.1))}
-                  className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                  onClick={() => handleVolumeStep(0.05)}
+                  disabled={volume >= 1 && !isMuted}
+                  className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:hover:text-white disabled:opacity-30 transition-colors"
                   aria-label="Ko'tarish"
                 >
                   <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 5" />
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                   </svg>
                 </button>
@@ -201,7 +230,7 @@ export const SoundControlMenu = memo(function SoundControlMenu() {
                 role="switch"
                 aria-checked={haptics}
                 onClick={() => {
-                  hapticTrigger.tap();
+                  hapticTrigger.light();
                   setHaptics(!haptics);
                 }}
                 className={cn(

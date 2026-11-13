@@ -12,11 +12,16 @@
  *  - 100% API, a11y, sound effects, and reduced-motion compatibility preserved
  */
 
-import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, type ReactNode, useId, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn, CountUp, TONES, resolveTone, usePrefersReducedMotion } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useLiquidGlassLens } from '@/layouts/core/liquidGlassOptics';
+import {
+  useAdaptiveGlassTint,
+  useLiquidGlassPhysics,
+} from '@/layouts/core/useLiquidGlass';
 
 export interface KPICardTrend {
   label: string;
@@ -161,17 +166,25 @@ function Sparkline({
           <stop offset="100%" stopColor={stroke} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <path d={fillPath} fill={`url(#${gradientId})`} />
-      <path
+      <motion.path
+        d={fillPath}
+        fill={`url(#${gradientId})`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <motion.path
         d={path}
         stroke={stroke}
         strokeWidth="2.15"
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ filter: `drop-shadow(0 2px 6px ${withAlpha(stroke, 0.45)})` }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
       />
       {/* Optical terminal beacon */}
-      <circle cx="116" cy={endY} r="3.5" fill={stroke} fillOpacity="0.28" />
+      <circle cx="116" cy={endY} r="3" fill={stroke} fillOpacity="0.3" />
       <circle cx="116" cy={endY} r="1.75" fill={stroke} />
     </svg>
   );
@@ -199,9 +212,14 @@ export function KPICard({
   const uid = useId();
   const lastHoverRef = useRef(0);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
-  const [spotlight, setSpotlight] = useState({ x: -100, y: -100, opacity: 0 });
   const interactive = Boolean(href || onClick);
+
+  useLiquidGlassPhysics(cardRef, {
+    enabled: !reduced && interactive,
+    tilt: interactive,
+    press: interactive,
+    maxTilt: 2.4,
+  });
 
   const activate = () => {
     sound.playPop();
@@ -218,35 +236,12 @@ export function KPICard({
   };
 
   const handleMouseEnter = () => {
-    setSpotlight((prev) => ({ ...prev, opacity: 1 }));
     if (!interactive) return;
     const now = Date.now();
     if (now - lastHoverRef.current > 800) {
       lastHoverRef.current = now;
       sound.playTick();
     }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = cardRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setSpotlight({ x, y, opacity: 1 });
-
-    if (interactive && !reduced) {
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const rotateX = ((y - centerY) / centerY) * -3.2;
-      const rotateY = ((x - centerX) / centerX) * 3.2;
-      setTilt({ x: rotateX, y: rotateY });
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setSpotlight((prev) => ({ ...prev, opacity: 0 }));
-    setTilt({ x: 0, y: 0 });
   };
 
   const { prefix, suffix, numeric } = splitValue(formattedValue);
@@ -262,6 +257,7 @@ export function KPICard({
   const gradientId = `kpi-spark-${uid.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   const styleVars = {
+    '--lgx-radius': '26px',
     '--kpi-caustic': withAlpha(accentColor, 0.28),
     '--kpi-rim-hover': withAlpha(accentColor, 0.42),
     '--kpi-accent-solid': accentColor,
@@ -269,15 +265,6 @@ export function KPICard({
 
   return (
     <motion.div
-      ref={cardRef}
-      role={interactive ? 'button' : 'group'}
-      tabIndex={interactive ? 0 : undefined}
-      aria-label={`${title}: ${formattedValue ?? value}${interactive ? ' — ochish uchun bosing' : ''}`}
-      onClick={interactive ? activate : undefined}
-      onKeyDown={handleKeyDown}
-      onMouseEnter={handleMouseEnter}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
       initial={reduced ? false : { opacity: 0, y: 14, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
@@ -285,72 +272,50 @@ export function KPICard({
         delay: reduced ? 0 : delay,
         ease: [0.22, 1, 0.36, 1],
       }}
-      style={{
-        ...styleVars,
-        transform: interactive && (tilt.x !== 0 || tilt.y !== 0)
-          ? `perspective(900px) rotateX(${tilt.x.toFixed(2)}deg) rotateY(${tilt.y.toFixed(2)}deg)`
-          : undefined,
-      }}
-      className={cn(
-        'group relative flex h-full flex-col justify-between gap-3.5 overflow-hidden rounded-[26px]',
-        // iOS 27 Multi-layered Liquid Glass Lens
-        'border border-white/80 dark:border-white/[0.13]',
-        'bg-gradient-to-br from-white/[0.80] via-white/[0.56] to-white/[0.72]',
-        'dark:from-white/[0.10] dark:via-white/[0.04] dark:to-white/[0.07]',
-        'p-4 backdrop-blur-3xl backdrop-saturate-[200%] sm:p-5 lg:p-5.5',
-        // Dual Specular Rim (Top 3D Lip + Bottom Inner Refraction + Ambient Elevation)
-        'shadow-[0_1px_0_rgba(255,255,255,0.9),0_18px_42px_-12px_rgba(15,23,42,0.07),0_4px_14px_-4px_rgba(15,23,42,0.04),inset_0_1.5px_1px_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(255,255,255,0.45)]',
-        'dark:shadow-[0_20px_48px_-12px_rgba(0,0,0,0.62),inset_0_1.5px_1px_rgba(255,255,255,0.22),inset_0_-1px_0.5px_rgba(255,255,255,0.05)]',
-        'transform-gpu transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,box-shadow]',
-        interactive &&
-          cn(
-            'cursor-pointer select-none outline-none',
-            'hover:-translate-y-1 hover:border-[color:var(--kpi-rim-hover)]',
-            'hover:shadow-[0_24px_54px_-14px_var(--kpi-caustic),inset_0_1.5px_1.5px_rgba(255,255,255,1)]',
-            'dark:hover:shadow-[0_24px_56px_-14px_var(--kpi-caustic),inset_0_1.5px_1px_rgba(255,255,255,0.32)]',
-            'active:translate-y-0 active:scale-[0.985] active:duration-75',
-            'motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100 motion-reduce:transition-none',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--kpi-accent-solid)]',
-          ),
-      )}
+      className="h-full [perspective:1000px]"
     >
-      {/* 1. Curved Top Liquid Meniscus Sheen */}
+      <div
+        ref={cardRef}
+        role={interactive ? 'button' : 'group'}
+        tabIndex={interactive ? 0 : undefined}
+        aria-label={`${title}: ${formattedValue ?? value}${interactive ? ' — ochish uchun bosing' : ''}`}
+        onClick={interactive ? activate : undefined}
+        onKeyDown={handleKeyDown}
+        onMouseEnter={handleMouseEnter}
+        style={styleVars}
+        className={cn(
+          'lgx lgx--clear group relative flex h-full flex-col justify-between gap-3.5 p-4 sm:p-5 lg:p-5.5',
+          'transform-gpu',
+          interactive &&
+            cn(
+              'cursor-pointer select-none outline-none',
+              'hover:border-[color:var(--kpi-rim-hover)]',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--kpi-accent-solid)]',
+              'motion-reduce:transition-none',
+            ),
+        )}
+      >
+        <span aria-hidden="true" className="lgx__layer lgx__depth" />
+        <span aria-hidden="true" className="lgx__specular" />
+        <span aria-hidden="true" className="lgx__rim" />
+      {/* Ambient caustic bloom: the only colour on the card, and it breathes. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-20 opacity-85 transition-opacity duration-300 group-hover:opacity-100 dark:opacity-30"
-        style={{
-          background:
-            'radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.22) 48%, transparent 100%)',
-        }}
-      />
-
-      {/* 2. Ambient Caustic Light Bloom (Bottom Corner) */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-8 -right-8 h-28 w-28 rounded-full opacity-55 blur-2xl transition-all duration-500 group-hover:scale-125 group-hover:opacity-90 dark:opacity-40"
+        className="kpi-caustic pointer-events-none absolute -bottom-8 -right-8 h-28 w-28 rounded-full opacity-55 blur-2xl transition-opacity duration-500 group-hover:opacity-90 dark:opacity-40"
         style={{ background: withAlpha(accentColor, 0.32) }}
       />
 
-      {/* 2b. Hairline top refraction (Apple glass lip) */}
+      {/* Accent light follows the lens glint (no React state, no re-render). */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/50"
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background: `radial-gradient(340px circle at var(--lgx-glint-x, 50%) var(--lgx-glint-y, 8%), ${withAlpha(
+            accentColor,
+            0.14,
+          )}, transparent 70%)`,
+        }}
       />
-
-      {/* Dynamic Cursor Spotlight Ray */}
-      {spotlight.opacity > 0 && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -inset-px transition-opacity duration-300 z-0"
-          style={{
-            opacity: spotlight.opacity,
-            background: `radial-gradient(340px circle at ${spotlight.x}px ${spotlight.y}px, ${withAlpha(
-              accentColor,
-              0.16,
-            )}, transparent 70%)`,
-          }}
-        />
-      )}
 
       {/* 3. Holographic Sparkline */}
       <Sparkline tone={trendTone} gradientId={gradientId} />
@@ -424,6 +389,7 @@ export function KPICard({
           )}
         </div>
       )}
+      </div>
     </motion.div>
   );
 }

@@ -34,6 +34,7 @@ import {
   memo,
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type CSSProperties,
   type RefObject,
 } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -55,6 +56,14 @@ import { usePrefersReducedMotion, cn } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useDeviceProfile, useFocusTrap, useMediaQuery } from '../core/singletons';
 import { GlassSurface } from './GlassSurface';
+import {
+  useAdaptiveGlassTint,
+  useLiquidGlassPhysics,
+} from '../core/useLiquidGlass';
+import {
+  supportsBackdropRefraction,
+  useLiquidGlassLens,
+} from '../core/liquidGlassOptics';
 import { Brand } from './Brand';
 import { StaticIcon, Magnetic, I } from './Icons';
 import { ThemeToggle } from './TopBar';
@@ -347,8 +356,8 @@ function useOpticalRefraction(initialX = 160, initialY = 30, enabled = true) {
 
   const release = useCallback(() => opacity.set(0), [opacity]);
 
-  const sheen = useMotionTemplate`radial-gradient(185px circle at ${sx}px ${sy}px, rgba(255,255,255,0.46), rgba(90,200,250,0.16) 38%, rgba(94,92,230,0.08) 62%, transparent 80%)`;
-  const rim = useMotionTemplate`radial-gradient(135px circle at ${sx}px 0px, rgba(255,255,255,1), rgba(90,200,250,0.55) 45%, transparent 100%)`;
+  const sheen = useMotionTemplate`radial-gradient(185px circle at ${sx}px ${sy}px, rgba(255,255,255,0.46), rgba(255,255,255,0.14) 38%, rgba(255,255,255,0.05) 62%, transparent 80%)`;
+  const rim = useMotionTemplate`radial-gradient(135px circle at ${sx}px 0px, rgba(255,255,255,1), rgba(255,255,255,0.45) 45%, transparent 100%)`;
 
   return {
     bind: {
@@ -387,25 +396,16 @@ const FOCUS_RING =
 
 // PERF: dock/sheet fixed sirt — scroll paytida har kadrda qayta blur bo‘ladi.
 // 64 px → 24 px: ko‘z ilg‘amaydi, GPU yuki esa bir necha barobar kam.
-const GLASS_SLAB = cn(
-  'border border-white/75 bg-white/[0.78]',
-  'backdrop-blur-xl backdrop-saturate-150',
-  'shadow-[0_20px_50px_-8px_rgba(0,0,0,0.16),0_6px_20px_-2px_rgba(0,0,0,0.08),inset_0_1.5px_1px_0_rgba(255,255,255,0.98),inset_0_-1px_1px_0_rgba(0,122,255,0.08)]',
-  'dark:border-white/[0.16] dark:bg-[#16161a]/[0.80]',
-  'dark:shadow-[0_24px_60px_-8px_rgba(0,0,0,0.75),0_8px_24px_-2px_rgba(0,0,0,0.5),inset_0_1.5px_1px_0_rgba(255,255,255,0.25),inset_0_-1px_1px_0_rgba(90,200,250,0.12)]',
-);
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY GLASS TOKENS — kept only for `reducedTransparency` solid fallbacks.
+// All translucent surfaces now use the `lgx` material system (liquid-glass.css).
+// ─────────────────────────────────────────────────────────────────────────────
 
+/** Fully-opaque fallback when prefers-reduced-transparency: reduce */
 const GLASS_SOLID =
   'border border-black/[0.08] bg-[var(--bg-card)] dark:border-white/[0.14]';
 
-const GLASS_DRAWER = cn(
-  'border border-white/65 bg-white/[0.88]',
-  'backdrop-blur-xl backdrop-saturate-150',
-  'shadow-[inset_0_1.5px_0_rgba(255,255,255,0.96),inset_0_-1px_0_rgba(0,122,255,0.15),0_24px_52px_-12px_rgba(0,0,0,0.3),0_4px_16px_-4px_rgba(0,0,0,0.12)]',
-  'dark:border-white/[0.16] dark:bg-[#141418]/[0.90]',
-  'dark:shadow-[inset_0_1.5px_0_rgba(255,255,255,0.24),inset_0_-1px_0_rgba(10,132,255,0.18),0_28px_60px_-12px_rgba(0,0,0,0.75),0_6px_20px_-4px_rgba(0,0,0,0.45)]',
-);
-
+/** Chip / icon-button — stays as a small Tailwind-based micro-surface */
 const GLASS_CHIP = cn(
   'border border-black/[0.06] bg-black/[0.045] text-secondary',
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_-0.5px_0_rgba(0,0,0,0.04)]',
@@ -413,22 +413,17 @@ const GLASS_CHIP = cn(
   'hover:bg-black/[0.08] dark:hover:bg-white/[0.15]',
 );
 
-// Aktiv linza: nested backdrop-filter YO‘Q (u eng qimmat compositing
-// yo‘llaridan biri). Chuqurlik va shisha qalinligi gradient + ichki
-// soyalar + spekulyar rim bilan beriladi — batafsil `globals.css`da.
-const LENS_ACTIVE = 'lg-dock-lens';
-
 const TAB_IDLE = 'text-[#8E8E93] dark:text-[#98989D]';
-const TAB_ACTIVE = 'text-[#007AFF] dark:text-[#0A84FF]';
+const TAB_ACTIVE = 'text-primary';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * AMBIENT — static gradients, real motion lives in SheenLayer
  * ════════════════════════════════════════════════════════════════════════ */
 
 const AMBIENT_WARM =
-  'radial-gradient(90% 65% at 32% 16%, rgba(255,255,255,0.12), rgba(255,159,10,0.04) 45%, transparent 70%)';
+  'radial-gradient(90% 65% at 32% 16%, rgba(255,255,255,0.14), rgba(255,255,255,0.05) 45%, transparent 70%)';
 const AMBIENT_COOL =
-  'radial-gradient(90% 65% at 68% 84%, rgba(90,200,250,0.18), rgba(94,92,230,0.06) 50%, transparent 70%)';
+  'radial-gradient(90% 65% at 68% 84%, rgba(255,255,255,0.12), rgba(255,255,255,0.04) 50%, transparent 70%)';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * SHEEN LAYER — pointer sheen + ambient drift + refracted chromatic rim
@@ -517,53 +512,8 @@ const TopSpecular = memo(function TopSpecular({
       className={cn('pointer-events-none absolute top-0 z-10', inset)}
     >
       <div className="h-px bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/45" />
-      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-[#5AC8FA]/35 to-transparent dark:via-[#5AC8FA]/25" />
+      <div className="h-[0.5px] bg-gradient-to-r from-transparent via-white/30 to-transparent dark:via-white/15" />
     </div>
-  );
-});
-
-/* ══════════════════════════════════════════════════════════════════════════
- * DOCK LENS — active tab pill (bitta manba: tab ham, “More” ham shundan)
- * ════════════════════════════════════════════════════════════════════════ */
-
-const DockLens = memo(function DockLens({
-  reduced,
-  reducedTransparency,
-}: {
-  reduced: boolean;
-  reducedTransparency: boolean;
-}) {
-  return (
-    <motion.div
-      layoutId="dock-lens-active"
-      transition={
-        reduced ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 30, mass: 0.65 }
-      }
-      aria-hidden="true"
-      className={cn('absolute inset-0.5 z-0 overflow-hidden rounded-full', LENS_ACTIVE)}
-    >
-      {!reducedTransparency && (
-        <>
-          <span aria-hidden="true" className="lg-lens-rim" />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-3 top-0 h-[1px] rounded-full bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/70"
-          />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -left-1 top-0 h-3 w-4 rounded-full bg-gradient-to-br from-white/95 via-[#5AC8FA]/45 to-transparent blur-[1px] dark:from-white/50 dark:via-[#5AC8FA]/30"
-          />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-1 top-0 h-3 w-4 rounded-full bg-gradient-to-bl from-[#5E5CE6]/45 via-white/45 to-transparent blur-[1px] dark:from-[#5E5CE6]/30 dark:via-white/20"
-          />
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-3.5 bottom-0 h-[1px] rounded-full bg-gradient-to-r from-transparent via-apple-blue/60 to-transparent dark:via-[#5AC8FA]/60"
-          />
-        </>
-      )}
-    </motion.div>
   );
 });
 
@@ -587,15 +537,32 @@ export const MobileBottomNav = memo(function MobileBottomNav({
   const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
-  const canHover = useDeviceProfile().hoverCapable;
+  const profile = useDeviceProfile();
+  const canHover = profile.hoverCapable;
 
-  /* ── Optical refraction: faqat sichqoncha/stylus uchun ── */
-  const { bind: refrBind, sheen, rim, opacity: refrOpacity } = useOpticalRefraction(
-    180,
-    28,
-    canHover,
-  );
-  useLiquidDefs(!reducedTransparency);
+  /* ── Real Liquid Glass: refraction defs + adaptive tint + physics ── */
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const canRefract =
+    !reducedTransparency &&
+    !profile.lowPowerMode &&
+    supportsBackdropRefraction();
+  useLiquidGlassLens(dockRef, {
+    enabled: canRefract,
+    radius: 999,
+    bezel: 16,
+    refraction: 1.1,
+    dispersion: 8,
+  });
+  useAdaptiveGlassTint(dockRef, { enabled: !reducedTransparency });
+  useLiquidGlassPhysics(dockRef, {
+    enabled: !reducedTransparency && !reduced,
+    tilt: !reduced,
+    press: !reduced,
+    gyro: !canHover && !reduced,
+    maxTilt: 2.2,
+    scrollRef: scrollContainerRef,
+    scrollMotion: true,
+  });
 
   /* ── Recede while reading down, return on scroll up / route change ── */
   const [dockHidden, setDockHidden] = useState(false);
@@ -709,12 +676,15 @@ export const MobileBottomNav = memo(function MobileBottomNav({
       .filter((item): item is NavItem => Boolean(item));
   }, [normalizedRole]);
 
-  const isTabActive = useMemo(() => {
+  const activeIndex = useMemo(() => {
     const current = location.pathname;
-    return tabs.some((item) =>
+    const index = tabs.findIndex((item) =>
       item.end ? current === item.to : current === item.to || current.startsWith(`${item.to}/`),
     );
+    return index >= 0 ? index : tabs.length; // last slot is "More"
   }, [tabs, location.pathname]);
+
+  const isTabActive = activeIndex < tabs.length;
 
   const handleOpenMore = useCallback(() => {
     triggerHaptic(6);
@@ -746,12 +716,12 @@ export const MobileBottomNav = memo(function MobileBottomNav({
 
   return (
     <>
-      {/* Bottom scrim — fades with the dock, no full-width backdrop blur */}
+      {/* Bottom subtle ambient gradient (loyqa qora parda olib tashlandi, shaffof qoldirildi) */}
       <motion.div
         aria-hidden="true"
         animate={{ opacity: dockHidden ? 0 : 1 }}
         transition={reduced ? { duration: 0 } : { duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-30 h-24 select-none bg-gradient-to-t from-[var(--bg-app,#090d16)]/80 via-[var(--bg-app,#090d16)]/25 to-transparent md:hidden"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-30 h-16 select-none bg-gradient-to-t from-[var(--bg-app,#090d16)]/25 to-transparent md:hidden"
       />
 
       <nav
@@ -777,47 +747,38 @@ export const MobileBottomNav = memo(function MobileBottomNav({
           )}
         >
           <div
-            {...(reducedTransparency || !canHover ? {} : refrBind)}
+            ref={dockRef}
             className={cn(
-              'relative overflow-hidden rounded-full',
-              reducedTransparency ? GLASS_SOLID : 'lg-dock-surface',
+              'lgx lgx-dock lgx--clear',
+              reducedTransparency && 'lgx--solid',
             )}
+            data-lgx-low-power={profile.lowPowerMode ? 'true' : undefined}
+            style={{ '--lgx-tabs': String(tabs.length + 1) } as CSSProperties}
           >
-            {/* ── Liquid Glass optical layers (barchasi statik) ── */}
             {!reducedTransparency && (
               <>
-                {/* Egri yuza gloss + pastki qaytgan yorug‘lik */}
-                <span aria-hidden="true" className="lg-dock-gloss" />
-                <span aria-hidden="true" className="lg-dock-underlight" />
+                <span aria-hidden="true" className="lgx__layer lgx__depth" />
+                <span aria-hidden="true" className="lgx__layer lgx__noise" />
+                <span aria-hidden="true" className="lgx__specular" />
+                <span aria-hidden="true" className="lgx__dispersion" />
+                <span aria-hidden="true" className="lgx__rim" />
+                <span aria-hidden="true" className="lgx__ripple" />
 
-                {/* Chap/o‘ng qirra refraktsiyasi (xromatik dispersiya) */}
-                <span
+                <motion.span
                   aria-hidden="true"
-                  className="lg-dock-edge lg-dock-edge--l"
+                  className="lgx-dock__lens"
+                  initial={false}
+                  animate={{ x: `${activeIndex * 100}%` }}
+                  transition={
+                    reduced
+                      ? { duration: 0 }
+                      : { type: 'spring', stiffness: 430, damping: 34, mass: 0.7 }
+                  }
                 />
-                <span
-                  aria-hidden="true"
-                  className="lg-dock-edge lg-dock-edge--r"
-                />
-
-                <SheenLayer
-                  sheen={sheen}
-                  rim={rim}
-                  opacity={refrOpacity}
-                  driftEnabled={!reduced}
-                  withRim
-                  withRefract={false}
-                />
-
-                <TopSpecular inset="inset-x-10" />
-
-                {/* 1 px spekulyar rim */}
-                <span aria-hidden="true" className="lg-dock-rim" />
               </>
             )}
 
-            <LayoutGroup id="medu-mobile-bottom-dock">
-              <ul className="relative z-10 flex items-stretch p-1 sm:p-1.5">
+            <ul className="relative z-10 flex items-stretch p-1">
                 {tabs.map((item) => (
                   <li key={item.to} className="relative min-w-0 flex-1">
                     <NavLink
@@ -826,124 +787,47 @@ export const MobileBottomNav = memo(function MobileBottomNav({
                       onTouchStart={() => preloadRoute(item.to)}
                       onMouseEnter={() => preloadRoute(item.to)}
                       onClick={() => handleTabClick(item)}
-                      className={cn(
-                        'group relative flex min-h-[3.25rem] w-full touch-manipulation flex-col items-center justify-center rounded-full px-1 py-1',
-                        FOCUS_RING,
-                      )}
+                      className={cn('lgx-dock__tab', FOCUS_RING)}
                     >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && (
-                            <DockLens
-                              reduced={reduced}
-                              reducedTransparency={reducedTransparency}
-                            />
-                          )}
-
-                          <motion.div
-                            whileTap={reduced ? undefined : { scale: 0.92 }}
-                            transition={SPRING_TOUCH}
-                            className="relative z-10 flex flex-col items-center justify-center gap-1"
-                          >
-                            <motion.span
-                              animate={
-                                isActive ? { scale: [0.92, 1.15, 1], y: -1 } : { scale: 1, y: 0 }
-                              }
-                              transition={
-                                reduced
-                                  ? { duration: 0.1 }
-                                  : { type: 'spring', stiffness: 500, damping: 25 }
-                              }
-                              className={cn(
-                                'transition-colors duration-200',
-                                isActive
-                                  ? TAB_ACTIVE
-                                  : cn(TAB_IDLE, 'group-hover:text-primary'),
-                              )}
-                            >
-                              <StaticIcon
-                                paths={item.iconPath}
-                                className="h-[1.25rem] w-[1.25rem]"
-                              />
-                            </motion.span>
-                            <span
-                              className={cn(
-                                'max-w-[4.8rem] truncate text-[10.5px] leading-none tracking-[-0.012em] transition-colors duration-200',
-                                isActive
-                                  ? cn(TAB_ACTIVE, 'font-semibold')
-                                  : cn(TAB_IDLE, 'font-medium'),
-                              )}
-                            >
-                              {tr(t, item.labelKey, item.label)}
-                            </span>
-                          </motion.div>
-                        </>
-                      )}
+                      <span className="lgx-dock__icon" aria-hidden="true">
+                        <StaticIcon
+                          paths={item.iconPath}
+                          className="h-[1.2rem] w-[1.2rem]"
+                        />
+                      </span>
+                      <span className="lgx-dock__label">
+                        {tr(t, item.labelKey, item.label)}
+                      </span>
                     </NavLink>
                   </li>
                 ))}
 
-                {/* Authentic Apple 5th Tab: More Button */}
+                {/* Fifth slot: menu */}
                 <li className="relative min-w-0 flex-1">
-                  <motion.button
+                  <button
                     type="button"
                     onClick={handleOpenMore}
-                    whileTap={reduced ? undefined : { scale: 0.92 }}
-                    transition={SPRING_TOUCH}
                     aria-label={tr(t, 'a11y.openMenu', 'Open menu')}
                     aria-haspopup="dialog"
-                    className={cn(
-                      'group relative flex min-h-[3.25rem] w-full touch-manipulation flex-col items-center justify-center rounded-full px-1 py-1',
-                      'transition-colors duration-200',
-                      !isTabActive ? TAB_ACTIVE : TAB_IDLE,
-                      'hover:bg-black/[0.04] hover:text-primary dark:hover:bg-white/[0.06]',
-                      FOCUS_RING,
-                    )}
+                    data-active={!isTabActive ? 'true' : undefined}
+                    className={cn('lgx-dock__tab', FOCUS_RING)}
                   >
-                    {!isTabActive && (
-                      <DockLens
-                        reduced={reduced}
-                        reducedTransparency={reducedTransparency}
-                      />
-                    )}
-
                     {!isTabActive && (
                       <span
                         aria-hidden="true"
-                        className="absolute right-2.5 top-1.5 z-20 h-1.5 w-1.5 rounded-full bg-apple-blue shadow-[0_0_6px_rgba(0,122,255,0.85)]"
+                        className="absolute right-2.5 top-1.5 z-20 h-1.5 w-1.5 rounded-full bg-[rgb(var(--lgx-ink)/0.55)]"
                       />
                     )}
 
-                    <div className="relative z-10 flex flex-col items-center justify-center gap-1">
-                      <motion.span
-                        animate={
-                          !isTabActive ? { scale: [0.92, 1.15, 1], y: -1 } : { scale: 1, y: 0 }
-                        }
-                        transition={
-                          reduced
-                            ? { duration: 0.1 }
-                            : { type: 'spring', stiffness: 500, damping: 25 }
-                        }
-                        className={cn(
-                          'transition-colors duration-200',
-                          !isTabActive ? TAB_ACTIVE : TAB_IDLE,
-                        )}
-                      >
-                        <StaticIcon paths={I.menu} className="h-[1.25rem] w-[1.25rem]" />
-                      </motion.span>
-                      <span
-                        className={cn(
-                          'max-w-full truncate text-[10.5px] leading-none tracking-[-0.012em] transition-colors',
-                          !isTabActive ? cn(TAB_ACTIVE, 'font-semibold') : 'font-medium',
-                        )}
-                      >
-                        {tr(t, 'nav.more', 'More')}
-                      </span>
-                    </div>
-                  </motion.button>
+                    <span className="lgx-dock__icon" aria-hidden="true">
+                      <StaticIcon paths={I.menu} className="h-[1.2rem] w-[1.2rem]" />
+                    </span>
+                    <span className="lgx-dock__label">
+                      {tr(t, 'nav.more', 'More')}
+                    </span>
+                  </button>
                 </li>
               </ul>
-            </LayoutGroup>
           </div>
         </motion.div>
       </nav>
@@ -977,11 +861,14 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
 }) {
   const { t } = useSafeI18n();
   const drawerRef = useRef<HTMLDivElement | null>(null);
+  // Inner glass surface ref — receives the per-element SVG lens
+  const drawerGlassRef = useRef<HTMLDivElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const soundRef = useStableSound();
   const reduced = usePrefersReducedMotion();
   const reducedTransparency = useMediaQuery('(prefers-reduced-transparency: reduce)');
-  const canHover = useDeviceProfile().hoverCapable;
+  const profile = useDeviceProfile();
+  const canHover = profile.hoverCapable;
 
   const {
     bind: drawerRefrBind,
@@ -990,8 +877,29 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
     opacity: drawerRefrOpacity,
   } = useOpticalRefraction(166, 40, canHover);
 
-  // Keep the filter alive for the whole lifetime so exit animations never
-  // lose their definition mid-flight.
+  /* ── Real Liquid Glass: per-element SVG lens + adaptive tint for drawer ── */
+  const canRefractDrawer =
+    !reducedTransparency &&
+    !profile.lowPowerMode &&
+    supportsBackdropRefraction();
+
+  useLiquidGlassLens(drawerGlassRef, {
+    enabled: canRefractDrawer,
+    // Drawer is a tall vertical slab — large bezel on the right edge only
+    bezel: 20,
+    refraction: 1.0,
+    dispersion: 6,
+  });
+  useAdaptiveGlassTint(drawerGlassRef, { enabled: !reducedTransparency });
+  useLiquidGlassPhysics(drawerGlassRef, {
+    enabled: !reducedTransparency && !reduced,
+    tilt: false,   // drawer slides in, no tilt needed
+    press: !reduced,
+    gyro: false,
+    scrollMotion: false,
+  });
+
+  // Keep the legacy SVG filter alive so exit-animation rim never loses its def.
   useLiquidDefs(!reducedTransparency);
   useFocusTrap(drawerRef, open, closeBtnRef);
   useBodyScrollLock(open);
@@ -1131,25 +1039,31 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
             transition={reduced ? { duration: 0.16 } : DRAWER_SPRING}
             className="absolute left-0 top-0 ml-[max(0.75rem,env(safe-area-inset-left,0px))] mt-[calc(0.75rem+env(safe-area-inset-top,0px))] h-[calc(100dvh-1.5rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[min(338px,88vw)] origin-left transform-gpu will-change-transform"
           >
+            {/* Real Liquid Glass drawer — lgx material system.
+                `lgx--drawer` variant defined in liquid-glass.css gives the
+                vertical slab its convex squircle bezel, adaptive tint, and
+                per-element SVG displacement lens. The old GLASS_DRAWER tokens
+                (plain backdrop-filter + hardcoded rgba wash) are replaced. */}
             <div
+              ref={drawerGlassRef}
               {...(open && !reducedTransparency && canHover ? drawerRefrBind : {})}
               className={cn(
-                'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem]',
-                reducedTransparency ? GLASS_SOLID : GLASS_DRAWER,
+                'lgx lgx--drawer relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem]',
+                reducedTransparency && GLASS_SOLID,
               )}
+              style={{ '--lgx-radius': '2rem' } as React.CSSProperties}
             >
               {!reducedTransparency && (
                 <>
-                  <SheenLayer
-                    sheen={drawerSheen}
-                    rim={drawerRim}
-                    opacity={drawerRefrOpacity}
-                    driftEnabled={!reduced}
-                    withRim
-                    withRefract={false}
-                  />
-                  <TopSpecular inset="inset-x-8" />
+                  {/* lgx__layer set rendered by lgx CSS — depth / noise / specular /
+                      dispersion / rim are painted automatically. We only need the
+                      physics-driven edge caustic that reacts to drag velocity. */}
+                  <span aria-hidden="true" className="lgx__layer lgx__depth" />
+                  <span aria-hidden="true" className="lgx__specular" />
+                  <span aria-hidden="true" className="lgx__rim" />
 
+                  {/* Edge caustic: chromatic fringe that brightens as the drawer
+                      is dragged shut — driven by the same edgeCausticOpacity spring */}
                   <motion.div
                     aria-hidden="true"
                     style={
@@ -1159,15 +1073,6 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                       } as MotionStyle
                     }
                     className="pointer-events-none absolute inset-y-6 right-0 z-20 w-[3px] bg-gradient-to-b from-transparent via-[#5AC8FA] to-transparent shadow-[0_0_16px_2px_rgba(90,200,250,0.65)]"
-                  />
-
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -left-12 -top-12 h-44 w-44 rounded-full bg-apple-blue/12 blur-2xl"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -bottom-8 -right-8 h-32 w-32 rounded-full bg-[#FF9F0A]/10 blur-2xl dark:bg-[#FF9F0A]/14"
                   />
                 </>
               )}
@@ -1215,7 +1120,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                 </Magnetic>
               </div>
 
-              {/* Profile Card: surfaces userName, role, orgName AND userEmail */}
+              {/* Profile Card: Glass capsule without milky opaque background */}
               <motion.div
                 initial={reduced ? false : { y: 12, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -1226,18 +1131,12 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                 <div
                   className={cn(
                     'relative flex items-center gap-3.5 overflow-hidden rounded-[1.6rem] p-3.5',
-                    'border border-black/[0.05] bg-white/70 shadow-[inset_0_1.5px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(120,200,255,0.2),0_8px_20px_-8px_rgba(16,24,40,0.1)]',
-                    'dark:border-white/[0.09] dark:bg-white/[0.06] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_8px_20px_-8px_rgba(0,0,0,0.5)]',
-                    'backdrop-blur-md',
+                    'border border-white/20 bg-white/[0.08] dark:bg-white/[0.04]',
+                    'shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_24px_-8px_rgba(0,0,0,0.15)]',
+                    'backdrop-blur-sm',
                   )}
                 >
-                  {!reducedTransparency && (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/30"
-                    />
-                  )}
-                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-apple-blue to-[#5E5CE6] text-[14px] font-bold tracking-tight text-white shadow-[inset_0_1.5px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(120,200,255,0.4),0_6px_16px_rgba(0,122,255,0.35)]">
+                  <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-apple-blue to-[#5E5CE6] text-[14px] font-bold tracking-tight text-white shadow-[0_4px_12px_rgba(0,122,255,0.35)]">
                     {displayInitials}
                     <span
                       aria-hidden="true"
@@ -1250,7 +1149,7 @@ export const MobileMenuDrawer = memo(function MobileMenuDrawer({
                       {displayName}
                     </p>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="inline-flex shrink-0 items-center rounded-full bg-apple-blue/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-apple-blue dark:bg-apple-blue/20 dark:text-[#5AC8FA]">
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-apple-blue/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-apple-blue dark:text-[#5AC8FA]">
                         {formattedRole}
                       </span>
                       {secondaryMeta && (
@@ -1613,28 +1512,23 @@ export const MobileSearchSheet = memo(function MobileSearchSheet({
             )}
 
             <div {...(reducedTransparency || !canHover ? {} : searchRefrBind)}>
+              {/* GlassSurface already IS the lgx material — do not combine with
+                  GLASS_SLAB (that double-layers blur and overrides the adaptive tint).
+                  reducedTransparency fallback is handled inside GlassSurface itself. */}
               <GlassSurface
                 tone="modal"
                 radius="2.1rem"
                 spotlight={!reducedTransparency}
+                ripple={!reduced && !reducedTransparency}
                 className={cn(
                   'relative overflow-hidden',
-                  reducedTransparency ? GLASS_SOLID : GLASS_SLAB,
+                  reducedTransparency && GLASS_SOLID,
                 )}
               >
-                {!reducedTransparency && (
-                  <>
-                    <SheenLayer
-                      sheen={sheen}
-                      rim={rim}
-                      opacity={opacity}
-                      driftEnabled={!reduced}
-                      withRim
-                      withRefract={false}
-                    />
-                    <TopSpecular inset="inset-x-10" />
-                  </>
-                )}
+                {/* GlassSurface renders lgx__depth, lgx__specular, lgx__rim,
+                    and lgx__dispersion automatically — no SheenLayer needed here.
+                    TopSpecular is kept as a focused-state visual hint only. */}
+                {!reducedTransparency && <TopSpecular inset="inset-x-10" />}
 
                 <div className="relative z-10 flex items-center gap-3 px-[18px] py-4">
                   <motion.span
@@ -1750,7 +1644,7 @@ export const MobileSearchSheet = memo(function MobileSearchSheet({
                                   reduced ? { duration: 0.15 } : SPRING_MORPH
                                 }
                                 aria-hidden="true"
-                                className="absolute inset-0 -z-10 rounded-full border border-apple-blue/30 bg-apple-blue/[0.13] shadow-[inset_0_1px_0_rgba(255,255,255,0.65),inset_0_-1px_0_rgba(120,200,255,0.35)] dark:border-apple-blue/45 dark:bg-apple-blue/[0.22]"
+                                className="absolute inset-0 -z-10 rounded-full border border-black/[0.07] bg-black/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.65),inset_0_-1px_0_rgba(0,0,0,0.04)] dark:border-white/[0.14] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]"
                               />
                             )}
                             {tr(t, scope.labelKey, scope.fallback)}

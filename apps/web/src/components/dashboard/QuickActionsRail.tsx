@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { cn, Icon, type IconName } from '@/lib/design';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 
 interface RailAction {
   key: string;
@@ -31,6 +32,7 @@ interface RailAction {
 export function QuickActionsRail() {
   const { t } = useSafeI18n();
   const sound = usePremiumSound();
+  const cardRef = useDashboardGlassCard<HTMLElement>({ dispersion: 3 });
 
   const actions: RailAction[] = [
     {
@@ -85,23 +87,18 @@ export function QuickActionsRail() {
 
   return (
     <section
+      ref={cardRef}
       aria-labelledby="dashboard-quick-actions"
       className={cn(
-        'vision-card relative isolate overflow-hidden rounded-[2rem] p-4 sm:p-5 backdrop-blur-3xl',
-        'border border-white/60 bg-white/75 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)]',
-        'dark:border-white/[0.12] dark:bg-[#161618]/75 dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)]',
+        'lgx lgx--clear relative isolate overflow-hidden rounded-[2rem] p-4 sm:p-5',
       )}
     >
-      {/* Ambient caustic */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-20 -top-24 -z-10 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(94,92,230,0.16),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(94,92,230,0.22),transparent_70%)]"
-      />
+      <DashboardGlassLayers />
 
-      {/* Top specular hairline */}
+      {/* Neutral volume, no coloured wash. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/25"
+        className="pointer-events-none absolute -right-20 -top-24 -z-10 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.26),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(255,255,255,0.08),transparent_70%)]"
       />
 
       <div className="flex items-center justify-between gap-3">

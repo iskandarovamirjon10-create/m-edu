@@ -193,10 +193,10 @@ describe('Attendance Enterprise Features Suite', () => {
     renderWithProviders(<AttendancePage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Tezkor Davomat')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Tezkor Davomat/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Tezkor Davomat'));
+    fireEvent.click(screen.getByRole('button', { name: /Tezkor Davomat/i }));
 
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -13,7 +13,7 @@
  * ============================================================================
  */
 
-import { useState, useEffect, memo, useCallback, useRef } from 'react';
+import { useState, useEffect, memo, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
@@ -67,11 +67,27 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
   const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [micLevel, setMicLevel] = useState(0); // 0 to 100
+  const [spectrumBars, setSpectrumBars] = useState<number[]>(() => Array(28).fill(8));
   const [selectedWord, setSelectedWord] = useState<PhonemeWord | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+
+  const handlePlayNativeWord = useCallback((wordToSpeak: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(wordToSpeak);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.85; // clearer pace for phonetic analysis
+      window.speechSynthesis.speak(utterance);
+      sound.playTick();
+      haptics.light();
+    } catch {
+      /* ignore audio synthesis error */
+    }
+  }, [sound, haptics]);
 
   const [transcript] = useState(
     'My mentor was an inspiring mathematics teacher who completely transformed how I analyze complex algorithms and structured problem-solving paradigms.',
@@ -127,10 +143,12 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
         audioCtxRef.current = null;
       }
       setMicLevel(0);
+      setSpectrumBars(Array(28).fill(8));
       return;
     }
 
     let active = true;
+    let fallbackTimer: ReturnType<typeof setInterval> | null = null;
 
     async function initMic() {
       try {
@@ -146,9 +164,14 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
           const ctx = new AudioContextClass();
           audioCtxRef.current = ctx;
 
+          if (ctx.state === 'suspended') {
+            await ctx.resume().catch(() => {});
+          }
+
           const source = ctx.createMediaStreamSource(stream);
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 64;
+          analyser.smoothingTimeConstant = 0.8;
           source.connect(analyser);
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -156,11 +179,18 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
           const tick = () => {
             if (!active) return;
             analyser.getByteFrequencyData(dataArray);
+
             let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-              sum += dataArray[i];
+            const bars: number[] = [];
+            const step = Math.max(1, Math.floor(dataArray.length / 28));
+            for (let i = 0; i < 28; i++) {
+              const val = dataArray[i * step] || 0;
+              bars.push(Math.max(8, Math.min(100, Math.round((val / 255) * 100))));
+              sum += val;
             }
-            const avg = sum / dataArray.length;
+            setSpectrumBars(bars);
+
+            const avg = sum / Math.max(1, dataArray.length);
             setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
             animFrameRef.current = requestAnimationFrame(tick);
           };
@@ -168,11 +198,14 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
         }
       } catch {
         // Fallback procedural wave if microphone access is denied
-        const fallbackTimer = setInterval(() => {
+        fallbackTimer = setInterval(() => {
           if (!active) return;
-          setMicLevel(Math.floor(25 + Math.random() * 45));
+          const randLevel = Math.floor(25 + Math.random() * 45);
+          setMicLevel(randLevel);
+          setSpectrumBars(Array.from({ length: 28 }).map((_, i) =>
+            Math.max(8, Math.round(randLevel * (0.5 + Math.sin(i * 0.4) * 0.5)))
+          ));
         }, 120);
-        return () => clearInterval(fallbackTimer);
       }
     }
 
@@ -180,6 +213,7 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
 
     return () => {
       active = false;
+      if (fallbackTimer) clearInterval(fallbackTimer);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [isRecording]);
@@ -211,6 +245,24 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
   const overallScore = Math.round(
     words.reduce((sum, w) => sum + w.score, 0) / Math.max(1, words.length),
   );
+
+  const ieltsInfo = useMemo(() => {
+    if (overallScore >= 95) return { band: '8.5 - 9.0', cefr: 'C2 Proficient' };
+    if (overallScore >= 90) return { band: '8.0 - 8.5', cefr: 'C1+ Advanced' };
+    if (overallScore >= 85) return { band: '7.5', cefr: 'C1 Effective' };
+    if (overallScore >= 80) return { band: '7.0', cefr: 'C1 Competent' };
+    if (overallScore >= 75) return { band: '6.5', cefr: 'B2+ Vantage' };
+    if (overallScore >= 70) return { band: '6.0', cefr: 'B2 Independent' };
+    return { band: '5.5', cefr: 'B1 Intermediate' };
+  }, [overallScore]);
+
+  const handleDownloadReport = useCallback(() => {
+    sound.playSuccess();
+    haptics.success();
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  }, [sound, haptics]);
 
   return (
     <div className="relative isolate overflow-hidden rounded-[2.5rem] border border-white/60 bg-white/[0.85] p-6 shadow-2xl backdrop-blur-3xl dark:border-white/10 dark:bg-[#0c1220]/90">
@@ -266,7 +318,7 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
             <div className="flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 font-mono text-xs font-bold text-rose-500 animate-pulse">
               <span className="h-2 w-2 rounded-full bg-rose-500" />
               <span>
-                Yozilmoqda: {String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}
+                Yozilmoqda: {String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')} ({micLevel}%)
               </span>
             </div>
           )}
@@ -290,17 +342,14 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
       {/* Real-time Spectrum Waveform */}
       {isRecording && (
         <div className="my-4 p-3 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-center gap-1.5 h-14">
-          {Array.from({ length: 28 }).map((_, i) => {
-            const heightFactor = Math.max(8, (micLevel * (0.5 + Math.sin(i * 0.4) * 0.5)));
-            return (
-              <motion.div
-                key={i}
-                className="w-1.5 rounded-full bg-gradient-to-t from-cyan-500 to-blue-400"
-                style={{ height: `${heightFactor}%` }}
-                transition={{ duration: 0.08 }}
-              />
-            );
-          })}
+          {spectrumBars.map((height, i) => (
+            <motion.div
+              key={i}
+              className="w-1.5 rounded-full bg-gradient-to-t from-cyan-500 to-blue-400"
+              style={{ height: `${height}%` }}
+              transition={{ duration: 0.08 }}
+            />
+          ))}
         </div>
       )}
 
@@ -308,7 +357,9 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
       <div className="my-6 rounded-3xl bg-black/[0.02] p-5 border border-black/[0.05] dark:bg-white/[0.02] dark:border-white/[0.05]">
         <div className="flex items-center justify-between mb-3 text-xs text-[var(--text-tertiary)]">
           <span>Har bir so‘zni ustiga bosib fonetik tavsiyani ko‘ring:</span>
-          <span className="font-mono text-emerald-500 font-bold">Umumiy Ball: {overallScore}% (IELTS 7.5)</span>
+          <span className="font-mono text-emerald-500 font-bold">
+            Umumiy Ball: {overallScore}% (IELTS {ieltsInfo.band} · {ieltsInfo.cefr})
+          </span>
         </div>
 
         <div className="flex flex-wrap gap-2 leading-relaxed">
@@ -365,6 +416,15 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
                   <span className="text-xs font-bold text-emerald-400">
                     Aniqlik: {selectedWord.score}%
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => handlePlayNativeWord(selectedWord.word)}
+                    title="Native talaffuzni tinglash"
+                    className="flex items-center gap-1 rounded-lg bg-cyan-500/20 px-2 py-0.5 text-[11px] font-bold text-cyan-300 hover:bg-cyan-500/30 transition-colors"
+                  >
+                    <span>🔊</span>
+                    <span>Tinglash</span>
+                  </button>
                 </div>
                 <p className="text-xs text-zinc-300 mt-1">
                   {selectedWord.feedback || "Talaffuz xalqaro CEFR C1 standartiga to'liq mos keladi."}
@@ -398,10 +458,7 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
 
         <button
           type="button"
-          onClick={() => {
-            haptics.success();
-            sound.playSuccess();
-          }}
+          onClick={handleDownloadReport}
           className="text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:underline"
         >
           To‘liq Fonetik Tahlil PDF Hisobotini Yuklab Olish →

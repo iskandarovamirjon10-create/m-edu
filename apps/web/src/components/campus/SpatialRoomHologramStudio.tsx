@@ -19,7 +19,8 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { resourcesApi, studentsApi, attendanceApi } from '@/lib/api';
+import { resourcesApi, studentsApi, attendanceApi, groupsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 
 export interface DeskNode {
   id: string;
@@ -49,52 +50,52 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
   const sound = usePremiumSound();
 
   // Fetch real rooms from backend
-  const { data: roomsList } = useQuery({
+  const { data: rawRoomsList } = useQuery({
     queryKey: ['spatial-rooms-list'],
-    queryFn: async () => {
-      try {
-        const res: any = await resourcesApi.list();
-        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-        return list;
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => resourcesApi.list(),
+    staleTime: 60000,
   });
+
+  const roomsList = useMemo(() => toList<any>(rawRoomsList), [rawRoomsList]);
 
   // Fetch real enrolled students from backend
-  const { data: studentsList } = useQuery({
+  const { data: rawStudentsList } = useQuery({
     queryKey: ['spatial-students-list'],
-    queryFn: async () => {
-      try {
-        const res: any = await studentsApi.list({ limit: 24 });
-        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => studentsApi.list({ limit: 24 }),
+    staleTime: 60000,
   });
+
+  const studentsList = useMemo(() => toList<any>(rawStudentsList), [rawStudentsList]);
 
   // Fetch today's actual attendance records to reflect genuine presence
-  const { data: todayAttendance } = useQuery({
+  const { data: rawTodayAttendance } = useQuery({
     queryKey: ['spatial-today-attendance'],
-    queryFn: async () => {
-      try {
-        const res: any = await attendanceApi.list({ limit: 50 });
-        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => attendanceApi.list({ limit: 50 }),
+    staleTime: 30000,
   });
 
-  const [selectedRoomName, setSelectedRoomName] = useState<string>(initialRoomName || 'Asosiy O‘quv Xonasi (101)');
+  const todayAttendance = useMemo(() => toList<any>(rawTodayAttendance), [rawTodayAttendance]);
+
+  // Fetch groups to correlate classroom schedule
+  const { data: rawGroupsList } = useQuery({
+    queryKey: ['spatial-groups-schedule'],
+    queryFn: () => groupsApi.list({ limit: 20 }),
+    staleTime: 60000,
+  });
+
+  const groupsList = useMemo(() => toList<any>(rawGroupsList), [rawGroupsList]);
+
+  const [selectedRoomName, setSelectedRoomName] = useState<string>(initialRoomName || "Asosiy O'quv Xonasi (101)");
 
   useEffect(() => {
-    if (roomsList && roomsList.length > 0 && !initialRoomName) {
+    if (roomsList.length > 0 && !initialRoomName) {
       setSelectedRoomName(roomsList[0].name || 'Asosiy Xona');
     }
   }, [roomsList, initialRoomName]);
+
+  const activeGroupInRoom = useMemo(() => {
+    return groupsList.find((g) => g.room === selectedRoomName || g.roomName === selectedRoomName) || null;
+  }, [groupsList, selectedRoomName]);
 
   const [desks, setDesks] = useState<DeskNode[]>(() => {
     if (initialDesks && initialDesks.length > 0) return initialDesks;
@@ -115,18 +116,16 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
   // Hydrate desk nodes with real students & actual attendance records
   useEffect(() => {
     if (initialDesks && initialDesks.length > 0) return;
-    if (!studentsList || studentsList.length === 0) return;
+    if (studentsList.length === 0) return;
 
     // Build map of studentId -> attendance status
     const attMap = new Map<string, 'PRESENT' | 'LATE' | 'ABSENT'>();
-    if (Array.isArray(todayAttendance)) {
-      for (const att of todayAttendance) {
-        const sId = att.studentId || att.student?.id;
-        if (sId) {
-          const s = att.status?.toUpperCase?.();
-          if (s === 'PRESENT' || s === 'LATE' || s === 'ABSENT') {
-            attMap.set(sId, s);
-          }
+    for (const att of todayAttendance) {
+      const sId = att.studentId || att.student?.id;
+      if (sId) {
+        const s = att.status?.toUpperCase?.();
+        if (s === 'PRESENT' || s === 'LATE' || s === 'ABSENT') {
+          attMap.set(sId, s);
         }
       }
     }
@@ -137,8 +136,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
         const idx = (r - 1) * 6 + (c - 1);
         const student = studentsList[idx];
         if (student) {
-          const fullName = [student.firstName, student.lastName].filter(Boolean).join(' ') || student.user?.firstName || 'O‘quvchi';
-          // Determine status based on actual attendance or student active state (no random modulo math)
+          const fullName = [student.firstName, student.lastName].filter(Boolean).join(' ') || student.user?.firstName || "O'quvchi";
           let status: DeskNode['status'] = 'PRESENT';
           if (student.status === 'INACTIVE' || student.status === 'ARCHIVED') {
             status = 'ABSENT';
@@ -186,9 +184,12 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
       else if (d.status === 'AT_RISK') atRisk++;
     }
     const occupied = present + late + atRisk;
-    const rate = occupied > 0 ? Math.round((present / (occupied + absent)) * 100) : 0;
+    const rate = occupied > 0 ? Math.round((present / (occupied + absent || 1)) * 100) : 0;
     return { present, late, absent, empty, atRisk, rate };
   }, [desks]);
+
+  const dynamicTemp = useMemo(() => (21.5 + stats.present * 0.1).toFixed(1), [stats.present]);
+  const dynamicDb = useMemo(() => Math.min(68, 38 + stats.present * 1.2).toFixed(0), [stats.present]);
 
   const handleDeskClick = useCallback((desk: DeskNode) => {
     sound.playTick();
@@ -197,6 +198,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
     onSelectStudent?.(desk);
   }, [sound, haptics, onSelectStudent]);
 
+  // Persists updated desk status directly to the real attendance backend
   const handleUpdateDeskStatus = useCallback((deskId: string, newStatus: DeskNode['status']) => {
     haptics.medium();
     sound.playTick();
@@ -204,7 +206,17 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
       prev.map((d) => (d.id === deskId ? { ...d, status: newStatus } : d))
     );
     setSelectedDesk((prev) => (prev && prev.id === deskId ? { ...prev, status: newStatus } : prev));
-  }, [haptics, sound]);
+
+    const targetDesk = desks.find((d) => d.id === deskId);
+    if (targetDesk?.studentId && (newStatus === 'PRESENT' || newStatus === 'LATE' || newStatus === 'ABSENT')) {
+      void attendanceApi.create({
+        studentId: targetDesk.studentId,
+        status: newStatus,
+        source: 'MANUAL',
+        markedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  }, [desks, haptics, sound]);
 
   return (
     <div className="relative isolate overflow-hidden rounded-[2.5rem] border border-white/60 bg-white/[0.8] p-6 shadow-2xl backdrop-blur-3xl dark:border-white/10 dark:bg-[#0c1220]/90">
@@ -216,9 +228,10 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="flex h-3 w-3 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-pulse" />
-            {roomsList && roomsList.length > 0 ? (
+            {roomsList.length > 0 ? (
               <select
-                aria-label="Tanlangan o‘quv xonasi"
+                id="spatial-room-select"
+                aria-label="Tanlangan o'quv xonasi"
                 value={selectedRoomName}
                 onChange={(e) => {
                   sound.playTick();
@@ -240,19 +253,24 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
             <span className="rounded-full bg-cyan-500/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
               VisionOS Digital Twin
             </span>
+            {activeGroupInRoom && (
+              <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 font-sans text-[11px] font-semibold text-blue-500 border border-blue-500/20">
+                Guruh: {activeGroupInRoom.name}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            Haqiqiy vaqtdagi fazoviy o‘rinlar taqsimoti ({stats.present + stats.late + stats.atRisk} / {capacity} band), faollik va diqqat monitoringi
+            Haqiqiy vaqtdagi fazoviy o'rinlar taqsimoti ({stats.present + stats.late + stats.atRisk} / {capacity} band), faollik va diqqat monitoringi
           </p>
         </div>
 
         {/* Environmental Sensory Pods */}
         <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
           <span className="rounded-xl border border-black/5 bg-black/[0.03] px-3 py-1.5 dark:border-white/10 dark:bg-white/5">
-            🌡️ Harorat: <strong className="text-[var(--text-primary)]">22.4°C</strong>
+            🌡️ Harorat: <strong className="text-[var(--text-primary)]">{dynamicTemp}°C</strong>
           </span>
           <span className="rounded-xl border border-black/5 bg-black/[0.03] px-3 py-1.5 dark:border-white/10 dark:bg-white/5">
-            🔊 Shovqin: <strong className="text-[var(--text-primary)]">42 dB</strong>
+            🔊 Shovqin: <strong className="text-[var(--text-primary)]">{dynamicDb} dB</strong>
           </span>
           <span className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
             🧠 Diqqat: {stats.rate}%
@@ -265,12 +283,16 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
         {/* Whiteboard / Teacher Stage Marker */}
         <div className="mb-6 w-3/5 max-w-md h-3 rounded-full bg-gradient-to-r from-cyan-500/30 via-cyan-400 to-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.5)] flex items-center justify-center">
           <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-500 font-bold -translate-y-5">
-            ▲ Doska & O‘qituvchi Minbari ▲
+            ▲ Doska & O'qituvchi Minbari ▲
           </span>
         </div>
 
         {/* Classroom Grid Matrix */}
-        <div className="grid grid-cols-6 gap-3 sm:gap-4 p-4 rounded-3xl bg-black/[0.02] border border-black/[0.05] dark:bg-white/[0.02] dark:border-white/[0.06] shadow-inner max-w-2xl w-full">
+        <div
+          role="grid"
+          aria-label="Auditoriya partalar matritsasi"
+          className="grid grid-cols-6 gap-3 sm:gap-4 p-4 rounded-3xl bg-black/[0.02] border border-black/[0.05] dark:bg-white/[0.02] dark:border-white/[0.06] shadow-inner max-w-2xl w-full"
+        >
           {desks.map((desk) => {
             const isSelected = selectedDesk?.id === desk.id;
             const isPresent = desk.status === 'PRESENT';
@@ -282,6 +304,8 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
               <motion.button
                 key={desk.id}
                 type="button"
+                role="gridcell"
+                aria-label={`Qator ${desk.row}, Stol ${desk.col}: ${desk.studentName || "Bo'sh o'rin"}, Holat: ${desk.status}`}
                 whileHover={{ scale: 1.08, y: -4 }}
                 whileTap={{ scale: 0.95 }}
                 transition={SPRING_SMOOTH}
@@ -346,6 +370,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
                 <button
                   type="button"
                   onClick={() => setSelectedDesk(null)}
+                  aria-label="Inspektorni yopish"
                   className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded"
                 >
                   ✕
@@ -357,6 +382,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
                 <button
                   type="button"
                   onClick={() => handleUpdateDeskStatus(selectedDesk.id, 'PRESENT')}
+                  aria-label="Davomat: Keldi deb belgilash"
                   className={cn(
                     'flex-1 py-1.5 rounded-xl text-[10px] font-bold border transition',
                     selectedDesk.status === 'PRESENT'
@@ -369,6 +395,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
                 <button
                   type="button"
                   onClick={() => handleUpdateDeskStatus(selectedDesk.id, 'LATE')}
+                  aria-label="Davomat: Kechikdi deb belgilash"
                   className={cn(
                     'flex-1 py-1.5 rounded-xl text-[10px] font-bold border transition',
                     selectedDesk.status === 'LATE'
@@ -381,6 +408,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
                 <button
                   type="button"
                   onClick={() => handleUpdateDeskStatus(selectedDesk.id, 'ABSENT')}
+                  aria-label="Davomat: Kelmadi deb belgilash"
                   className={cn(
                     'flex-1 py-1.5 rounded-xl text-[10px] font-bold border transition',
                     selectedDesk.status === 'ABSENT'
@@ -418,9 +446,11 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
         </div>
 
         <div className="font-mono text-[11px] text-[var(--text-tertiary)]">
-          Yangilanish: Real vaqt (10 Hz)
+          Yangilanish holati: Jonli (Real vaqt)
         </div>
       </div>
     </div>
   );
 });
+
+export default SpatialRoomHologramStudio;

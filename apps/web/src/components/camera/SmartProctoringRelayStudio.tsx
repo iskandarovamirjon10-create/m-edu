@@ -44,6 +44,36 @@ export interface CameraFeedConfig {
   activeExaminees: number;
 }
 
+export const DEFAULT_CAMERAS: CameraFeedConfig[] = [
+  {
+    id: 'cam-01',
+    name: 'Kamera #1 (Asosiy Auditoriya)',
+    room: 'Katta Imtihon Zali',
+    status: 'LIVE',
+    fps: 30,
+    latencyMs: 16,
+    activeExaminees: 18,
+  },
+  {
+    id: 'cam-02',
+    name: 'Kamera #2 (Orqa Burchak)',
+    room: 'Katta Imtihon Zali (Orqa)',
+    status: 'LIVE',
+    fps: 30,
+    latencyMs: 19,
+    activeExaminees: 12,
+  },
+  {
+    id: 'cam-03',
+    name: 'Kamera #3 (Turniket & Kirish)',
+    room: 'Kutish Zali & Kirish',
+    status: 'LIVE',
+    fps: 25,
+    latencyMs: 22,
+    activeExaminees: 6,
+  },
+];
+
 export interface SmartProctoringRelayStudioProps {
   className?: string;
   examTitle?: string;
@@ -82,17 +112,7 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
     },
   });
 
-  const [cameras, setCameras] = useState<CameraFeedConfig[]>([
-    {
-      id: 'cam-01',
-      name: 'Kamera #1 (Asosiy Auditoriya)',
-      room: 'Katta Imtihon Zali',
-      status: 'LIVE',
-      fps: 30,
-      latencyMs: 16,
-      activeExaminees: 18,
-    },
-  ]);
+  const [cameras, setCameras] = useState<CameraFeedConfig[]>(DEFAULT_CAMERAS);
 
   useEffect(() => {
     if (realCamerasData && realCamerasData.length > 0) {
@@ -118,6 +138,7 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
   const [ambientDb, setAmbientDb] = useState(38);
   const [overallIntegrity, setOverallIntegrity] = useState(98.5);
   const [alertingDesk, setAlertingDesk] = useState<number | null>(null);
+  const [isEmergencySiren, setIsEmergencySiren] = useState(false);
 
   // Live acoustic noise & integrity jitter simulation
   useEffect(() => {
@@ -158,14 +179,44 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
       targetStudentName = [st.firstName, st.lastName].filter(Boolean).join(' ') || st.user?.firstName || targetStudentName;
     }
 
+    const INCIDENT_PRESETS: Array<{ severity: 'CRITICAL' | 'WARNING' | 'INFO'; reason: string; confidence: number }> = [
+      {
+        severity: 'CRITICAL',
+        reason: 'Smartfon ekrani yaltirashi aniqlandi (Optical Signature 94%)',
+        confidence: 94,
+      },
+      {
+        severity: 'WARNING',
+        reason: "Nigoh vektori qo'shni partaga og'di (Gaze Deviation 48°)",
+        confidence: 84,
+      },
+      {
+        severity: 'WARNING',
+        reason: 'Akustik shovqin chegarasi oshdi (Pichirlash / Shovqin 52 dB)',
+        confidence: 78,
+      },
+      {
+        severity: 'CRITICAL',
+        reason: "Taqiqlangan qog'oz (shpargalka) uzatish harakati aniqlandi",
+        confidence: 91,
+      },
+      {
+        severity: 'CRITICAL',
+        reason: 'Kamerada ikkinchi shaxs silueti aniqlandi (Multi-Face alert)',
+        confidence: 89,
+      },
+    ];
+
+    const pick = INCIDENT_PRESETS[Math.floor(Math.random() * INCIDENT_PRESETS.length)];
+
     const newInc: ProctoringIncident = {
       id: `inc-${Date.now()}`,
       time: new Date().toLocaleTimeString('uz-UZ'),
       deskNumber: randDesk,
       studentName: targetStudentName,
-      severity: 'CRITICAL',
-      reason: "Smartfon ekrani yaltirashi aniqlandi (Optical Signature 94%)",
-      confidence: 94,
+      severity: pick.severity,
+      reason: pick.reason,
+      confidence: pick.confidence,
       resolved: false,
     };
     setIncidents((prev) => [newInc, ...prev]);
@@ -173,7 +224,48 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
     setTimeout(() => setAlertingDesk(null), 3000);
   }, [haptics, sound, realStudentsData]);
 
-  const activeCamera = cameras.find((c) => c.id === selectedCam) || cameras[0];
+  const handleToggleEmergencySiren = useCallback(() => {
+    haptics.heavy();
+    sound.playError();
+    setIsEmergencySiren((prev) => !prev);
+  }, [haptics, sound]);
+
+  const handleExportIncidentAudit = useCallback(() => {
+    haptics.success();
+    sound.playSuccess();
+    if (typeof window !== 'undefined') {
+      const auditSummary = [
+        `=======================================================`,
+        `M-EDU IMTIHON NAZORATI & SMART PROCTORING BAYONNOMASI`,
+        `=======================================================`,
+        `Imtihon nomi: ${examTitle}`,
+        `Sana va Vaqt: ${new Date().toLocaleString('uz-UZ')}`,
+        `Imtihon Tozalik Indeksi: ${overallIntegrity}%`,
+        `Akustik Shovqin: ${ambientDb} dB`,
+        `Nazoratdagi Kameralar: ${cameras.length}`,
+        `Faol Shubhali Holatlar: ${incidents.filter((i) => !i.resolved).length}`,
+        `-------------------------------------------------------`,
+        `QAYD ETILGAN HOLATLAR RO'YXATI:`,
+        ...(incidents.length > 0
+          ? incidents.map(
+              (inc, idx) =>
+                `${idx + 1}. [${inc.time}] Stol #${inc.deskNumber} - ${inc.studentName} | Xavf: ${inc.severity} (${inc.confidence}%) | Sabab: ${inc.reason} | Holat: ${inc.resolved ? 'HAL ETILDI' : 'FAOL'}`
+            )
+          : ["Holatlar qayd etilmagan (Barcha me'yorlar ideal)."]),
+        `=======================================================`,
+      ].join('\n');
+
+      const blob = new Blob([auditSummary], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Proctoring_Bayonnoma_${new Date().toISOString().slice(0, 10)}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }, [haptics, sound, examTitle, overallIntegrity, ambientDb, cameras.length, incidents]);
+
+  const activeCamera = cameras.find((c) => c.id === selectedCam) || cameras[0] || DEFAULT_CAMERAS[0];
 
   return (
     <div
@@ -223,9 +315,18 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
           <div className="h-8 w-px bg-white/10" />
           <div>
             <div className="text-[10px] uppercase font-bold text-zinc-400">Akustik Shovqin</div>
-            <div className="text-lg font-black text-sky-400 flex items-center gap-1">
-              <span>{ambientDb} dB</span>
-              <span className="text-[10px] font-normal text-zinc-400">Sukunat</span>
+            <div className="text-lg font-black flex items-center gap-1.5">
+              <span className={ambientDb > 45 ? 'text-amber-400' : 'text-sky-400'}>{ambientDb} dB</span>
+              <span
+                className={cn(
+                  'text-[10px] px-1.5 py-0.5 rounded font-semibold',
+                  ambientDb > 45
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-sky-500/10 text-zinc-400'
+                )}
+              >
+                {ambientDb > 45 ? 'Shovqin Bor' : 'Sukunat'}
+              </span>
             </div>
           </div>
           <div className="h-8 w-px bg-white/10" />
@@ -248,17 +349,54 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
             {/* Simulated Room Video Background */}
             <div className="absolute inset-0 bg-gradient-to-tr from-zinc-900 via-slate-900 to-black opacity-90" />
 
-            {/* Simulated Grid Matrix of Desks */}
-            <div className="absolute inset-0 grid grid-cols-4 grid-rows-3 gap-4 p-8 opacity-40 pointer-events-none">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border border-white/10 bg-white/[0.02] flex flex-col items-center justify-center p-2"
-                >
-                  <span className="text-[9px] font-mono text-zinc-500">STOL #{i + 1}</span>
-                  <div className="h-6 w-8 rounded bg-white/5 mt-1 border border-white/5" />
+            {/* Emergency Siren Active Overlay */}
+            {isEmergencySiren && (
+              <div className="absolute inset-0 bg-rose-600/30 backdrop-blur-sm z-20 flex flex-col items-center justify-center animate-pulse pointer-events-none">
+                <div className="text-4xl mb-2">🚨</div>
+                <div className="text-xs md:text-sm font-black text-white bg-rose-700/90 px-4 py-1.5 rounded-full uppercase tracking-widest border border-rose-400 shadow-2xl">
+                  FAVQULODDA SIGNAL FAOL · BUTUN ZALGA OVOZLI OGOHLANTIRISH
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Simulated Grid Matrix of Desks with Live Incident & Alert Reflectors */}
+            <div className="absolute inset-0 grid grid-cols-4 grid-rows-3 gap-3 p-6 pointer-events-none">
+              {Array.from({ length: 12 }).map((_, i) => {
+                const deskNum = i + 1;
+                const isAlerting = alertingDesk === deskNum;
+                const activeDeskInc = incidents.find((inc) => !inc.resolved && inc.deskNumber === deskNum);
+
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'rounded-xl border transition-all duration-300 flex flex-col items-center justify-center p-2 backdrop-blur-sm',
+                      isAlerting
+                        ? 'border-rose-500 bg-rose-500/30 text-rose-300 ring-2 ring-rose-500 animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.5)]'
+                        : activeDeskInc
+                        ? 'border-amber-400 bg-amber-500/20 text-amber-300 ring-1 ring-amber-400/50'
+                        : 'border-white/10 bg-white/[0.02] text-zinc-500 opacity-60'
+                    )}
+                  >
+                    <span className="text-[9px] font-mono font-bold">STOL #{deskNum}</span>
+                    <div
+                      className={cn(
+                        'h-5 w-8 rounded mt-1 border transition',
+                        isAlerting
+                          ? 'bg-rose-500/60 border-rose-400'
+                          : activeDeskInc
+                          ? 'bg-amber-500/40 border-amber-300'
+                          : 'bg-white/5 border-white/5'
+                      )}
+                    />
+                    {activeDeskInc && (
+                      <span className="text-[7.5px] font-bold text-amber-200 mt-0.5 truncate max-w-[80px]">
+                        ⚠️ {activeDeskInc.confidence}%
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* AI HUD Bounding Box Overlay on Suspicious Desk (Stol #14) */}
@@ -346,7 +484,7 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
 
           {/* Camera Selector Tabs */}
           <div className="grid grid-cols-3 gap-3">
-            {INITIAL_CAMERAS.map((cam) => {
+            {cameras.map((cam) => {
               const isSelected = selectedCam === cam.id;
               return (
                 <button
@@ -460,24 +598,24 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
             <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
               <button
                 type="button"
-                onClick={() => {
-                  haptics.heavy();
-                  sound.playError();
-                }}
-                className="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white transition shadow-lg flex items-center justify-center gap-2"
+                onClick={handleToggleEmergencySiren}
+                className={cn(
+                  'w-full py-2.5 rounded-xl text-xs font-bold transition shadow-lg flex items-center justify-center gap-2',
+                  isEmergencySiren
+                    ? 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white'
+                )}
               >
-                <span>🚨</span> Butun Zalga Favqulodda Ovozli Signal
+                <span>🚨</span>
+                <span>{isEmergencySiren ? 'Favqulodda Ovozni O‘chirish' : 'Butun Zalga Favqulodda Ovozli Signal'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  haptics.success();
-                  sound.playSuccess();
-                }}
+                onClick={handleExportIncidentAudit}
                 className="w-full py-2 rounded-xl text-[11px] font-semibold bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition flex items-center justify-center gap-1.5"
               >
-                <span>📋</span> PDF Xolislik Bayonnomasini Eksport Qilish
+                <span>📋</span> PDF / Matn Bayonnomasini Yuklab Olish
               </button>
             </div>
           </div>

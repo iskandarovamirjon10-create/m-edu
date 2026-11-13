@@ -1,17 +1,11 @@
-import { memo, useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { memo, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import {
   Flame,
   Award,
   CheckCircle2,
   Share2,
-  Download,
-  Sparkles,
-  TrendingUp,
   BrainCircuit,
-  QrCode,
-  ShieldCheck,
-  ChevronRight,
   Zap,
 } from 'lucide-react';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -46,7 +40,17 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
   const [activeRing, setActiveRing] = useState<'all' | 'attendance' | 'academic' | 'homework'>('all');
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Normalized and safe metric calculations
+  const attendanceRate = Math.min(100, Math.max(0, Number(metrics.attendanceRate) || 0));
+  const academicMastery = Math.min(100, Math.max(0, Number(metrics.academicMastery) || 0));
+  const completedHw = Math.max(0, Number(metrics.completedHomeworks) || 0);
+  const totalHw = Math.max(0, Number(metrics.totalHomeworks) || 0);
+  const homeworkRate = totalHw > 0
+    ? Math.min(100, Math.max(0, Math.round((completedHw / totalHw) * 100)))
+    : Math.min(100, Math.max(0, Number(metrics.homeworkRate) || 0));
+  const streakDays = Math.max(0, Number(metrics.attendanceStreakDays) || 0);
+  const overallScore = Math.round((attendanceRate + academicMastery + homeworkRate) / 3);
 
   // SVG Concentric Ring geometry
   const center = 100;
@@ -60,30 +64,30 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
   const middleC = getCircumference(middleR);
   const innerC = getCircumference(innerR);
 
-  const outerOffset = outerC - (Math.min(100, Math.max(0, metrics.attendanceRate)) / 100) * outerC;
-  const middleOffset = middleC - (Math.min(100, Math.max(0, metrics.academicMastery)) / 100) * middleC;
-  const innerOffset = innerC - (Math.min(100, Math.max(0, metrics.homeworkRate)) / 100) * innerC;
+  const outerOffset = outerC - (attendanceRate / 100) * outerC;
+  const middleOffset = middleC - (academicMastery / 100) * middleC;
+  const innerOffset = innerC - (homeworkRate / 100) * innerC;
 
   // AI Diagnostic Generation
   const aiDiagnosis = {
     strengths:
-      metrics.attendanceRate >= 90
+      attendanceRate >= 90
         ? "Namunali intizom: dars qoldirmaslik koeffitsienti yuqori va doimiy diqqat mavjud."
         : "Faol qatnashuv: amaliy mashg'ulotlarda tashabbuskorlik ko'rsatmoqda.",
     growthAreas:
-      metrics.homeworkRate < 80
+      homeworkRate < 80
         ? "Mustaqil topshiriqlarni topshirish muddatlariga qat'iy rioya qilish tavsiya etiladi."
         : "Murakkabroq olimpiada yoki portfolio loyihalariga jalb etish maqsadga muvofiq.",
     parentAdvice:
-      metrics.academicMastery >= 85
+      academicMastery >= 85
         ? "O'quvchining yuqori sur'atini qo'llab-quvvatlang va xalqaro sertifikat imtihonlariga yo'naltiring."
         : "Uyda haftada kamida 4 soat konsentratsiyalangan mustaqil amaliyot muhitini yarating.",
   };
 
   // Generate 1080x1920 Story Card
   const handleExportStory = useCallback(async () => {
-    sound?.play('tap');
-    haptics?.trigger?.('medium');
+    sound?.playTick?.();
+    haptics?.medium?.();
     setIsExporting(true);
 
     try {
@@ -92,6 +96,21 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
       canvas.height = 1920;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas 2D context unavailable');
+
+      // Safe roundRect helper
+      const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(x, y, w, h, r);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.arcTo(x + w, y, x + w, y + h, r);
+          ctx.arcTo(x + w, y + h, x, y + h, r);
+          ctx.arcTo(x, y + h, x, y, r);
+          ctx.arcTo(x, y, x + w, y, r);
+          ctx.closePath();
+        }
+      };
 
       // Background gradient
       const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920);
@@ -128,7 +147,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(80, 240, 920, 220, 32);
+      drawRoundRect(80, 240, 920, 220, 32);
       ctx.fill();
       ctx.stroke();
 
@@ -165,16 +184,15 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
         }
       };
 
-      drawCanvasRing(210, 32, metrics.attendanceRate, '#ff2d55', 'rgba(255, 45, 85, 0.2)');
-      drawCanvasRing(158, 32, metrics.academicMastery, '#34c759', 'rgba(52, 199, 89, 0.2)');
-      drawCanvasRing(106, 32, metrics.homeworkRate, '#0a84ff', 'rgba(10, 132, 255, 0.2)');
+      drawCanvasRing(210, 32, attendanceRate, '#ff2d55', 'rgba(255, 45, 85, 0.2)');
+      drawCanvasRing(158, 32, academicMastery, '#34c759', 'rgba(52, 199, 89, 0.2)');
+      drawCanvasRing(106, 32, homeworkRate, '#0a84ff', 'rgba(10, 132, 255, 0.2)');
 
       // Center Icon or Score
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 50px -apple-system, sans-serif';
       ctx.textAlign = 'center';
-      const avg = Math.round((metrics.attendanceRate + metrics.academicMastery + metrics.homeworkRate) / 3);
-      ctx.fillText(`${avg}%`, ringCenterX, ringCenterY + 12);
+      ctx.fillText(`${overallScore}%`, ringCenterX, ringCenterY + 12);
       ctx.font = '22px -apple-system, sans-serif';
       ctx.fillStyle = '#94a3b8';
       ctx.fillText('UMUMIY INDEKS', ringCenterX, ringCenterY + 50);
@@ -185,7 +203,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
         ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.beginPath();
-        ctx.roundRect(80, y, 920, 120, 24);
+        drawRoundRect(80, y, 920, 120, 24);
         ctx.fill();
         ctx.stroke();
 
@@ -209,15 +227,15 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
         ctx.textAlign = 'left';
       };
 
-      drawLegendPill(1080, '#ff2d55', 'Davomat & Streak', `${metrics.attendanceRate}%`, `${metrics.attendanceStreakDays} kun davomiy streak`);
-      drawLegendPill(1230, '#34c759', 'Akademik O\'zlashtirish', `${metrics.academicMastery}%`, 'Imtihon va test ko\'rsatkichlari');
-      drawLegendPill(1380, '#0a84ff', 'Vazifalar & Amaliyot', `${metrics.homeworkRate}%`, `${metrics.completedHomeworks}/${metrics.totalHomeworks} topshirilgan`);
+      drawLegendPill(1080, '#ff2d55', 'Davomat & Streak', `${attendanceRate}%`, `${streakDays} kun davomiy streak`);
+      drawLegendPill(1230, '#34c759', 'Akademik O\'zlashtirish', `${academicMastery}%`, 'Imtihon va test ko\'rsatkichlari');
+      drawLegendPill(1380, '#0a84ff', 'Vazifalar & Amaliyot', `${homeworkRate}%`, `${completedHw}/${totalHw} topshirilgan`);
 
       // AI Seal & Footer
       ctx.fillStyle = 'rgba(147, 51, 234, 0.12)';
       ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
       ctx.beginPath();
-      ctx.roundRect(80, 1540, 920, 240, 28);
+      drawRoundRect(80, 1540, 920, 240, 28);
       ctx.fill();
       ctx.stroke();
 
@@ -243,17 +261,17 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
       link.href = dataUrl;
       link.click();
 
-      sound?.play('success');
-      haptics?.trigger?.('success');
+      sound?.playSuccess?.();
+      haptics?.success?.();
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
     } catch (err) {
       console.error('Story export error:', err);
-      sound?.play('error');
+      sound?.playError?.();
     } finally {
       setIsExporting(false);
     }
-  }, [metrics, sound, haptics, aiDiagnosis]);
+  }, [metrics, sound, haptics, aiDiagnosis, attendanceRate, academicMastery, homeworkRate, streakDays, completedHw, totalHw, overallScore]);
 
   return (
     <div
@@ -313,7 +331,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
         <div className="flex flex-col items-center justify-center lg:col-span-5">
           <div className="relative flex h-56 w-56 items-center justify-center">
             <svg
-              className="h-full w-full -rotate-90 transform"
+              className="h-full w-full -rotate-90 transform cursor-pointer"
               viewBox="0 0 200 200"
             >
               {/* Outer Ring: Attendance / Streak (Red-Rose) */}
@@ -329,14 +347,22 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
                 cx={center}
                 cy={center}
                 r={outerR}
-                className="stroke-rose-500"
+                className="stroke-rose-500 cursor-pointer"
                 strokeWidth={strokeWidth}
                 strokeDasharray={outerC}
                 initial={{ strokeDashoffset: outerC }}
-                animate={{ strokeDashoffset: outerOffset }}
+                animate={{
+                  strokeDashoffset: outerOffset,
+                  opacity: activeRing === 'all' || activeRing === 'attendance' ? 1 : 0.22,
+                }}
                 transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
                 strokeLinecap="round"
                 fill="none"
+                onClick={() => {
+                  sound?.playTick?.();
+                  haptics?.light?.();
+                  setActiveRing(activeRing === 'attendance' ? 'all' : 'attendance');
+                }}
               />
 
               {/* Middle Ring: Academic Mastery (Emerald-Green) */}
@@ -352,14 +378,22 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
                 cx={center}
                 cy={center}
                 r={middleR}
-                className="stroke-emerald-500"
+                className="stroke-emerald-500 cursor-pointer"
                 strokeWidth={strokeWidth}
                 strokeDasharray={middleC}
                 initial={{ strokeDashoffset: middleC }}
-                animate={{ strokeDashoffset: middleOffset }}
+                animate={{
+                  strokeDashoffset: middleOffset,
+                  opacity: activeRing === 'all' || activeRing === 'academic' ? 1 : 0.22,
+                }}
                 transition={{ duration: 1.4, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
                 strokeLinecap="round"
                 fill="none"
+                onClick={() => {
+                  sound?.playTick?.();
+                  haptics?.light?.();
+                  setActiveRing(activeRing === 'academic' ? 'all' : 'academic');
+                }}
               />
 
               {/* Inner Ring: Homework & Projects (Sky-Blue) */}
@@ -375,24 +409,44 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
                 cx={center}
                 cy={center}
                 r={innerR}
-                className="stroke-sky-500"
+                className="stroke-sky-500 cursor-pointer"
                 strokeWidth={strokeWidth}
                 strokeDasharray={innerC}
                 initial={{ strokeDashoffset: innerC }}
-                animate={{ strokeDashoffset: innerOffset }}
+                animate={{
+                  strokeDashoffset: innerOffset,
+                  opacity: activeRing === 'all' || activeRing === 'homework' ? 1 : 0.22,
+                }}
                 transition={{ duration: 1.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 strokeLinecap="round"
                 fill="none"
+                onClick={() => {
+                  sound?.playTick?.();
+                  haptics?.light?.();
+                  setActiveRing(activeRing === 'homework' ? 'all' : 'homework');
+                }}
               />
             </svg>
 
             {/* Central Badge */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                {Math.round((metrics.attendanceRate + metrics.academicMastery + metrics.homeworkRate) / 3)}%
+                {activeRing === 'attendance'
+                  ? `${attendanceRate}%`
+                  : activeRing === 'academic'
+                  ? `${academicMastery}%`
+                  : activeRing === 'homework'
+                  ? `${homeworkRate}%`
+                  : `${overallScore}%`}
               </span>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Score
+                {activeRing === 'attendance'
+                  ? 'Davomat'
+                  : activeRing === 'academic'
+                  ? 'Akademik'
+                  : activeRing === 'homework'
+                  ? 'Vazifalar'
+                  : 'Score'}
               </span>
             </div>
           </div>
@@ -401,7 +455,11 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              onClick={() => setActiveRing('all')}
+              onClick={() => {
+                sound?.playTick?.();
+                haptics?.light?.();
+                setActiveRing('all');
+              }}
               className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 activeRing === 'all'
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
@@ -412,7 +470,11 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
             </button>
             <button
               type="button"
-              onClick={() => setActiveRing('attendance')}
+              onClick={() => {
+                sound?.playTick?.();
+                haptics?.light?.();
+                setActiveRing('attendance');
+              }}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 activeRing === 'attendance'
                   ? 'bg-rose-500 text-white'
@@ -424,7 +486,11 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
             </button>
             <button
               type="button"
-              onClick={() => setActiveRing('academic')}
+              onClick={() => {
+                sound?.playTick?.();
+                haptics?.light?.();
+                setActiveRing('academic');
+              }}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 activeRing === 'academic'
                   ? 'bg-emerald-500 text-white'
@@ -436,7 +502,11 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
             </button>
             <button
               type="button"
-              onClick={() => setActiveRing('homework')}
+              onClick={() => {
+                sound?.playTick?.();
+                haptics?.light?.();
+                setActiveRing('homework');
+              }}
               className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 activeRing === 'homework'
                   ? 'bg-sky-500 text-white'
@@ -453,7 +523,12 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
         <div className="space-y-3 lg:col-span-7">
           {/* 1. Davomat & Streak Card */}
           <div
-            className={`flex items-center justify-between rounded-2xl border p-4 transition-all ${
+            onClick={() => {
+              sound?.playTick?.();
+              haptics?.light?.();
+              setActiveRing(activeRing === 'attendance' ? 'all' : 'attendance');
+            }}
+            className={`cursor-pointer flex items-center justify-between rounded-2xl border p-4 transition-all ${
               activeRing === 'attendance' || activeRing === 'all'
                 ? 'border-rose-500/30 bg-rose-500/5 shadow-sm dark:bg-rose-500/10'
                 : 'border-slate-200/60 bg-white/40 opacity-50 dark:border-white/5 dark:bg-white/5'
@@ -469,7 +544,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
                     Davomat & Olovli Ketma-ketlik
                   </h4>
                   <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                    {metrics.attendanceStreakDays} kunlik streak 🔥
+                    {streakDays} kunlik streak 🔥
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -479,7 +554,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
             </div>
             <div className="text-right">
               <span className="text-xl font-black text-rose-600 dark:text-rose-400">
-                {metrics.attendanceRate}%
+                {attendanceRate}%
               </span>
               <p className="text-[10px] text-slate-400">Hozirgi davr</p>
             </div>
@@ -487,7 +562,12 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
 
           {/* 2. Akademik O'zlashtirish Card */}
           <div
-            className={`flex items-center justify-between rounded-2xl border p-4 transition-all ${
+            onClick={() => {
+              sound?.playTick?.();
+              haptics?.light?.();
+              setActiveRing(activeRing === 'academic' ? 'all' : 'academic');
+            }}
+            className={`cursor-pointer flex items-center justify-between rounded-2xl border p-4 transition-all ${
               activeRing === 'academic' || activeRing === 'all'
                 ? 'border-emerald-500/30 bg-emerald-500/5 shadow-sm dark:bg-emerald-500/10'
                 : 'border-slate-200/60 bg-white/40 opacity-50 dark:border-white/5 dark:bg-white/5'
@@ -513,7 +593,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
             </div>
             <div className="text-right">
               <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">
-                {metrics.academicMastery}%
+                {academicMastery}%
               </span>
               <p className="text-[10px] text-slate-400">Mastery Index</p>
             </div>
@@ -521,7 +601,12 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
 
           {/* 3. Uyga Vazifalar Card */}
           <div
-            className={`flex items-center justify-between rounded-2xl border p-4 transition-all ${
+            onClick={() => {
+              sound?.playTick?.();
+              haptics?.light?.();
+              setActiveRing(activeRing === 'homework' ? 'all' : 'homework');
+            }}
+            className={`cursor-pointer flex items-center justify-between rounded-2xl border p-4 transition-all ${
               activeRing === 'homework' || activeRing === 'all'
                 ? 'border-sky-500/30 bg-sky-500/5 shadow-sm dark:bg-sky-500/10'
                 : 'border-slate-200/60 bg-white/40 opacity-50 dark:border-white/5 dark:bg-white/5'
@@ -537,7 +622,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
                     Mustaqil Vazifalar & Loyihalar
                   </h4>
                   <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-bold text-sky-600 dark:text-sky-400">
-                    {metrics.completedHomeworks} / {metrics.totalHomeworks} qabul qilingan
+                    {completedHw} / {totalHw} qabul qilingan
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -547,7 +632,7 @@ export const StudentActivityRingsPassport = memo(function StudentActivityRingsPa
             </div>
             <div className="text-right">
               <span className="text-xl font-black text-sky-600 dark:text-sky-400">
-                {metrics.homeworkRate}%
+                {homeworkRate}%
               </span>
               <p className="text-[10px] text-slate-400">Bajarilish</p>
             </div>

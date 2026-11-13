@@ -22,6 +22,7 @@ export interface QueuedAction {
   payload: unknown;
   timestamp: number;
   retryCount: number;
+  lastAttemptAt?: number;
   status: 'pending' | 'syncing' | 'failed' | 'completed';
   error?: string;
   label: string;
@@ -41,11 +42,46 @@ const DB_VERSION = 1;
 const STORE_NAME = 'sync_queue';
 const LS_FALLBACK_KEY = 'medu_offline_sync_queue';
 
+export const MAX_RETRIES = 5;
+export const BASE_BACKOFF_MS = 1000;
+export const MAX_BACKOFF_MS = 60000;
+
 let dbInstance: IDBDatabase | null = null;
 let isDbSupported = typeof window !== 'undefined' && 'indexedDB' in window;
 
 type SyncListener = (state: OfflineSyncState) => void;
 const listeners = new Set<SyncListener>();
+
+let broadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+  try {
+    broadcastChannel = new BroadcastChannel('medu_offline_mesh_sync');
+    broadcastChannel.onmessage = async (event) => {
+      if (event.data?.type === 'mesh_updated') {
+        const updated = await loadQueueFromStorage();
+        currentState.queue = updated;
+        notify(false);
+      }
+    };
+  } catch {
+    broadcastChannel = null;
+  }
+}
+
+function broadcastChange(action: string) {
+  try {
+    broadcastChannel?.postMessage({ type: 'mesh_updated', action, timestamp: Date.now() });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('medu:offline-sync', {
+          detail: { ...currentState, lastAction: action },
+        })
+      );
+    }
+  } catch {
+    // Ignore broadcast errors
+  }
+}
 
 let currentState: OfflineSyncState = {
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -55,7 +91,7 @@ let currentState: OfflineSyncState = {
   queue: [],
 };
 
-function notify() {
+function notify(shouldBroadcast = true) {
   currentState = {
     ...currentState,
     pendingCount: currentState.queue.filter((a) => a.status === 'pending' || a.status === 'failed').length,
@@ -67,6 +103,9 @@ function notify() {
       console.error('Error in offline sync listener', e);
     }
   });
+  if (shouldBroadcast) {
+    broadcastChange('state_updated');
+  }
 }
 
 /** Open or return IndexedDB database instance */
@@ -219,6 +258,41 @@ function deleteFromLocalStorage(id: string) {
   }
 }
 
+async function deleteBatchFromStorage(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  if (db) {
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        for (const id of ids) {
+          store.delete(id);
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => {
+          deleteBatchFromLocalStorage(ids);
+          resolve();
+        };
+      } catch {
+        deleteBatchFromLocalStorage(ids);
+        resolve();
+      }
+    });
+  }
+  deleteBatchFromLocalStorage(ids);
+}
+
+function deleteBatchFromLocalStorage(ids: string[]) {
+  try {
+    const idSet = new Set(ids);
+    const queue = loadFromLocalStorage().filter((a) => !idSet.has(a.id));
+    localStorage.setItem(LS_FALLBACK_KEY, JSON.stringify(queue));
+  } catch (e) {
+    console.error('localStorage delete batch error', e);
+  }
+}
+
 /** Generate a resilient UUID v4 */
 function generateUuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -260,7 +334,7 @@ export async function queueOfflineAction(params: {
   return action;
 }
 
-/** Process and sync pending queue in FIFO order */
+/** Process and sync pending queue in FIFO order with exponential backoff & client-error protection */
 export async function syncPendingQueue(): Promise<{
   successCount: number;
   failedCount: number;
@@ -269,11 +343,21 @@ export async function syncPendingQueue(): Promise<{
     return { successCount: 0, failedCount: 0 };
   }
 
-  const pending = currentState.queue
-    .filter((a) => a.status === 'pending' || a.status === 'failed')
+  const now = Date.now();
+  const eligible = currentState.queue
+    .filter((a) => {
+      if (a.status === 'pending') return true;
+      if (a.status === 'failed') {
+        if (a.retryCount >= MAX_RETRIES) return false;
+        const backoffDelay = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * Math.pow(2, a.retryCount));
+        const lastAttempt = a.lastAttemptAt || a.timestamp;
+        return now - lastAttempt >= backoffDelay;
+      }
+      return false;
+    })
     .sort((a, b) => a.timestamp - b.timestamp);
 
-  if (pending.length === 0) {
+  if (eligible.length === 0) {
     return { successCount: 0, failedCount: 0 };
   }
 
@@ -283,8 +367,15 @@ export async function syncPendingQueue(): Promise<{
   let successCount = 0;
   let failedCount = 0;
 
-  for (const item of pending) {
+  for (const item of eligible) {
+    // Check if network was disconnected during batch iteration
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      currentState.isOnline = false;
+      break;
+    }
+
     item.status = 'syncing';
+    item.lastAttemptAt = Date.now();
     notify();
 
     try {
@@ -299,27 +390,53 @@ export async function syncPendingQueue(): Promise<{
         headers['x-xsrf-token'] = token;
       }
 
+      const body =
+        item.payload !== undefined && item.payload !== null
+          ? JSON.stringify(item.payload)
+          : undefined;
+
       const res = await fetch(apiUrl(item.endpoint), {
         method: item.method,
         headers,
-        body: JSON.stringify(item.payload),
+        body,
         credentials: 'include',
       });
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => 'Server error');
-        throw new Error(`HTTP ${res.status}: ${errorText}`);
+        const isClientPermanent =
+          res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429;
+        const err = new Error(`HTTP ${res.status}: ${errorText}`);
+        (err as unknown as { isPermanent?: boolean }).isPermanent = isClientPermanent;
+        throw err;
       }
 
       item.status = 'completed';
+      item.error = undefined;
       successCount++;
       await saveActionToStorage(item);
     } catch (err: unknown) {
       item.status = 'failed';
       item.retryCount += 1;
       item.error = err instanceof Error ? err.message : String(err);
+
+      if ((err as unknown as { isPermanent?: boolean })?.isPermanent) {
+        item.retryCount = MAX_RETRIES;
+      }
+
+      const isNetworkError =
+        (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) ||
+        (err instanceof Error &&
+          (err.message.includes('Network') || err.message.includes('Failed to fetch')));
+
       failedCount++;
       await saveActionToStorage(item);
+
+      if (isNetworkError) {
+        currentState.isOnline = false;
+        notify();
+        break;
+      }
     }
     notify();
   }
@@ -331,21 +448,24 @@ export async function syncPendingQueue(): Promise<{
   return { successCount, failedCount };
 }
 
-/** Clear completed items from storage */
+/** Clear completed items from storage in a single atomic batch */
 export async function clearCompletedActions(): Promise<void> {
   const completed = currentState.queue.filter((a) => a.status === 'completed');
-  for (const item of completed) {
-    await deleteActionFromStorage(item.id);
-  }
+  if (completed.length === 0) return;
+
+  const ids = completed.map((item) => item.id);
+  await deleteBatchFromStorage(ids);
   currentState.queue = currentState.queue.filter((a) => a.status !== 'completed');
   notify();
 }
 
-/** Retry a specific failed action */
+/** Retry a specific failed action with reset backoff counter */
 export async function retryQueuedAction(id: string): Promise<void> {
   const item = currentState.queue.find((a) => a.id === id);
   if (!item) return;
   item.status = 'pending';
+  item.retryCount = 0;
+  item.lastAttemptAt = undefined;
   item.error = undefined;
   await saveActionToStorage(item);
   notify();

@@ -4,13 +4,15 @@
  * ============================================================================
  */
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { RefreshCw, FileText, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/design';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import type { DashboardStats } from '@/lib/types';
 import { ExecutiveBriefingModal } from '@/components/dashboard/ExecutiveBriefingModal';
+import { useLiquidGlassLens } from '@/layouts/core/liquidGlassOptics';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 
 export interface DashboardHeaderProps {
   userName?: string;
@@ -61,6 +63,8 @@ function getGreetingConfig(hour: number) {
 
 const LiveClock = memo(function LiveClock() {
   const [now, setNow] = useState(() => new Date());
+  const pillRef = useRef<HTMLDivElement | null>(null);
+  useLiquidGlassLens(pillRef, { radius: 12, bezel: 8, refraction: 1.1 });
 
   useEffect(() => {
     let timeoutId: number | null = null;
@@ -100,13 +104,12 @@ const LiveClock = memo(function LiveClock() {
 
   return (
     <div
+      ref={pillRef}
       className={cn(
-        'order-2 inline-flex h-10 flex-1 shrink-0 items-center gap-1.5 rounded-xl px-2.5 sm:order-1 sm:flex-none sm:gap-2 sm:px-3',
-        'border border-white/60 bg-white/70 backdrop-blur-3xl backdrop-saturate-[210%]',
-        'shadow-[inset_0_1.5px_1.5px_rgba(255,255,255,0.9),0_8px_24px_-8px_rgba(0,0,0,0.08)]',
-        'dark:border-white/[0.15] dark:bg-[#1C1C1E]/70 dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.25)]'
+        'lgx lgx--clear order-2 inline-flex h-10 flex-1 shrink-0 items-center gap-1.5 rounded-xl px-2.5 sm:order-1 sm:flex-none sm:gap-2 sm:px-3',
       )}
     >
+      <span aria-hidden="true" className="lgx__rim" />
       {/* Live status dot */}
       <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
         <span className="absolute inline-flex h-full w-full rounded-full bg-[#34C759] motion-safe:animate-[livePulse_2.4s_ease-in-out_infinite]" />
@@ -151,6 +154,7 @@ export const DashboardHeader = memo(function DashboardHeader({
   const { t } = useSafeI18n();
   const [isBriefingOpen, setIsBriefingOpen] = useState(false);
   const [currentHour, setCurrentHour] = useState(() => new Date().getHours());
+  const headerRef = useDashboardGlassCard<HTMLElement>({ dispersion: 5 });
 
   useEffect(() => {
     const sync = () => {
@@ -206,27 +210,21 @@ export const DashboardHeader = memo(function DashboardHeader({
 
   return (
     <header
+      ref={headerRef}
       className={cn(
-        'relative isolate overflow-hidden rounded-3xl sm:rounded-[2.25rem] p-4 sm:p-6 lg:p-7.5',
-        'border border-white/65 bg-white/75 backdrop-blur-3xl backdrop-saturate-[210%]',
-        'shadow-[0_24px_64px_-16px_rgba(0,0,0,0.18),inset_0_1.5px_2px_rgba(255,255,255,0.95)]',
-        'dark:border-white/[0.16] dark:bg-[#161618]/75 dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.7),inset_0_1.5px_2px_rgba(255,255,255,0.22)]'
+        'lgx lgx--clear relative isolate overflow-hidden rounded-[2rem] p-4 sm:p-6 lg:p-7.5',
       )}
     >
-      {/* ── Aurora caustic backdrop ────────────────────────────────── */}
+      <DashboardGlassLayers />
+
+      {/* ── Neutral volume: light pools in the slab, not a colour wash ── */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       >
-        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(10,132,255,0.18),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(10,132,255,0.28),transparent_70%)]" />
-        <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(94,92,230,0.14),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(94,92,230,0.24),transparent_70%)]" />
+        <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.34),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(255,255,255,0.10),transparent_70%)]" />
+        <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.20),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(255,255,255,0.06),transparent_70%)]" />
       </div>
-
-      {/* ── Top specular hairline ───────────────────────────────────── */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent dark:via-white/45"
-      />
 
       <div className="relative flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
         {/* ══ Left Column: Identity · Greeting · Subtitle ═══════════ */}

@@ -43,6 +43,8 @@ import { Brand } from './Brand';
 import { MeduAiLogo } from '@/components/brand/MeduAiLogo';
 import { StaticIcon, PremiumIcon, I, type IconPaths } from './Icons';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { useLiquidGlassLens } from '../core/liquidGlassOptics';
+import { useLiquidGlassPhysics } from '../core/useLiquidGlass';
 import { preloadRoute } from '@/routes/index';
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -1353,6 +1355,22 @@ export const Sidebar = memo(function Sidebar({
   const [navFilter, setNavFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
+
+  // Real per-element lens: the rail bends the page content behind it. No
+  // chromatic pass here — the dock is the hero surface, the sidebar must stay
+  // perfectly still and readable while scrolling long nav trees.
+  useLiquidGlassLens(surfaceRef, {
+    enabled: !reducedTransparency,
+    radius: 0,
+    bezel: 18,
+    refraction: 1.05,
+    dispersion: 0,
+  });
+  useLiquidGlassPhysics(surfaceRef, {
+    enabled: !reduced,
+    tilt: false,
+    press: false,
+  });
   const rectRef = useRef<CachedSidebarRect | null>(null);
   const spotRafRef = useRef<number | null>(null);
   const spotPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -1517,25 +1535,26 @@ export const Sidebar = memo(function Sidebar({
         onPointerLeave={handlePointerLeave}
         style={
           {
+            '--lgx-radius': '0px',
+            '--lgx-blur': '10px',
             '--sb-spot-x': '50%',
             '--sb-spot-y': '20%',
             '--sb-spot-opacity': '0',
           } as CSSProperties
         }
         className={cn(
-          'group/sidebar relative isolate flex h-full min-h-0 flex-col overflow-hidden',
-          'border-r border-black/[0.07] dark:border-white/[0.09]',
-          reducedTransparency
-            ? 'bg-[var(--bg-card)]'
-            : cn(
-                // 40 px yetarli: sidebar doimiy fixed, scroll paytida 64 px blur
-                // har kadrda qayta hisoblanadi.
-                'bg-[var(--glass-surface-bg)] backdrop-blur-2xl backdrop-saturate-[170%]',
-                'shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.45),inset_0_1px_0_0_rgba(255,255,255,0.6),8px_0_32px_-12px_rgba(0,0,0,0.08)]',
-                'dark:shadow-[inset_-1px_0_0_0_rgba(255,255,255,0.09),inset_0_1px_0_0_rgba(255,255,255,0.14),12px_0_36px_-12px_rgba(0,0,0,0.52)]',
-              ),
+          'lgx lgx--sidebar group/sidebar relative flex h-full min-h-0 flex-col overflow-hidden',
+          reducedTransparency && 'lgx--solid',
         )}
       >
+        {!reducedTransparency && (
+          <>
+            <span aria-hidden="true" className="lgx__layer lgx__depth" />
+            <span aria-hidden="true" className="lgx__noise lgx__layer" />
+            <span aria-hidden="true" className="lgx__specular" />
+            <span aria-hidden="true" className="lgx__rim" />
+          </>
+        )}
         {/* ── 1. iOS 27 Dynamic Cursor Caustic Spotlight + Specular Right Rail Edge ── */}
         {!reducedTransparency && (
           <>
@@ -1548,7 +1567,7 @@ export const Sidebar = memo(function Sidebar({
               style={{
                 opacity: 'var(--sb-spot-opacity, 0)',
                 background:
-                  'radial-gradient(circle closest-side, rgba(10, 132, 255, 0.08), rgba(94, 92, 230, 0.035) 45%, transparent 75%)',
+                  'radial-gradient(circle closest-side, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 45%, transparent 75%)',
                 transform:
                   'translate3d(calc(var(--sb-spot-x, 50%) - 340px), calc(var(--sb-spot-y, 20%) - 340px), 0)',
               }}
@@ -1559,7 +1578,7 @@ export const Sidebar = memo(function Sidebar({
               style={{
                 opacity: 'var(--sb-spot-opacity, 0)',
                 background:
-                  'radial-gradient(180px circle at 100% var(--sb-spot-y, 20%), rgba(255, 255, 255, 0.95), rgba(90, 200, 250, 0.55) 45%, transparent 85%)',
+                  'radial-gradient(180px circle at 100% var(--sb-spot-y, 20%), rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.4) 45%, transparent 85%)',
               }}
             />
           </>

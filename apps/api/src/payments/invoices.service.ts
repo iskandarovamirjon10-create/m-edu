@@ -923,19 +923,31 @@ export class InvoicesService {
     }
 
     let remainingLessons = dto.remainingLessons;
-    if (remainingLessons === undefined || remainingLessons === null) {
+    if (remainingLessons !== undefined && remainingLessons !== null) {
+      if (remainingLessons <= 0) {
+        throw new BadRequestException('Remaining lessons must be at least 1');
+      }
+      if (remainingLessons > totalLessons) {
+        throw new BadRequestException('Remaining lessons cannot exceed total lessons in month');
+      }
+    } else {
       const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
-      const remainingDays = Math.max(1, daysInMonth - start.getDate() + 1);
+      const startDay = Math.min(Math.max(1, start.getDate()), daysInMonth);
+      const remainingDays = Math.max(1, daysInMonth - startDay + 1);
       const ratio = remainingDays / daysInMonth;
       remainingLessons = Math.max(1, Math.min(totalLessons, Math.round(totalLessons * ratio)));
     }
 
-    const proratedTotal = remainingLessons >= totalLessons
-      ? Math.round(dto.fullMonthlyAmount)
-      : Math.round((dto.fullMonthlyAmount * remainingLessons) / totalLessons);
-    const lessonRate = remainingLessons > 0
-      ? Math.round(proratedTotal / remainingLessons)
-      : Math.round(dto.fullMonthlyAmount / totalLessons);
+    const fullMonthlyMinor = toMinor(dto.fullMonthlyAmount);
+    const proratedTotalMinor = remainingLessons >= totalLessons
+      ? fullMonthlyMinor
+      : Math.round((fullMonthlyMinor * remainingLessons) / totalLessons);
+    const lessonRateMinor = remainingLessons > 0
+      ? Math.round(proratedTotalMinor / remainingLessons)
+      : Math.round(fullMonthlyMinor / totalLessons);
+
+    const proratedTotal = Math.round(fromMinor(proratedTotalMinor));
+    const lessonRate = Math.round(fromMinor(lessonRateMinor));
 
     return {
       studentId: dto.studentId,
@@ -952,13 +964,19 @@ export class InvoicesService {
 
   async createProratedInvoice(organizationId: string, actorId: string, dto: ProrateInvoiceDto) {
     const preview = await this.proratePreview(organizationId, dto);
-    const suffix = crypto.randomInt(1000, 10000);
-    const invoiceNumber = `INV-PRORATE-${Date.now().toString().slice(-4)}${suffix}`;
+    // Cryptographically secure pseudorandom token (CSPRNG) prevents number collisions
+    const randomSuffix = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const invoiceNumber = `INV-PRORATE-${Date.now()}-${randomSuffix}`;
+
+    const startDateObj = new Date(dto.startDate);
+    const defaultDueDate = new Date(startDateObj);
+    defaultDueDate.setDate(defaultDueDate.getDate() + 5);
 
     const invoiceDto: CreateInvoiceDto = {
       studentId: dto.studentId,
       number: invoiceNumber,
       currency: 'UZS',
+      dueDate: defaultDueDate.toISOString(),
       notes: dto.notes ?? `Prorated tuition starting from ${dto.startDate}`,
       items: [
         {

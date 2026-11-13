@@ -35,8 +35,6 @@ import {
   Check,
   Sparkles,
   Clock,
-  Users,
-  Info,
   Plus,
   Minus,
   Divide,
@@ -50,10 +48,7 @@ import {
   DollarSign,
   ArrowRightLeft,
   GraduationCap,
-  Percent,
   Briefcase,
-  HelpCircle,
-  Calendar,
 } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { useUiStore } from '@/stores/ui.store';
@@ -233,7 +228,11 @@ function useFocusTrap(ref: React.RefObject<HTMLElement | null>, active: boolean)
       );
 
     const timer = window.setTimeout(() => {
-      getFocusable()[0]?.focus();
+      const focusTarget =
+        root.querySelector<HTMLElement>('[data-calc-focus="true"]') ||
+        root.querySelector<HTMLElement>('button[aria-label="Tozalash"]') ||
+        getFocusable()[0];
+      focusTarget?.focus();
     }, 40);
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -331,12 +330,14 @@ function CalcBtn({
   variant = 'default',
   active = false,
   label,
+  dataFocus,
 }: {
   children: ReactNode;
   onClick: () => void;
   variant?: CalcVariant;
   active?: boolean;
   label?: string;
+  dataFocus?: boolean;
 }) {
   return (
     <motion.button
@@ -344,6 +345,7 @@ function CalcBtn({
       whileTap={{ scale: 0.92 }}
       transition={SPRING_SNAPPY}
       type="button"
+      data-calc-focus={dataFocus ? 'true' : undefined}
       onClick={onClick}
       aria-label={label}
       aria-pressed={variant === 'primary' ? active : undefined}
@@ -378,6 +380,26 @@ export function GlobalCalculator() {
   // Educational Prorate parameters
   const [attendedLessons, setAttendedLessons] = useState('8');
   const [totalMonthLessons, setTotalMonthLessons] = useState('12');
+
+  // Calculator Memory State (MC, MR, M+, M-)
+  const [memory, setMemory] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0;
+    try {
+      const saved = localStorage.getItem('medu_calc_memory');
+      return saved ? parseFloat(saved) || 0 : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const saveMemory = useCallback((val: number) => {
+    setMemory(val);
+    try {
+      localStorage.setItem('medu_calc_memory', String(val));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // SSR-safe sound preference
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -519,6 +541,68 @@ export function GlobalCalculator() {
     }
   }, [currentValue, playClick]);
 
+  /* ------------------------------ memory actions --------------------- */
+  const handleMemoryClear = useCallback(() => {
+    playClick('pop');
+    saveMemory(0);
+    setAnnounce('Xotira tozalandi');
+  }, [playClick, saveMemory]);
+
+  const handleMemoryRecall = useCallback(() => {
+    if (memory === 0) return;
+    playClick('tick');
+    const memStr = String(memory);
+    clear();
+    const isNegative = memStr.startsWith('-');
+    const unsigned = isNegative ? memStr.slice(1) : memStr;
+    for (const ch of unsigned) {
+      if (ch === '.') inputDot();
+      else if (ch >= '0' && ch <= '9') inputDigit(ch);
+    }
+    if (isNegative) toggleSign();
+    setAnnounce(`Xotiradan yuklandi: ${formatNumberDisplay(memStr)}`);
+  }, [memory, playClick, clear, inputDot, inputDigit, toggleSign]);
+
+  const handleMemoryAdd = useCallback(() => {
+    const val = parseFloat(currentValue);
+    if (!Number.isFinite(val)) return;
+    playClick('success');
+    const nextMem = Math.round((memory + val) * 100000000) / 100000000;
+    saveMemory(nextMem);
+    setAnnounce(`Xotiraga qo'shildi: ${formatNumberDisplay(nextMem)}`);
+  }, [currentValue, memory, playClick, saveMemory]);
+
+  const handleMemorySubtract = useCallback(() => {
+    const val = parseFloat(currentValue);
+    if (!Number.isFinite(val)) return;
+    playClick('success');
+    const nextMem = Math.round((memory - val) * 100000000) / 100000000;
+    saveMemory(nextMem);
+    setAnnounce(`Xotiradan ayirildi: ${formatNumberDisplay(nextMem)}`);
+  }, [currentValue, memory, playClick, saveMemory]);
+
+  // Handle clipboard paste (e.g. user pastes "1 250 000" or "45.75")
+  const handlePaste = useCallback((pastedText: string) => {
+    const clean = pastedText.trim().replace(/\s+/g, '').replace(/,/g, '.');
+    if (!clean) return;
+    const num = parseFloat(clean);
+    if (!Number.isFinite(num)) {
+      playClick('error');
+      setAnnounce("Noto'g'ri son nusxalandi");
+      return;
+    }
+    playClick('pop');
+    clear();
+    const isNegative = clean.startsWith('-');
+    const unsigned = isNegative ? clean.slice(1) : clean;
+    for (const ch of unsigned) {
+      if (ch === '.') inputDot();
+      else if (ch >= '0' && ch <= '9') inputDigit(ch);
+    }
+    if (isNegative) toggleSign();
+    setAnnounce(`Kiritildi: ${formatNumberDisplay(clean)}`);
+  }, [playClick, clear, inputDot, inputDigit, toggleSign]);
+
   /* ------------------------------ recall from history ----------------- */
   const handleRecallHistory = useCallback(
     (resultStr: string) => {
@@ -581,6 +665,54 @@ export function GlobalCalculator() {
         return;
       }
 
+      // Ctrl/Cmd + V → paste number
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+        if (!inInput) {
+          e.preventDefault();
+          void (async () => {
+            try {
+              const text = await navigator.clipboard?.readText();
+              if (text) handlePaste(text);
+            } catch {
+              /* ignore */
+            }
+          })();
+        }
+        return;
+      }
+
+      // Alt shortcuts for Memory: Alt+C (MC), Alt+R (MR), Alt++ (M+), Alt+- (M-)
+      if (e.altKey) {
+        if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          handleMemoryClear();
+          return;
+        }
+        if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          handleMemoryRecall();
+          return;
+        }
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          handleMemoryAdd();
+          return;
+        }
+        if (e.key === '-') {
+          e.preventDefault();
+          handleMemorySubtract();
+          return;
+        }
+      }
+
+      // Toggle history via 'h' or 'H'
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !inInput && (e.key === 'h' || e.key === 'H')) {
+        e.preventDefault();
+        playClick('pop');
+        setShowHistory((v) => !v);
+        return;
+      }
+
       if (inInput || activeTab === 'finance' || showHistory) return;
 
       if (KEY_TO_DIGIT[e.key] !== undefined) {
@@ -594,6 +726,7 @@ export function GlobalCalculator() {
       switch (e.key) {
         case '.':
         case ',':
+        case 'Decimal':
           e.preventDefault();
           playClick('tick');
           flashKey('.');
@@ -635,7 +768,6 @@ export function GlobalCalculator() {
           e.preventDefault();
           playClick('success');
           calculateEquals();
-          setAnnounce(`Natija: ${formatNumberDisplay(currentValue)}`);
           break;
         }
         case 'Backspace':
@@ -671,9 +803,36 @@ export function GlobalCalculator() {
     clear,
     playClick,
     handleCopy,
+    handlePaste,
+    handleMemoryClear,
+    handleMemoryRecall,
+    handleMemoryAdd,
+    handleMemorySubtract,
     flashKey,
-    currentValue,
   ]);
+
+  // Window paste event listener
+  useEffect(() => {
+    if (!isCalculatorOpen) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return;
+      const text = e.clipboardData?.getData('text');
+      if (text) {
+        e.preventDefault();
+        handlePaste(text);
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [isCalculatorOpen, handlePaste]);
+
+  // Screen reader announcer for live calculations
+  useEffect(() => {
+    if (isCalculatorOpen && currentValue && currentValue !== '0') {
+      setAnnounce(`Natija: ${formatNumberDisplay(currentValue)}`);
+    }
+  }, [currentValue, isCalculatorOpen]);
 
   /* ------------------------------ AI handoff -------------------------- */
   const handleAskAi = useCallback(
@@ -991,10 +1150,20 @@ export function GlobalCalculator() {
                           {/* Tactile visionOS LCD Well */}
                           <div className="calc-lcd-well mx-3.5 mt-3.5 flex flex-col items-end justify-between rounded-2xl border border-black/[0.06] px-4 py-3 dark:border-white/10">
                             <div className="flex w-full items-center justify-between">
-                              <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                {operator ? 'Amal kiritilmoqda' : 'Hisob'}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                  {operator ? 'Amal kiritilmoqda' : 'Hisob'}
+                                </span>
+                                {memory !== 0 && (
+                                  <span
+                                    title={`Xotiradagi qiymat: ${formatNumberDisplay(memory)}`}
+                                    className="rounded-md bg-amber-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                                  >
+                                    M: {formatNumberDisplay(memory)}
+                                  </span>
+                                )}
+                              </div>
                               <div className="h-4 font-mono text-xs font-medium tracking-wider text-slate-500 dark:text-slate-400">
                                 {previousValue != null
                                   ? `${formattedPrevious} ${operator ?? ''}`
@@ -1161,9 +1330,52 @@ export function GlobalCalculator() {
                                   </div>
                                 </div>
 
+                                {/* Memory Functions Row: MC, MR, M+, M- */}
+                                <div className="mx-3.5 mb-1 flex items-center justify-between gap-1.5 px-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={memory === 0}
+                                    onClick={handleMemoryClear}
+                                    title="Xotirani tozalash (MC - Alt+C)"
+                                    className="calc-key-glass flex-1 rounded-xl border border-black/5 bg-black/[0.04] py-1 font-mono text-[11px] font-bold text-slate-700 transition-colors hover:bg-black/[0.08] disabled:opacity-30 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                                  >
+                                    MC
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={memory === 0}
+                                    onClick={handleMemoryRecall}
+                                    title={`Xotiradan yuklash (MR - Alt+R): ${memory}`}
+                                    className={`calc-key-glass flex-1 rounded-xl border py-1 font-mono text-[11px] font-bold transition-colors ${
+                                      memory !== 0
+                                        ? 'border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                        : 'border-black/5 bg-black/[0.04] text-slate-700 opacity-30 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300'
+                                    }`}
+                                  >
+                                    MR
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleMemoryAdd}
+                                    title="Xotiraga qo'shish (M+ - Alt++)"
+                                    className="calc-key-glass flex-1 rounded-xl border border-black/5 bg-black/[0.04] py-1 font-mono text-[11px] font-bold text-slate-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                                  >
+                                    M+
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleMemorySubtract}
+                                    title="Xotiradan ayirish (M- - Alt+-)"
+                                    className="calc-key-glass flex-1 rounded-xl border border-black/5 bg-black/[0.04] py-1 font-mono text-[11px] font-bold text-slate-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300"
+                                  >
+                                    M-
+                                  </button>
+                                </div>
+
                                 {/* Keypad Grid */}
                                 <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-4 gap-2 p-3.5 pt-1.5">
                                   <CalcBtn
+                                    dataFocus
                                     onClick={() => {
                                       playClick('pop');
                                       clear();

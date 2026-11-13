@@ -6,7 +6,7 @@
  * and specular rim highlights.
  */
 
-import { useMemo, useId } from 'react';
+import { useMemo, useId, useRef } from 'react';
 import {
   BarChart,
   Bar,
@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 import type { MonthlyRevenue } from '@/lib/types';
 import { formatCurrency, formatMonth } from '@/lib/format';
 import { compactNumber } from '@/lib/design';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 
 interface PaymentRevenueBarProps {
   totalAmount?: number;
@@ -88,6 +89,7 @@ export function PaymentRevenueBar({
   const uid = useId().replace(/:/g, '');
   const primaryBarGradId = `ios27-bar-primary-${uid}`;
   const peakBarGradId = `ios27-bar-peak-${uid}`;
+  const cardRef = useDashboardGlassCard<HTMLDivElement>();
 
   const chartData = useMemo<ChartPoint[]>(() => {
     let base: Array<{ label: string; total: number }> = [];
@@ -151,16 +153,11 @@ export function PaymentRevenueBar({
   const hasData = chartData.length > 0;
 
   return (
-    <div className="group relative flex h-full flex-col overflow-hidden rounded-[2rem] border border-white/75 bg-white/[0.68] p-5 backdrop-blur-3xl backdrop-saturate-[200%] shadow-[0_24px_60px_-15px_rgba(15,23,42,0.07),0_4px_20px_-2px_rgba(15,23,42,0.03),inset_0_1px_1px_rgba(255,255,255,0.85)] transition-all duration-300 dark:border-white/[0.11] dark:bg-[#0B0F1A]/[0.68] dark:shadow-[0_28px_70px_-15px_rgba(0,0,0,0.65),inset_0_1px_0.5px_rgba(255,255,255,0.16)] sm:p-6">
-      {/* iOS 27 Top Specular Rim & Optical Glaze */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-6 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/95 to-transparent dark:via-white/30"
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/40 via-white/5 to-transparent dark:from-white/[0.04] dark:to-transparent"
-      />
+    <div
+      ref={cardRef}
+      className="lgx lgx--clear group relative flex h-full flex-col rounded-[2rem] p-5 sm:p-6"
+    >
+      <DashboardGlassLayers />
 
       {/* Ambient Volumetric Caustic Glow */}
       <div

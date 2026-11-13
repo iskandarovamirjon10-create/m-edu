@@ -183,6 +183,10 @@ export function RevenueChart({
             radius={[6, 6, 0, 0]}
             fill="url(#meduRevenueBar)"
             opacity={0.75}
+            isAnimationActive
+            animationBegin={80}
+            animationDuration={900}
+            animationEasing="ease-out"
           />
 
           <Area
@@ -191,6 +195,11 @@ export function RevenueChart({
             stroke="#0A84FF"
             strokeWidth={2.5}
             fill="url(#meduRevenueArea)"
+            dot={false}
+            isAnimationActive
+            animationBegin={180}
+            animationDuration={1100}
+            animationEasing="ease-out"
             activeDot={{
               r: 6,
               fill: '#FFFFFF',

@@ -108,7 +108,7 @@ describe('Kiosk Page', () => {
     const exitBtn = screen.getByRole('button', { name: /Kioskdan chiqish/i });
     fireEvent.click(exitBtn);
 
-    expect(screen.getByText(/Kioskdanni Chiqish/i)).toBeInTheDocument();
+    expect(screen.getByText(/Kioskdan chiqish/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/••••/i)).toBeInTheDocument();
   });
 });

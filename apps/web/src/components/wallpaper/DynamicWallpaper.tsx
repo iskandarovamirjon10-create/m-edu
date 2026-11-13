@@ -399,10 +399,7 @@ const WALLPAPER_CSS = `
 }
 
 .m-edu-grain {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
-  opacity: 0.35;
-  mix-blend-mode: overlay;
-  pointer-events: none;
+  display: none;
 }
 
 

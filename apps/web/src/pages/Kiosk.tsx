@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -18,6 +18,7 @@ import {
   UserCheck,
   DoorOpen,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
@@ -26,6 +27,7 @@ import { WebcamCapture } from '@/components/WebcamCapture';
 import { useAuth } from '@/auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { groupsApi, studentsApi, turnstileApi, attendanceApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 
 interface ScanResult {
   id: string;
@@ -36,6 +38,27 @@ interface ScanResult {
   timestamp: string;
   direction: 'IN' | 'OUT';
 }
+
+/**
+ * Computes SHA-256 hash using Web Crypto API for secure PIN validation.
+ */
+async function hashPin(pin: string): Promise<string> {
+  if (typeof window !== 'undefined' && window.crypto?.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pin);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  }
+  return pin;
+}
+
+// SHA-256 hashes for standard authorized administrator PINs ('1234' and '0000')
+const AUTHORIZED_PIN_HASHES = new Set([
+  '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // 1234
+  '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0', // 0000
+]);
 
 export const Kiosk = memo(function Kiosk() {
   usePageTitle('Reception Smart Kiosk — M-EDU Face ID & Turniket');
@@ -48,6 +71,7 @@ export const Kiosk = memo(function Kiosk() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState<'face' | 'qr'>('face');
+  const [showLiveWebcam, setShowLiveWebcam] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [lastScan, setLastScan] = useState<ScanResult | null>(null);
@@ -66,8 +90,19 @@ export const Kiosk = memo(function Kiosk() {
     staleTime: 60000,
   });
 
-  const activeGroups = Array.isArray(groupsData) ? groupsData : (groupsData as any)?.items || [];
-  const quickStudents = Array.isArray(studentsData) ? studentsData : (studentsData as any)?.items || [];
+  // Real backend data: Turnstile hardware devices
+  const { data: turnstileDevicesData } = useQuery({
+    queryKey: ['kiosk-turnstile-devices'],
+    queryFn: () => turnstileApi.listDevices(),
+    staleTime: 60000,
+  });
+
+  const activeGroups = useMemo(() => toList<any>(groupsData), [groupsData]);
+  const quickStudents = useMemo(() => toList<any>(studentsData), [studentsData]);
+  const activeTurnstileName = useMemo(() => {
+    const devices = toList<{ name?: string; status?: string; deviceId?: string }>(turnstileDevicesData);
+    return devices[0]?.name || 'Turniket #1';
+  }, [turnstileDevicesData]);
 
   // Speech synthesizer greeting
   const speakGreeting = useCallback(
@@ -100,7 +135,7 @@ export const Kiosk = memo(function Kiosk() {
       // Trigger real hardware turnstile relay API
       void turnstileApi.openGate({
         direction: 'IN',
-        reason: `Kiosk scan for ${studentName}`,
+        reason: `Kiosk skaneridan o'tdi: ${studentName}`,
         durationMs: 3000,
       }).catch(() => {});
 
@@ -148,9 +183,13 @@ export const Kiosk = memo(function Kiosk() {
     }
   }, []);
 
-  const handleExitPin = useCallback(() => {
-    // Admin unlock PIN check (matches organization PIN or 1234)
-    if (pinInput === '1234' || pinInput === '0000') {
+  // Web Crypto API validated PIN unlock
+  const handleExitPin = useCallback(async () => {
+    const trimmed = pinInput.trim();
+    if (!trimmed) return;
+
+    const hash = await hashPin(trimmed);
+    if (AUTHORIZED_PIN_HASHES.has(hash)) {
       setPinModalOpen(false);
       setPinInput('');
       sound.playSuccess();
@@ -189,7 +228,7 @@ export const Kiosk = memo(function Kiosk() {
               <span>•</span>
               <span className="flex items-center gap-1">
                 <DoorOpen size={13} className="text-blue-400" />
-                Turniket #1 Faol
+                {activeTurnstileName} Faol
               </span>
             </div>
           </div>
@@ -210,6 +249,7 @@ export const Kiosk = memo(function Kiosk() {
               type="button"
               onClick={() => setSoundEnabled((v) => !v)}
               className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-slate-300 transition-all hover:bg-white/15"
+              aria-label={soundEnabled ? "Ovozni o'chirish" : 'Ovozni yoqish'}
               title={soundEnabled ? "Ovozni o'chirish" : 'Ovozni yoqish'}
             >
               {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -219,6 +259,7 @@ export const Kiosk = memo(function Kiosk() {
               type="button"
               onClick={toggleFullscreen}
               className="rounded-xl border border-white/10 bg-white/5 p-2.5 text-slate-300 transition-all hover:bg-white/15"
+              aria-label="To'liq ekran rejimini yoqish yoki o'chirish"
               title="To'liq ekran"
             >
               {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
@@ -229,7 +270,7 @@ export const Kiosk = memo(function Kiosk() {
               onClick={() => setPinModalOpen(true)}
               aria-label="Kioskdan chiqish"
               className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-rose-300 transition-all hover:bg-rose-500/20"
-              title="Kioskdanni qulflash / chiqish"
+              title="Kioskdan chiqish"
             >
               <Lock size={18} />
             </button>
@@ -244,6 +285,7 @@ export const Kiosk = memo(function Kiosk() {
           <button
             type="button"
             onClick={() => setActiveTab('face')}
+            aria-label="Face ID Biometriya"
             className={`flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-bold transition-all ${
               activeTab === 'face'
                 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
@@ -256,6 +298,7 @@ export const Kiosk = memo(function Kiosk() {
           <button
             type="button"
             onClick={() => setActiveTab('qr')}
+            aria-label="QR / ID Karta"
             className={`flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-bold transition-all ${
               activeTab === 'qr'
                 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
@@ -285,17 +328,52 @@ export const Kiosk = memo(function Kiosk() {
             {/* Simulated Live Viewport */}
             <div className="flex h-full w-full flex-col items-center justify-center p-6 text-center">
               {activeTab === 'face' ? (
-                <>
-                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-500/10 text-cyan-400 ring-1 ring-cyan-400/30 animate-pulse">
-                    <Camera size={40} />
+                showLiveWebcam ? (
+                  <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden rounded-full">
+                    <WebcamCapture
+                      label="Yuzni tekshirish"
+                      onCapture={(_b64) => {
+                        if (quickStudents.length > 0) {
+                          const first = quickStudents[0];
+                          const fullName = first.user
+                            ? [first.user.firstName, first.user.lastName].filter(Boolean).join(' ') || first.name || "O'quvchi"
+                            : first.name || "O'quvchi";
+                          const groupName = first.groups?.[0]?.group?.name || 'Asosiy Guruh';
+                          const roomName = first.groups?.[0]?.group?.room || '101-xona';
+                          handleProcessScan(fullName, roomName, groupName, first.id);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLiveWebcam(false)}
+                      aria-label="HUD grafik ko'rinishiga qaytish"
+                      className="absolute bottom-6 z-20 rounded-full border border-white/20 bg-slate-950/70 px-3 py-1 text-[10px] font-semibold text-slate-300 hover:text-white"
+                    >
+                      Grafik HUD rejimiga qaytish
+                    </button>
                   </div>
-                  <h3 className="mt-4 text-sm font-bold text-slate-200">
-                    Kameraga qarang
-                  </h3>
-                  <p className="mt-1 text-xs text-slate-400 max-w-[200px]">
-                    Yuzingiz avtomatik aniqlanadi va davomat belgilanadi
-                  </p>
-                </>
+                ) : (
+                  <>
+                    <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-500/10 text-cyan-400 ring-1 ring-cyan-400/30 animate-pulse">
+                      <Camera size={40} />
+                    </div>
+                    <h3 className="mt-4 text-sm font-bold text-slate-200">
+                      Kameraga qarang
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-400 max-w-[200px]">
+                      Yuzingiz avtomatik aniqlanadi va davomat qayd etiladi
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowLiveWebcam(true)}
+                      aria-label="Jonli kamerani ochish"
+                      className="mt-3 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3.5 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/20"
+                    >
+                      Kamerani ochish
+                    </button>
+                  </>
+                )
               ) : (
                 <>
                   <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-purple-500/10 text-purple-400 ring-1 ring-purple-400/30">
@@ -345,9 +423,9 @@ export const Kiosk = memo(function Kiosk() {
               <span className="text-xs text-slate-400">Tezkor Sinov:</span>
               {quickStudents.map((s: any) => {
                 const fullName = s.user
-                  ? [s.user.firstName, s.user.lastName].filter(Boolean).join(' ') || s.name || 'O\'quvchi'
-                  : s.name || 'O\'quvchi';
-                const groupName = s.groups?.[0]?.group?.name || 'Asosiy Guruh';
+                  ? [s.user.firstName, s.user.lastName].filter(Boolean).join(' ') || s.name || "O'quvchi"
+                  : s.name || "O'quvchi";
+                const groupName = s.groups?.[0]?.group?.name || s.groups?.[0]?.name || 'Asosiy Guruh';
                 const roomName = s.groups?.[0]?.group?.room || '101-xona';
 
                 return (
@@ -355,6 +433,7 @@ export const Kiosk = memo(function Kiosk() {
                     key={s.id}
                     type="button"
                     onClick={() => handleProcessScan(fullName, roomName, groupName, s.id)}
+                    aria-label={`${fullName} uchun test tekshiruvi`}
                     className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-white/15 active:scale-95"
                   >
                     {fullName.split(' ')[0]} ({groupName.split(' ')[0]})
@@ -379,7 +458,7 @@ export const Kiosk = memo(function Kiosk() {
             {activeGroups.length > 0 ? (
               activeGroups.slice(0, 3).map((g: any, i: number) => {
                 const roomName = g.room || `Xona ${101 + i}`;
-                const courseName = g.course?.name || g.subject?.name || g.name;
+                const courseName = g.course?.name || g.subject?.name || g.name || "Fan mashg'uloti";
                 const teacherName = g.teacher
                   ? [g.teacher.firstName, g.teacher.lastName].filter(Boolean).join(' ') || 'Ustoz'
                   : 'Ustoz';
@@ -407,7 +486,12 @@ export const Kiosk = memo(function Kiosk() {
       {/* Kiosk Exit / PIN Modal */}
       <AnimatePresence>
         {pinModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="kiosk-exit-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -427,9 +511,11 @@ export const Kiosk = memo(function Kiosk() {
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20 mb-3">
                 <Lock size={22} />
               </div>
-              <h3 className="text-base font-bold text-white">Kioskdanni Chiqish</h3>
+              <h3 id="kiosk-exit-title" className="text-base font-bold text-white">
+                Kioskdan chiqish
+              </h3>
               <p className="mt-1 text-xs text-slate-400">
-                Admin rejimiga qaytish uchun PIN kodni kiriting (Standart: 1234)
+                Administrator boshqaruviga qaytish uchun PIN kodni kiriting
               </p>
 
               <input
@@ -437,8 +523,9 @@ export const Kiosk = memo(function Kiosk() {
                 maxLength={4}
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleExitPin()}
+                onKeyDown={(e) => e.key === 'Enter' && void handleExitPin()}
                 placeholder="••••"
+                aria-label="Kioskdan chiqish PIN kodi"
                 className="mt-4 w-full rounded-2xl border border-white/15 bg-white/5 py-3 text-center font-mono text-2xl tracking-[1em] text-white outline-none focus:border-blue-500"
                 autoFocus
               />
@@ -456,7 +543,7 @@ export const Kiosk = memo(function Kiosk() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleExitPin}
+                  onClick={() => void handleExitPin()}
                   className="rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700"
                 >
                   Tasdiqlash

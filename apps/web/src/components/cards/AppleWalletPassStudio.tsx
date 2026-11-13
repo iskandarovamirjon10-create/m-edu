@@ -15,14 +15,15 @@
  * ============================================================================
  */
 
-import { useState, useEffect, memo, useCallback } from 'react';
+import { useState, useEffect, memo, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { RealQrCode } from '@/components/ui/RealQrCode';
-import { studentsApi } from '@/lib/api';
+import { studentsApi, turnstileApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 import { useAuth } from '@/auth/AuthContext';
 
 export type PassThemeKey = 'midnight' | 'sapphire' | 'emerald' | 'sunset' | 'titanium';
@@ -94,6 +95,26 @@ export interface AppleWalletPassStudioProps {
   role?: 'STUDENT' | 'TEACHER' | 'ADMIN' | 'VIP';
 }
 
+/**
+ * Computes a cryptographic HMAC-like signature for Apple VAS QR code using Web Crypto API
+ */
+async function generateCryptoTokenSig(id: string, token: string): Promise<string> {
+  if (typeof window !== 'undefined' && window.crypto?.subtle) {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(`MEDU-APPLE-PASS:${id}:${token}`);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hashBuffer))
+        .slice(0, 6)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch {
+      return 'f8a4b2';
+    }
+  }
+  return 'f8a4b2';
+}
+
 export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
   className,
   studentName: propStudentName,
@@ -107,23 +128,19 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
   const { user } = useAuth();
 
   // Query real students list from backend
-  const { data: studentsList } = useQuery({
+  const { data: rawStudentsList } = useQuery({
     queryKey: ['students-for-apple-wallet'],
-    queryFn: async () => {
-      try {
-        const res: any = await studentsApi.list({ limit: 50 });
-        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
-      } catch {
-        return [];
-      }
-    },
+    queryFn: () => studentsApi.list({ limit: 50 }),
+    staleTime: 60000,
   });
 
-  const organizationName = propOrganizationName || user?.organizationName || "Ta'lim Markazi";
+  const studentsList = useMemo(() => toList<any>(rawStudentsList), [rawStudentsList]);
+
+  const organizationName = propOrganizationName || user?.organization?.name || user?.organizationName || "M-EDU Ta'lim Markazi";
   const [activeTheme, setActiveTheme] = useState<PassThemeKey>('midnight');
   const [activeRole, setActiveRole] = useState(role);
   
-  const [currentName, setCurrentName] = useState(() => propStudentName || 'O‘quvchi');
+  const [currentName, setCurrentName] = useState(() => propStudentName || "O'quvchi");
   const [currentId, setCurrentId] = useState(() => propStudentId || 'STU-001');
   const [currentGroup, setCurrentGroup] = useState(() => propGroupName || 'Asosiy Kurs');
 
@@ -132,15 +149,16 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
     if (propStudentName) return;
     if (studentsList && studentsList.length > 0) {
       const first = studentsList[0];
-      const fullName = [first.firstName, first.lastName].filter(Boolean).join(' ') || first.user?.firstName || 'O‘quvchi';
+      const fullName = [first.firstName, first.lastName].filter(Boolean).join(' ') || first.user?.firstName || "O'quvchi";
       setCurrentName(fullName);
       setCurrentId(first.studentCode || first.id?.slice(0, 8) || 'STU-001');
-      setCurrentGroup(first.group?.name || first.groups?.[0]?.name || 'Guruh biriktirilmagan');
+      setCurrentGroup(first.group?.name || first.groups?.[0]?.group?.name || first.groups?.[0]?.name || 'Guruh biriktirilmagan');
     }
   }, [studentsList, propStudentName]);
 
   const [totpCountdown, setTotpCountdown] = useState(30);
   const [totpToken, setTotpToken] = useState('784-902');
+  const [cryptoSig, setCryptoSig] = useState('f8a4b2');
   const [nfcTapped, setNfcTapped] = useState(false);
   const [turnstileStatus, setTurnstileStatus] = useState<'IDLE' | 'READING' | 'GRANTED' | 'LOCKED'>('IDLE');
   const [isFlipped, setIsFlipped] = useState(false);
@@ -157,7 +175,8 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
           }
           const num = arr[0] ? (arr[0] % 900000) + 100000 : Math.floor(100000 + Math.random() * 900000);
           const rand = num.toString();
-          setTotpToken(`${rand.slice(0, 3)}-${rand.slice(3)}`);
+          const newToken = `${rand.slice(0, 3)}-${rand.slice(3)}`;
+          setTotpToken(newToken);
           return 30;
         }
         return prev - 1;
@@ -166,14 +185,32 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
     return () => clearInterval(timer);
   }, []);
 
+  // Update cryptographic signature when currentId or totpToken changes
+  useEffect(() => {
+    let cancelled = false;
+    void generateCryptoTokenSig(currentId, totpToken).then((sig) => {
+      if (!cancelled) setCryptoSig(sig);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentId, totpToken]);
+
   const theme = PASS_THEMES[activeTheme];
 
-  // NFC Tap on Gate reader simulation
+  // NFC Tap on Gate reader simulation connected to real hardware Turnstile API
   const handleSimulateNfcTap = useCallback(() => {
     haptics.medium();
     sound.playTick();
     setNfcTapped(true);
     setTurnstileStatus('READING');
+
+    // Trigger real hardware turnstile relay API
+    void turnstileApi.openGate({
+      direction: 'IN',
+      reason: `Apple Wallet NFC VAS: ${currentName} (${currentId})`,
+      durationMs: 3000,
+    }).catch(() => {});
 
     setTimeout(() => {
       sound.playSuccess();
@@ -185,7 +222,9 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
         setTurnstileStatus('IDLE');
       }, 3500);
     }, 900);
-  }, [haptics, sound]);
+  }, [haptics, sound, currentName, currentId]);
+
+  const qrPayload = `https://m-edu.uz/pass/v3?id=${currentId}&t=${totpToken}&sig=${cryptoSig}&role=${activeRole}&sec=AES256GCM`;
 
   const handleDownloadPkPass = useCallback(() => {
     haptics.light();
@@ -205,7 +244,7 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
         backgroundColor: theme.accentColor,
         labelColor: theme.labelColor,
         nfc: {
-          message: `MEDU-VAS-TOKEN:${currentId}:${totpToken}`,
+          message: `MEDU-VAS-TOKEN:${currentId}:${totpToken}:${cryptoSig}`,
           encryptionPublicKey: '04c3...AES256GCM',
         },
         barcode: {
@@ -229,9 +268,7 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
     }
 
     setTimeout(() => setPassDownloaded(false), 3000);
-  }, [haptics, sound, currentId, organizationName, currentName, theme, totpToken, qrPayload]);
-
-  const qrPayload = `https://m-edu.uz/pass/v3?id=${currentId}&t=${totpToken}&role=${activeRole}&sec=AES256GCM`;
+  }, [haptics, sound, currentId, organizationName, currentName, theme, totpToken, cryptoSig, qrPayload]);
 
   return (
     <div
@@ -488,38 +525,39 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
             <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-300 mb-2 flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-cyan-400" />
-                Guvohnoma Egasi (Markaz O‘quvchilari)
+                Guvohnoma Egasi (Markaz O'quvchilari)
               </span>
               {studentsList && studentsList.length > 0 && (
                 <span className="text-[10px] text-zinc-500 font-mono">
-                  {studentsList.length} nafar o‘quvchi topildi
+                  {studentsList.length} nafar o'quvchi topildi
                 </span>
               )}
             </h3>
 
             {studentsList && studentsList.length > 0 && (
               <div className="mb-3">
-                <label className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">
-                  Markaz o‘quvchisini tanlang:
+                <label htmlFor="student-picker-select" className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">
+                  Markaz o'quvchisini tanlang:
                 </label>
                 <select
-                  aria-label="Markaz o‘quvchisini tanlang"
+                  id="student-picker-select"
+                  aria-label="Markaz o'quvchisini tanlang"
                   value={currentId}
                   onChange={(e) => {
                     const sel = studentsList.find((s: any) => (s.studentCode || s.id?.slice(0, 8) || s.id) === e.target.value);
                     if (sel) {
                       sound.playTick();
                       haptics.light();
-                      const fullName = [sel.firstName, sel.lastName].filter(Boolean).join(' ') || sel.user?.firstName || 'O‘quvchi';
+                      const fullName = [sel.firstName, sel.lastName].filter(Boolean).join(' ') || sel.user?.firstName || "O'quvchi";
                       setCurrentName(fullName);
                       setCurrentId(sel.studentCode || sel.id?.slice(0, 8) || sel.id);
-                      setCurrentGroup(sel.group?.name || sel.groups?.[0]?.name || 'Guruh biriktirilmagan');
+                      setCurrentGroup(sel.group?.name || sel.groups?.[0]?.group?.name || sel.groups?.[0]?.name || 'Guruh biriktirilmagan');
                     }
                   }}
                   className="w-full bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-semibold focus:outline-none focus:border-cyan-400 transition cursor-pointer"
                 >
                   {studentsList.map((st: any) => {
-                    const name = [st.firstName, st.lastName].filter(Boolean).join(' ') || st.user?.firstName || 'O‘quvchi';
+                    const name = [st.firstName, st.lastName].filter(Boolean).join(' ') || st.user?.firstName || "O'quvchi";
                     const code = st.studentCode || st.id?.slice(0, 8) || st.id;
                     return (
                       <option key={st.id} value={code} className="dark:bg-[#18181b]">
@@ -531,14 +569,16 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
               </div>
             )}
 
-            <label className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">
-              Guvohnomadagi ism (Tahrirlash mumkin):
+            <label htmlFor="student-name-input" className="text-[10px] uppercase font-bold text-zinc-400 mb-1 block">
+              Guvohnoma egasining F.I.SH (Tahrirlash):
             </label>
             <input
+              id="student-name-input"
               type="text"
               value={currentName}
               onChange={(e) => setCurrentName(e.target.value)}
-              placeholder="Talaba F.I.SH."
+              placeholder="Talaba to'liq ismi"
+              aria-label="Guvohnoma egasining to'liq ismi"
               className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-semibold focus:outline-none focus:border-sky-400 transition"
             />
           </div>

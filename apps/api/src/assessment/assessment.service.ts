@@ -225,10 +225,12 @@ export class AssessmentService {
       where: { id: quizId, organizationId },
       include: {
         QuizQuestion: {
+          orderBy: { order: 'asc' },
           include: {
             Question: {
               include: {
                 QuestionOption: {
+                  orderBy: { order: 'asc' },
                   select: { id: true, text: true, order: true },
                 },
               },
@@ -291,10 +293,26 @@ export class AssessmentService {
 
     const shouldRandomize = actualQuiz.randomizeQuestions ?? (actualQuiz as any).shuffle ?? false;
     if (shouldRandomize) {
-      // Cryptographically secure unbiased Fisher-Yates shuffle
+      // Cryptographically secure unbiased Fisher-Yates shuffle for questions
       for (let i = questions.length - 1; i > 0; i--) {
         const j = crypto.randomInt(0, i + 1);
         [questions[i], questions[j]] = [questions[j], questions[i]];
+      }
+
+      // Cryptographically secure unbiased Fisher-Yates shuffle for options inside each question
+      // (Excluding TRUE_FALSE questions which conventionally keep True/False in standard order)
+      for (const q of questions) {
+        if (q.type !== 'TRUE_FALSE' && Array.isArray(q.options) && q.options.length > 1) {
+          for (let i = q.options.length - 1; i > 0; i--) {
+            const j = crypto.randomInt(0, i + 1);
+            [q.options[i], q.options[j]] = [q.options[j], q.options[i]];
+          }
+          // Re-index displayed orders so options display nicely as 1, 2, 3, 4
+          q.options = q.options.map((opt: any, idx: number) => ({
+            ...opt,
+            order: idx + 1,
+          }));
+        }
       }
     }
 
@@ -342,7 +360,8 @@ export class AssessmentService {
     const now = new Date();
     const durationSec = Math.round((now.getTime() - attempt.startedAt.getTime()) / 1000);
     // Server-side authoritative time limit check with 60 sec grace period
-    const allowedSec = (attempt.quiz.durationMinutes * 60) + 60;
+    const durationMinutes = attempt.quiz.durationMinutes ?? (attempt.quiz as any).timeLimitMin ?? 30;
+    const allowedSec = (durationMinutes * 60) + 60;
     const isExpired = durationSec > allowedSec;
 
     try {
@@ -405,7 +424,7 @@ export class AssessmentService {
           const correctOption = question.QuestionOption.find((o) => o.isCorrect);
           if (correctOption && selectedOptionId === correctOption.id) {
             isCorrect = true;
-            pointsEarned = question.points;
+            pointsEarned = Number(question.points ?? 1);
           }
         } else if (question.type === 'MULTIPLE_CHOICE') {
           const correctOptionIds = new Set(question.QuestionOption.filter((o) => o.isCorrect).map((o) => o.id));
@@ -415,7 +434,7 @@ export class AssessmentService {
             [...correctOptionIds].every((id) => selectedSet.has(id))
           ) {
             isCorrect = true;
-            pointsEarned = question.points;
+            pointsEarned = Number(question.points ?? 1);
           }
         }
 

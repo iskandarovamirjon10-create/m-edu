@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
 import { Icon, Shimmer, type IconName } from '@/lib/design';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 
 interface RawAuditItem {
   id: string;
@@ -62,6 +63,7 @@ function toActivity(item: RawAuditItem): Activity {
 
 export function RecentActivitiesFeed() {
   const sound = usePremiumSound();
+  const cardRef = useDashboardGlassCard<HTMLDivElement>();
   const { data, isLoading } = useQuery({
     queryKey: ['audit', 'recent-feed'],
     queryFn: () => auditApi.list({ limit: 5 }),
@@ -74,12 +76,11 @@ export function RecentActivitiesFeed() {
   const activities = rawItems.map(toActivity);
 
   return (
-    <div className="vision-card relative isolate overflow-hidden flex h-full flex-col p-5 sm:p-6 backdrop-blur-2xl">
-      {/* Top specular hairline */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/25"
-      />
+    <div
+      ref={cardRef}
+      className="lgx lgx--clear relative isolate flex h-full flex-col rounded-[2rem] p-5 sm:p-6"
+    >
+      <DashboardGlassLayers />
 
       <div className="flex items-center justify-between gap-3 border-b border-black/[0.06] pb-3.5 dark:border-white/[0.08]">
         <div className="flex items-center gap-2.5">

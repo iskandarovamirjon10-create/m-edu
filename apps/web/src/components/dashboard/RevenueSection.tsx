@@ -7,6 +7,7 @@ import { dashboardApi } from '@/lib/api';
 import { useSafeI18n } from '@/i18n/I18nProvider';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import type { MonthlyRevenue } from '@/lib/types';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 import type { Period } from './RevenueChart';
 
 const LazyRevenueChart = lazy(() => import('./RevenueChart'));
@@ -21,6 +22,7 @@ export function RevenueSection({ initialData }: RevenueSectionProps) {
   const { t } = useSafeI18n();
   const sound = usePremiumSound();
   const [period, setPeriod] = useState<Period>('1Y');
+  const cardRef = useDashboardGlassCard<HTMLDivElement>();
 
   const { data: revenueData, isFetching } = useQuery({
     queryKey: ['dashboard', 'revenue', period],
@@ -32,7 +34,11 @@ export function RevenueSection({ initialData }: RevenueSectionProps) {
   const chartData = revenueData?.length ? revenueData : (period === '1Y' ? initialData : []);
 
   return (
-    <div className="relative overflow-hidden flex flex-col justify-between rounded-[2rem] border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%] p-5 sm:p-6 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)] dark:border-white/[0.12] dark:bg-[#161618]/75 dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[1.5px] before:bg-gradient-to-r before:from-transparent before:via-white/70 before:to-transparent dark:before:via-white/20">
+    <div
+      ref={cardRef}
+      className="lgx lgx--clear relative flex flex-col justify-between rounded-[2rem] p-5 sm:p-6"
+    >
+      <DashboardGlassLayers />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-base font-semibold tracking-tight text-primary">

@@ -1821,9 +1821,9 @@ export function Student360Page() {
   const sparkSeed = nameHash(student.name);
 
   // Real Attendance Streak calculation from telemetry history
-  const realStreak = useMemo(() => {
-    const history = profile.attendanceHistory;
-    if (!history || history.length === 0) return attendance.present || 0;
+  const history = profile.attendanceHistory;
+  let realStreak = attendance.present || 0;
+  if (history && history.length > 0) {
     const sorted = [...history].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
@@ -1837,8 +1837,8 @@ export function Student360Page() {
         break;
       }
     }
-    return streak > 0 ? streak : attendance.present || 0;
-  }, [profile.attendanceHistory, attendance.present]);
+    if (streak > 0) realStreak = streak;
+  }
 
   /* ── Main content ────────────────────────────────────────── */
   return (

@@ -19,10 +19,12 @@ import {
   Loader2,
 } from 'lucide-react';
 import { studentsApi, paymentsApi } from '@/lib/api';
+import { toList } from '@/lib/normalizeList';
 import { queueOfflineAction } from '@/lib/offline-sync';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { useOptionalAuthState } from '@/auth/AuthContext';
 import { formatCurrency, formatDate } from '@/lib/format';
 import type { Student } from '@/types/students';
 
@@ -43,12 +45,29 @@ interface Props {
 
 type PaymentMethod = 'CASH' | 'TERMINAL' | 'CLICK' | 'PAYME';
 
+/**
+ * Generates cryptographically secure idempotency key via Web Crypto API
+ */
+function generateCryptoIdempotencyKey(): string {
+  if (typeof window !== 'undefined' && window.crypto) {
+    if (typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    const arr = new Uint8Array(16);
+    window.crypto.getRandomValues(arr);
+    return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  return `pos-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
   isOpen,
   onClose,
   onSuccess,
 }: Props) {
   const { t } = useSafeI18n();
+  const auth = useOptionalAuthState();
+  const user = auth?.user;
   const sound = usePremiumSound();
   const haptics = useHaptics();
   const qc = useQueryClient();
@@ -69,21 +88,19 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
 
   const studentsList: StudentPosMatch[] = useMemo(() => {
     if (!studentsResponse) return [];
-    const rawItems: Student[] = Array.isArray(studentsResponse)
-      ? studentsResponse
-      : (studentsResponse as any)?.items || [];
+    const rawItems = toList<Student>(studentsResponse);
 
     return rawItems.map((s) => {
       const u = s.user;
       const fullName = u
-        ? [u.firstName, u.lastName].filter(Boolean).join(' ') || (s as any).name || 'O\'quvchi'
-        : (s as any).name || 'O\'quvchi';
+        ? [u.firstName, u.lastName].filter(Boolean).join(' ') || (s as any).name || "O'quvchi"
+        : (s as any).name || "O'quvchi";
       const phone = u?.phone || (s as any).phone || s.parentPhone || '—';
       const groupName =
         s.groups?.[0]?.group?.name || s.groups?.[0]?.name || (s as any).groupName || 'Asosiy Guruh';
       const balance = Number(s.balance) || 0;
       const debt = balance < 0 ? Math.abs(balance) : 0;
-      const monthlyFee = (s as any).monthlyFee || 800000;
+      const monthlyFee = (s as any).monthlyFee || (s.groups?.[0]?.group as any)?.price || (s.groups?.[0]?.group as any)?.monthlyFee || 0;
 
       return {
         id: s.id,
@@ -105,6 +122,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
       amount: number;
       method: string;
       description?: string;
+      idempotencyKey?: string;
       status: 'PAID';
     }) => {
       // If client is offline, queue into IndexedDB Mesh immediately
@@ -154,6 +172,11 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
         rcpSuffix = String(Date.now()).slice(-6);
       }
 
+      const cashierName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+        (user?.email ? user.email.split('@')[0] : 'Kassir Operator');
+
       const receipt = {
         receiptNumber: res?.id ? `RCP-${String(res.id).slice(0, 8).toUpperCase()}` : `RCP-${rcpSuffix}`,
         studentName: selectedStudent?.name || "O'quvchi",
@@ -162,7 +185,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
         amount: numAmount,
         method,
         date: formatDate(new Date().toISOString()),
-        cashier: "Kassir / Operator",
+        cashier: cashierName,
         isOfflineQueued: Boolean(res?.offline),
       };
 
@@ -220,7 +243,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
     [sound, haptics]
   );
 
-  // Submit Payment to Real API
+  // Submit Payment to Real API with Cryptographic Idempotency
   const handleProcessPayment = useCallback(() => {
     if (!selectedStudent || numAmount <= 0) return;
 
@@ -232,6 +255,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
       amount: numAmount,
       method: method === 'TERMINAL' ? 'CARD' : method,
       description: `Express Kassa to'lovi — ${selectedStudent.groupName}`,
+      idempotencyKey: generateCryptoIdempotencyKey(),
       status: 'PAID',
     });
   }, [selectedStudent, numAmount, method, sound, haptics, createPaymentMutation]);
@@ -251,7 +275,12 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="express-pos-title"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -276,7 +305,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                 <Zap className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 id="express-pos-title" className="text-base font-bold text-white">
                   Express Kassa & POS Terminal
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -287,7 +316,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Yopish"
+              aria-label="Modal oynani yopish"
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" />
@@ -297,7 +326,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
           {/* Success Receipt View */}
           {successReceipt ? (
             <div className="p-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 shadow-[0_0_30px_#10b981]">
                 <CheckCircle2 className="h-8 w-8" />
               </div>
               <h2 className="mt-4 text-2xl font-black text-white">
@@ -311,7 +340,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
               <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-white/10 bg-white/5 p-6 text-left shadow-lg">
                 <div className="border-b border-dashed border-white/20 pb-4 text-center">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    M-EDU Ta'lim Markazi
+                    {user?.organization?.name || "M-EDU Ta'lim Markazi"}
                   </span>
                   <h4 className="mt-1 text-lg font-black text-white">To'lov Kvitansiyasi</h4>
                 </div>
@@ -325,15 +354,19 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                     <span className="font-bold text-white">{successReceipt.groupName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Usul:</span>
+                    <span className="text-slate-400">To'lov usuli:</span>
                     <span className="font-bold text-cyan-400">{successReceipt.method}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Kassir:</span>
+                    <span className="font-semibold text-slate-200">{successReceipt.cashier}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Sana:</span>
                     <span className="font-mono text-slate-300">{successReceipt.date}</span>
                   </div>
                   <div className="flex justify-between border-t border-dashed border-white/20 pt-3 text-sm font-black">
-                    <span className="text-slate-200">Summa:</span>
+                    <span className="text-slate-200">Jami summa:</span>
                     <span className="text-emerald-400">{formatCurrency(successReceipt.amount)}</span>
                   </div>
                 </div>
@@ -343,6 +376,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                 <button
                   type="button"
                   onClick={handlePrintReceipt}
+                  aria-label="Kvitansiya chekini chop etish"
                   className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-white/15"
                 >
                   <Printer className="h-4 w-4" />
@@ -351,6 +385,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                 <button
                   type="button"
                   onClick={handleReset}
+                  aria-label="Yangi to'lov oynasini ochish"
                   className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-blue-700 shadow-lg shadow-blue-600/30"
                 >
                   <Zap className="h-4 w-4" />
@@ -364,16 +399,18 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
               {/* Left Column: Student Selector & Method (5 cols) */}
               <div className="space-y-4 md:col-span-5">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300">
+                  <label htmlFor="pos-student-search-input" className="text-xs font-semibold text-slate-300">
                     O'quvchini qidirish:
                   </label>
                   <div className="relative mt-1.5">
                     <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
                     <input
+                      id="pos-student-search-input"
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Ism, telefon yoki ID..."
+                      aria-label="O'quvchini qidirish"
                       className="w-full rounded-2xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     {isLoadingStudents && (
@@ -395,6 +432,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                             setSelectedStudent(s);
                             if (s.debt > 0) setAmountStr(String(s.debt));
                           }}
+                          aria-label={`${s.name} o'quvchisini tanlash`}
                           className={`w-full rounded-2xl border p-3 text-left transition-all ${
                             isSelected
                               ? 'border-blue-500 bg-blue-500/20 shadow-md'
@@ -408,7 +446,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                                 s.debt > 0 ? 'text-rose-400' : 'text-emerald-400'
                               }`}
                             >
-                              {s.debt > 0 ? `Qarz: ${formatCurrency(s.debt)}` : 'Qarzi yo\'q'}
+                              {s.debt > 0 ? `Qarz: ${formatCurrency(s.debt)}` : "Qarzi yo'q"}
                             </span>
                           </div>
                           <p className="mt-0.5 text-[11px] text-slate-400">
@@ -419,16 +457,16 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                     })
                   ) : (
                     <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-center text-xs text-slate-500">
-                      {isLoadingStudents ? 'O\'quvchilar qidirilmoqda...' : 'O\'quvchi topilmadi'}
+                      {isLoadingStudents ? "O'quvchilar qidirilmoqda..." : "O'quvchi topilmadi"}
                     </div>
                   )}
                 </div>
 
                 {/* Payment Method Selector */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-300">
+                  <span className="text-xs font-semibold text-slate-300">
                     To'lov turi:
-                  </label>
+                  </span>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {[
                       { id: 'CLICK', label: 'Click QR', icon: QrCode, color: 'text-sky-400' },
@@ -443,6 +481,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                           key={item.id}
                           type="button"
                           onClick={() => setMethod(item.id as PaymentMethod)}
+                          aria-label={`${item.label} to'lov turini tanlash`}
                           className={`flex items-center gap-2.5 rounded-2xl border p-2.5 text-xs font-bold transition-all ${
                             active
                               ? 'border-blue-500 bg-blue-500/20 text-white shadow-sm'
@@ -488,6 +527,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                     <button
                       type="button"
                       onClick={() => handleSetAmount(selectedStudent.debt)}
+                      aria-label={`To'liq qarz ${selectedStudent.debt} so'mni kiritish`}
                       className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-400 hover:bg-rose-500/20 active:scale-95"
                     >
                       To'liq Qarz ({formatCurrency(selectedStudent.debt)})
@@ -502,6 +542,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                       key={digit}
                       type="button"
                       onClick={() => handleDigit(digit)}
+                      aria-label={`Raqam ${digit}`}
                       className="h-12 rounded-2xl border border-white/10 bg-white/5 text-lg font-black text-white transition-all hover:bg-white/15 active:scale-95"
                     >
                       {digit}
@@ -510,6 +551,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                   <button
                     type="button"
                     onClick={handleClear}
+                    aria-label="Kiritilgan summani tozalash"
                     className="h-12 rounded-2xl border border-rose-500/20 bg-rose-500/10 text-xs font-bold text-rose-400 hover:bg-rose-500/20 active:scale-95"
                   >
                     Tozalash
@@ -517,6 +559,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                   <button
                     type="button"
                     onClick={() => handleDigit('0')}
+                    aria-label="Raqam 0"
                     className="h-12 rounded-2xl border border-white/10 bg-white/5 text-lg font-black text-white hover:bg-white/15 active:scale-95"
                   >
                     0
@@ -524,7 +567,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                   <button
                     type="button"
                     onClick={handleBackspace}
-                    aria-label="O'chirish"
+                    aria-label="Oxirgi raqamni o'chirish"
                     className="flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 hover:bg-white/15 active:scale-95"
                   >
                     <Delete className="h-5 w-5" />
@@ -536,6 +579,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
                   type="button"
                   onClick={handleProcessPayment}
                   disabled={!selectedStudent || numAmount <= 0 || createPaymentMutation.isPending}
+                  aria-label="To'lovni tasdiqlash va backendga yozish"
                   className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 py-3.5 text-sm font-black text-white shadow-xl shadow-emerald-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40"
                 >
                   {createPaymentMutation.isPending ? (

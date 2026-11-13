@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn, CountUp, Icon, usePrefersReducedMotion, type IconName } from '@/lib/design';
 import { useSafeI18n } from '@/i18n/I18nProvider';
+import { DashboardGlassLayers, useDashboardGlassCard } from './DashboardGlass';
 import type { DashboardStats } from '@/lib/types';
 
 type PulseSource = Pick<
@@ -138,11 +139,7 @@ interface TileConfig {
 }
 
 const PANEL_SURFACE = cn(
-  'relative isolate overflow-hidden rounded-[2rem] p-3.5 sm:p-5 w-full min-w-0 max-w-full',
-  'border border-white/60 bg-white/75 backdrop-blur-3xl backdrop-saturate-[200%]',
-  'shadow-[0_20px_50px_-16px_rgba(0,0,0,0.08),inset_0_1.5px_1.5px_rgba(255,255,255,0.9)]',
-  'dark:border-white/[0.12] dark:bg-[#161618]/75',
-  'dark:shadow-[0_20px_50px_-16px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)]',
+  'lgx lgx--clear relative isolate overflow-hidden rounded-[2rem] p-3.5 sm:p-5 w-full min-w-0 max-w-full',
 );
 
 export interface DailyPulseStripProps {
@@ -154,6 +151,7 @@ export interface DailyPulseStripProps {
 export function DailyPulseStrip({ stats, updatedAt }: DailyPulseStripProps) {
   const { t } = useSafeI18n();
   const reduced = usePrefersReducedMotion();
+  const cardRef = useDashboardGlassCard<HTMLElement>({ dispersion: 3 });
   const pulse = computeDailyPulse(stats);
 
   const openTasks = pulse.tasksDue + pulse.tasksOverdue;
@@ -228,18 +226,18 @@ export function DailyPulseStrip({ stats, updatedAt }: DailyPulseStripProps) {
   ];
 
   return (
-    <section aria-label={t('dashboard.dailyPulseSection', 'Bugungi puls')} className={PANEL_SURFACE}>
-      {/* Ambient caustics */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(10,132,255,0.16),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(10,132,255,0.22),transparent_70%)]" />
-        <div className="absolute -bottom-24 -left-12 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(52,199,89,0.14),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(52,199,89,0.18),transparent_70%)]" />
-      </div>
+    <section
+      ref={cardRef}
+      aria-label={t('dashboard.dailyPulseSection', 'Bugungi puls')}
+      className={PANEL_SURFACE}
+    >
+      <DashboardGlassLayers />
 
-      {/* Top specular hairline */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/25"
-      />
+      {/* Neutral light pooling in the glass, not a coloured wash. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.30),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(255,255,255,0.10),transparent_70%)]" />
+        <div className="absolute -bottom-24 -left-12 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.20),transparent_70%)] blur-3xl dark:bg-[radial-gradient(circle,rgba(255,255,255,0.06),transparent_70%)]" />
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-0.5">
         <div className="flex min-w-0 items-center gap-2">

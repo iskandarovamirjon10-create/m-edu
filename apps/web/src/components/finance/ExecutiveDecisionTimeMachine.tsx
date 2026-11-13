@@ -48,7 +48,7 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
     },
   });
 
-  const [sim, setSim] = useState<SimulationState>(() => {
+  const [baseline, setBaseline] = useState<SimulationState>(() => {
     if (initialData) return initialData;
     return {
       monthlyTuition: 850_000,
@@ -58,6 +58,8 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
     };
   });
 
+  const [sim, setSim] = useState<SimulationState>(baseline);
+
   // Re-sync with live backend baseline if available
   useEffect(() => {
     if (initialData) return;
@@ -65,44 +67,46 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
       const liveStudents = analyticsData.totalStudents || analyticsData.activeStudents || 150;
       const liveTuition = analyticsData.averagePrice || analyticsData.avgTuition || 850_000;
       const liveRent = analyticsData.fixedCosts || analyticsData.monthlyExpenses || 20_000_000;
-      setSim({
-        monthlyTuition: Math.max(300_000, Number(liveTuition) || 850_000),
+      const newBase: SimulationState = {
+        monthlyTuition: Math.max(200_000, Number(liveTuition) || 850_000),
         totalStudents: Math.max(10, Number(liveStudents) || 150),
         teacherRevenueShare: 40,
-        rentAndUtilities: Math.max(5_000_000, Number(liveRent) || 20_000_000),
-      });
+        rentAndUtilities: Math.max(2_000_000, Number(liveRent) || 20_000_000),
+      };
+      setBaseline(newBase);
+      setSim(newBase);
     }
   }, [analyticsData, initialData]);
 
   const [lockedPlan, setLockedPlan] = useState<string | null>(null);
 
-  // Dynamic calculated presets based on real baseline
+  // Dynamic calculated presets based on persistent real baseline
   const presets = useMemo(() => {
-    const baseStudents = sim.totalStudents || 100;
-    const baseTuition = sim.monthlyTuition || 800_000;
-    const baseRent = sim.rentAndUtilities || 15_000_000;
+    const baseStudents = baseline.totalStudents || 100;
+    const baseTuition = baseline.monthlyTuition || 850_000;
+    const baseRent = baseline.rentAndUtilities || 20_000_000;
 
     return {
       baseline: {
         monthlyTuition: baseTuition,
         totalStudents: baseStudents,
-        teacherRevenueShare: 40,
+        teacherRevenueShare: baseline.teacherRevenueShare || 40,
         rentAndUtilities: baseRent,
       },
       growth: {
-        monthlyTuition: Math.round(baseTuition * 1.15),
-        totalStudents: Math.round(baseStudents * 1.35),
+        monthlyTuition: Math.round((baseTuition * 1.15) / 50_000) * 50_000,
+        totalStudents: Math.round((baseStudents * 1.35) / 10) * 10,
         teacherRevenueShare: 38,
-        rentAndUtilities: Math.round(baseRent * 1.2),
+        rentAndUtilities: Math.round((baseRent * 1.2) / 500_000) * 500_000,
       },
       maxCapacity: {
-        monthlyTuition: Math.round(baseTuition * 1.3),
-        totalStudents: Math.round(baseStudents * 1.8),
+        monthlyTuition: Math.round((baseTuition * 1.3) / 50_000) * 50_000,
+        totalStudents: Math.round((baseStudents * 1.8) / 10) * 10,
         teacherRevenueShare: 35,
-        rentAndUtilities: Math.round(baseRent * 1.35),
+        rentAndUtilities: Math.round((baseRent * 1.35) / 500_000) * 500_000,
       },
     };
-  }, [sim.totalStudents, sim.monthlyTuition, sim.rentAndUtilities]);
+  }, [baseline]);
 
   const handleSliderChange = useCallback((key: keyof SimulationState, val: number) => {
     sound.playTick();
@@ -122,9 +126,22 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
     haptics.heavy();
     sound.playPayment();
     fireExecutiveConfetti({ originY: 0.6, particleCount: 70 });
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          'medu_executive_scenario_target',
+          JSON.stringify({
+            ...sim,
+            lockedAt: new Date().toISOString(),
+          })
+        );
+      }
+    } catch {
+      // Ignore quota error
+    }
     setLockedPlan('Qaror strategik rejaga muhrlandi! (6 oylik maqsad belgilandi)');
     setTimeout(() => setLockedPlan(null), 4500);
-  }, [haptics, sound]);
+  }, [haptics, sound, sim]);
 
   const calculations = useMemo(() => {
     const grossMonthlyRevenue = sim.totalStudents * sim.monthlyTuition;
@@ -133,22 +150,38 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
     const netMonthlyProfit = grossMonthlyRevenue - totalMonthlyExpense;
     const profitMargin = grossMonthlyRevenue > 0 ? Math.round((netMonthlyProfit / grossMonthlyRevenue) * 100) : 0;
 
-    // 6-month cumulative projection factoring churn vs replacement
-    const month6Revenue = grossMonthlyRevenue * 6;
-    const month6Profit = netMonthlyProfit * 6;
-
-    // Break-even student count
+    // Unit contribution margin per student
     const studentMargin = sim.monthlyTuition * (1 - sim.teacherRevenueShare / 100);
     const breakEvenStudents = studentMargin > 0 ? Math.ceil(sim.rentAndUtilities / studentMargin) : 0;
+
+    // Safety margin (cushion above break-even)
+    const safetyMarginStudents = Math.max(0, sim.totalStudents - breakEvenStudents);
+    const safetyMarginPercent = sim.totalStudents > 0 ? Math.round((safetyMarginStudents / sim.totalStudents) * 100) : 0;
+
+    // Profit contribution per enrolled student
+    const profitPerStudent = sim.totalStudents > 0 ? Math.round(netMonthlyProfit / sim.totalStudents) : 0;
+
+    // Projections
+    const month6Revenue = grossMonthlyRevenue * 6;
+    const month6Profit = netMonthlyProfit * 6;
+    const annualRunRateRevenue = grossMonthlyRevenue * 12;
+    const annualRunRateProfit = netMonthlyProfit * 12;
 
     return {
       grossMonthlyRevenue,
       teacherPayroll,
+      totalMonthlyExpense,
       netMonthlyProfit,
       profitMargin,
+      studentMargin,
+      breakEvenStudents,
+      safetyMarginStudents,
+      safetyMarginPercent,
+      profitPerStudent,
       month6Revenue,
       month6Profit,
-      breakEvenStudents,
+      annualRunRateRevenue,
+      annualRunRateProfit,
     };
   }, [sim]);
 
@@ -209,9 +242,9 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
             </div>
             <input
               type="range"
-              min={300_000}
-              max={2_500_000}
-              step={50_000}
+              min={200_000}
+              max={3_000_000}
+              step={25_000}
               value={sim.monthlyTuition}
               onChange={(e) => handleSliderChange('monthlyTuition', Number(e.target.value))}
               className="w-full accent-[#007AFF] cursor-pointer"
@@ -226,8 +259,8 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
             </div>
             <input
               type="range"
-              min={50}
-              max={1500}
+              min={10}
+              max={2000}
               step={10}
               value={sim.totalStudents}
               onChange={(e) => handleSliderChange('totalStudents', Number(e.target.value))}
@@ -243,8 +276,8 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
             </div>
             <input
               type="range"
-              min={20}
-              max={65}
+              min={15}
+              max={70}
               step={1}
               value={sim.teacherRevenueShare}
               onChange={(e) => handleSliderChange('teacherRevenueShare', Number(e.target.value))}
@@ -260,8 +293,8 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
             </div>
             <input
               type="range"
-              min={5_000_000}
-              max={100_000_000}
+              min={2_000_000}
+              max={120_000_000}
               step={1_000_000}
               value={sim.rentAndUtilities}
               onChange={(e) => handleSliderChange('rentAndUtilities', Number(e.target.value))}
@@ -297,6 +330,9 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
                 <span className="font-mono text-base font-black text-[#007AFF]">
                   {calculations.profitMargin}%
                 </span>
+                <span className="text-[10px] text-zinc-500 block mt-0.5">
+                  1 o‘quvchidan: {calculations.profitPerStudent.toLocaleString('uz-UZ')} so‘m
+                </span>
               </div>
 
               <div className="rounded-2xl bg-white/60 p-3.5 dark:bg-white/5 border border-white/40 dark:border-white/10">
@@ -304,19 +340,27 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
                 <span className="font-mono text-base font-black text-[#FF9500]">
                   {calculations.breakEvenStudents} talaba
                 </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block mt-0.5">
+                  Zaxira: +{calculations.safetyMarginStudents} ({calculations.safetyMarginPercent}%)
+                </span>
               </div>
             </div>
 
             {/* 6-Month Cumulative Horizon */}
-            <div className="rounded-2xl bg-white/70 p-4 dark:bg-white/5 border border-black/5 dark:border-white/10">
-              <div className="flex items-center justify-between text-xs mb-1">
+            <div className="rounded-2xl bg-white/70 p-4 dark:bg-white/5 border border-black/5 dark:border-white/10 space-y-2">
+              <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-[var(--text-primary)]">6 Oylik Kümülyativ Sof Jamg‘arma:</span>
                 <span className="font-mono font-black text-[#AF52DE]">
                   {calculations.month6Profit.toLocaleString('uz-UZ')} so‘m
                 </span>
               </div>
-              <div className="text-[11px] text-[var(--text-tertiary)]">
-                Jami kutilayotgan tushum: {calculations.month6Revenue.toLocaleString('uz-UZ')} so‘m
+              <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)]">
+                <span>Jami 6 oylik kutilayotgan tushum:</span>
+                <span className="font-mono">{calculations.month6Revenue.toLocaleString('uz-UZ')} so‘m</span>
+              </div>
+              <div className="pt-1 border-t border-black/5 dark:border-white/10 flex items-center justify-between text-[10px] text-zinc-400">
+                <span>Yillik aylanma (Run-Rate):</span>
+                <span className="font-mono font-semibold text-zinc-300">{calculations.annualRunRateRevenue.toLocaleString('uz-UZ')} so‘m</span>
               </div>
             </div>
           </div>
