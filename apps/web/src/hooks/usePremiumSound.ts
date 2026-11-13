@@ -201,6 +201,34 @@ function getServerHapticsSnapshot(): boolean {
   return true;
 }
 
+export function useAudioSettings(): {
+  isMuted: boolean;
+  volume: number;
+  haptics: boolean;
+  setMuted: (muted: boolean) => void;
+  setVolume: (volume: number) => void;
+  setHaptics: (enabled: boolean) => void;
+  toggleMute: () => void;
+} {
+  const isMuted = useSyncExternalStore(subscribeAcousticStore, getMuteSnapshot, getServerMuteSnapshot);
+  const volume = useSyncExternalStore(subscribeAcousticStore, getVolumeSnapshot, getServerVolumeSnapshot);
+  const haptics = useSyncExternalStore(subscribeAcousticStore, getHapticsSnapshot, getServerHapticsSnapshot);
+
+  const toggleMute = useCallback(() => {
+    setAudioMuted(!isMuted);
+  }, [isMuted]);
+
+  return {
+    isMuted,
+    volume,
+    haptics,
+    setMuted: setAudioMuted,
+    setVolume: setAudioVolume,
+    setHaptics: setHapticsEnabled,
+    toggleMute,
+  };
+}
+
 export function isAudioMuted(): boolean {
   return getMuteSnapshot();
 }

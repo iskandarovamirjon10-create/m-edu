@@ -53,6 +53,7 @@ import { ALL_ITEMS_MAP } from './Sidebar';
 import { GlassModal } from '@/components/ui';
 import { useOfflineSync } from '@/lib/offline-sync';
 import { SpatialIdentityCard360 } from '@/components/cards/SpatialIdentityCard360';
+import { SoundControlMenu } from '@/components/audio/SoundControlMenu';
 
 /* ══════════════════════════════════════════════════════════════════════
  * LIQUID GLASS & SPRING TOKENS — v2 physics
@@ -2411,6 +2412,8 @@ export const TopBar = memo(function TopBar({
             <StaticIcon paths={I.camera} size={18} />
           </ActionButton>
 
+          <SoundControlMenu />
+
           <div className="hidden 2xl:block">
             <FocusModeCapsule />
           </div>
@@ -2457,6 +2460,11 @@ export const MobileTopBar = memo(function MobileTopBar({
 
   const currentNav = useMemo(() => resolveRouteNav(location.pathname), [location.pathname]);
   const currentTitle = currentNav ? t(currentNav.labelKey, currentNav.label) : 'M-EDU';
+
+  const isCalculatorOpen = useCalculatorOpen();
+  const toggleCalculator = useCallback(() => {
+    setCalculatorOpen(!isCalculatorOpen);
+  }, [isCalculatorOpen]);
 
   return (
     <header className="pointer-events-none fixed inset-x-0 top-0 z-40 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] pt-[calc(0.5rem+env(safe-area-inset-top,0px))] select-none md:hidden">

@@ -19,6 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { studentsApi, paymentsApi } from '@/lib/api';
+import { queueOfflineAction } from '@/lib/offline-sync';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useSafeI18n } from '@/i18n/I18nProvider';
@@ -97,15 +98,52 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
 
   const numAmount = parseInt(amountStr.replace(/\D/g, '') || '0', 10);
 
-  // Real backend payment creation mutation
+  // Real backend payment creation mutation with Offline Mesh fallback
   const createPaymentMutation = useMutation({
-    mutationFn: (payload: {
+    mutationFn: async (payload: {
       studentId: string;
       amount: number;
       method: string;
       description?: string;
       status: 'PAID';
-    }) => paymentsApi.create(payload),
+    }) => {
+      // If client is offline, queue into IndexedDB Mesh immediately
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await queueOfflineAction({
+          endpoint: '/payments',
+          method: 'POST',
+          payload,
+          label: `Offline POS To'lovi (${selectedStudent?.name || "O'quvchi"} - ${payload.amount.toLocaleString()} UZS)`,
+          meta: { studentId: payload.studentId, amount: payload.amount },
+        });
+        return {
+          id: `offline-${Date.now()}`,
+          offline: true,
+          ...payload,
+        };
+      }
+
+      try {
+        return await paymentsApi.create(payload);
+      } catch (err: any) {
+        // If network error occurred, queue to offline mesh
+        if (!navigator.onLine || err?.message?.includes('NetworkError') || err?.message?.includes('Failed to fetch')) {
+          await queueOfflineAction({
+            endpoint: '/payments',
+            method: 'POST',
+            payload,
+            label: `Offline POS To'lovi (${selectedStudent?.name || "O'quvchi"} - ${payload.amount.toLocaleString()} UZS)`,
+            meta: { studentId: payload.studentId, amount: payload.amount },
+          });
+          return {
+            id: `offline-${Date.now()}`,
+            offline: true,
+            ...payload,
+          };
+        }
+        throw err;
+      }
+    },
     onSuccess: (res: any) => {
       const receipt = {
         receiptNumber: res?.id ? `RCP-${String(res.id).slice(0, 8).toUpperCase()}` : `RCP-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -116,6 +154,7 @@ export const ExpressPosTerminalModal = memo(function ExpressPosTerminalModal({
         method,
         date: formatDate(new Date().toISOString()),
         cashier: "Kassir / Operator",
+        isOfflineQueued: Boolean(res?.offline),
       };
 
       setSuccessReceipt(receipt);
