@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { fireExecutiveConfetti } from '@/lib/executiveConfetti';
-import { api } from '@/lib/api';
+import { analyticsApi } from '@/lib/api';
 
 interface SimulationState {
   monthlyTuition: number; // in UZS (e.g. 850,000)
@@ -40,8 +40,8 @@ export const ExecutiveDecisionTimeMachine = memo(function ExecutiveDecisionTimeM
     queryKey: ['executive-analytics-overview'],
     queryFn: async () => {
       try {
-        const res = await api.get('/analytics/overview');
-        return res.data || res;
+        const res: any = await analyticsApi.overview();
+        return res?.data || res;
       } catch {
         return null;
       }

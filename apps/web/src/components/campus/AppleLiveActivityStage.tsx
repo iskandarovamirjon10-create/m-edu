@@ -21,7 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { api } from '@/lib/api';
+import { attendanceApi, studentsApi } from '@/lib/api';
 
 export interface LiveActivityItem {
   id: string;
@@ -52,8 +52,8 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
     queryKey: ['live-activities-attendance'],
     queryFn: async () => {
       try {
-        const res = await api.get('/attendance?limit=5');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+        const res: any = await attendanceApi.list({ limit: 5 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }
@@ -66,8 +66,8 @@ export const AppleLiveActivityStage = memo(function AppleLiveActivityStage({
     queryKey: ['live-activities-students'],
     queryFn: async () => {
       try {
-        const res = await api.get('/students?limit=10');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+        const res: any = await studentsApi.list({ limit: 10 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }

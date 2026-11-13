@@ -19,7 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { api } from '@/lib/api';
+import { studentsApi } from '@/lib/api';
 
 export interface PhonemeWord {
   word: string;
@@ -45,8 +45,8 @@ export const NeuralVoiceDiagnosticStudio = memo(function NeuralVoiceDiagnosticSt
     queryKey: ['students-for-voice-diagnostic'],
     queryFn: async () => {
       try {
-        const res = await api.get('/students?limit=25');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+        const res: any = await studentsApi.list({ limit: 25 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }

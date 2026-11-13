@@ -22,7 +22,7 @@ import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
 import { RealQrCode } from '@/components/ui/RealQrCode';
-import { api } from '@/lib/api';
+import { studentsApi } from '@/lib/api';
 import { useAuth } from '@/auth/AuthContext';
 
 export type PassThemeKey = 'midnight' | 'sapphire' | 'emerald' | 'sunset' | 'titanium';
@@ -111,8 +111,8 @@ export const AppleWalletPassStudio = memo(function AppleWalletPassStudio({
     queryKey: ['students-for-apple-wallet'],
     queryFn: async () => {
       try {
-        const res = await api.get('/students?limit=50');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+        const res: any = await studentsApi.list({ limit: 50 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }

@@ -21,7 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { api } from '@/lib/api';
+import { camerasApi, studentsApi } from '@/lib/api';
 
 export interface ProctoringIncident {
   id: string;
@@ -61,8 +61,8 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
     queryKey: ['proctoring-real-cameras'],
     queryFn: async () => {
       try {
-        const res = await api.get('/cameras');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res) ? res : [];
+        const res: any = await camerasApi.list();
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }
@@ -74,8 +74,8 @@ export const SmartProctoringRelayStudio = memo(function SmartProctoringRelayStud
     queryKey: ['proctoring-real-students'],
     queryFn: async () => {
       try {
-        const res = await api.get('/students?limit=30');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+        const res: any = await studentsApi.list({ limit: 30 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }

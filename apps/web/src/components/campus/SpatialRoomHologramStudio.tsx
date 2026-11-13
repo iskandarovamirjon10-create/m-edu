@@ -19,7 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/design';
 import { useHaptics } from '@/hooks/useHaptics';
 import { usePremiumSound } from '@/hooks/usePremiumSound';
-import { api } from '@/lib/api';
+import { resourcesApi, studentsApi, attendanceApi } from '@/lib/api';
 
 export interface DeskNode {
   id: string;
@@ -53,8 +53,8 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
     queryKey: ['spatial-rooms-list'],
     queryFn: async () => {
       try {
-        const res = await api.get('/resources');
-        const list = Array.isArray(res.data) ? res.data : Array.isArray(res) ? res : [];
+        const res: any = await resourcesApi.list();
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
         return list;
       } catch {
         return [];
@@ -67,8 +67,21 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
     queryKey: ['spatial-students-list'],
     queryFn: async () => {
       try {
-        const res = await api.get('/students?limit=24');
-        return Array.isArray(res.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+        const res: any = await studentsApi.list({ limit: 24 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  // Fetch today's actual attendance records to reflect genuine presence
+  const { data: todayAttendance } = useQuery({
+    queryKey: ['spatial-today-attendance'],
+    queryFn: async () => {
+      try {
+        const res: any = await attendanceApi.list({ limit: 50 });
+        return Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res) ? res : [];
       } catch {
         return [];
       }
@@ -99,10 +112,24 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
     return list;
   });
 
-  // Hydrate desk nodes with real students when data arrives
+  // Hydrate desk nodes with real students & actual attendance records
   useEffect(() => {
     if (initialDesks && initialDesks.length > 0) return;
     if (!studentsList || studentsList.length === 0) return;
+
+    // Build map of studentId -> attendance status
+    const attMap = new Map<string, 'PRESENT' | 'LATE' | 'ABSENT'>();
+    if (Array.isArray(todayAttendance)) {
+      for (const att of todayAttendance) {
+        const sId = att.studentId || att.student?.id;
+        if (sId) {
+          const s = att.status?.toUpperCase?.();
+          if (s === 'PRESENT' || s === 'LATE' || s === 'ABSENT') {
+            attMap.set(sId, s);
+          }
+        }
+      }
+    }
 
     const list: DeskNode[] = [];
     for (let r = 1; r <= 4; r++) {
@@ -111,8 +138,14 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
         const student = studentsList[idx];
         if (student) {
           const fullName = [student.firstName, student.lastName].filter(Boolean).join(' ') || student.user?.firstName || 'O‘quvchi';
-          // Determine status based on student data or default to PRESENT
-          const status: DeskNode['status'] = student.status === 'INACTIVE' ? 'ABSENT' : idx % 7 === 3 ? 'LATE' : 'PRESENT';
+          // Determine status based on actual attendance or student active state (no random modulo math)
+          let status: DeskNode['status'] = 'PRESENT';
+          if (student.status === 'INACTIVE' || student.status === 'ARCHIVED') {
+            status = 'ABSENT';
+          } else if (attMap.has(student.id)) {
+            status = attMap.get(student.id)!;
+          }
+
           list.push({
             id: `desk-${r}-${c}`,
             row: r,
@@ -121,7 +154,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
             studentName: fullName,
             studentId: student.id,
             avatarUrl: student.photoUrl || student.avatarUrl,
-            focusScore: status === 'PRESENT' ? 92 - (idx % 12) : undefined,
+            focusScore: status === 'PRESENT' ? 95 : status === 'LATE' ? 80 : undefined,
           });
         } else {
           list.push({
@@ -134,7 +167,7 @@ export const SpatialRoomHologramStudio = memo(function SpatialRoomHologramStudio
       }
     }
     setDesks(list);
-  }, [studentsList, initialDesks]);
+  }, [studentsList, todayAttendance, initialDesks]);
 
   const [selectedDesk, setSelectedDesk] = useState<DeskNode | null>(null);
 
